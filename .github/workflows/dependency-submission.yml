@@ -1,4 +1,4 @@
-name: Automatic Dependency Submission
+name: Dependency graph
 
 on:
   push:
@@ -19,5 +19,8 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: 17
-    - name: Generate and submit dependency graph
+    - name: Generate dependency graph
       uses: gradle/actions/dependency-submission@v6
+      with:
+        # GitHub does not enable the dependency graph automatically for new forks.
+        dependency-graph: ${{ github.repository == 'termux/termux-app' && 'generate-submit-and-upload' || 'generate-and-upload' }}
