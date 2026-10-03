@@ -2,17 +2,18 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux">
-    <!ENTITY TERMUX_API_APP_NAME "Termux:API">
-    <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
-    <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
-    <!ENTITY TERMUX_TASKER_APP_NAME "Termux:Tasker">
-    <!ENTITY TERMUX_WIDGET_APP_NAME "Termux:Widget">
+    <!ENTITY TERMUX_APP_NAME "MDTerm">
+    <!ENTITY TERMUX_API_APP_NAME "MDTerm:API">
+    <!ENTITY TERMUX_BOOT_APP_NAME "MDTerm:Boot">
+    <!ENTITY TERMUX_FLOAT_APP_NAME "MDTerm:Float">
+    <!ENTITY TERMUX_STYLING_APP_NAME "MDTerm:Styling">
+    <!ENTITY TERMUX_TASKER_APP_NAME "MDTerm:Tasker">
+    <!ENTITY TERMUX_WIDGET_APP_NAME "MDTerm:Widget">
     <!ENTITY TERMUX_PREFIX_DIR_PATH "/data/data/com.termux/files/usr">
     ]>
 
 <resources>
+    <string name="title_text_input">Text input</string>
 
     <string name="msg_directory_absolute_path">%1$s Directory Absolute Path: \"%2$s\"</string>
 
@@ -82,7 +83,7 @@
     <string name="msg_report_issue">
         If you want to report this issue, then copy its text from the options menu (3-dots on top right) and post
         an issue on one of the following links.
-        \n\nIf you are posting a Termux app crash report, then please provide details on what you were doing that
+        \n\nIf you are posting a &TERMUX_APP_NAME; app crash report, then please provide details on what you were doing that
         caused the crash and how to reproduce it, if possible.
         \n\nIf you are posting an issue on GitHub, then post it in the repository at which the report belongs at.
         Issues opened or emails sent with **(partial) screenshots** instead of copied text or a file of this report
@@ -135,4 +136,5 @@
     <string name="log_level_unknown">*Unknown*</string>
     <string name="log_level_value">Logcat log level set to \"%1$s\"</string>
 
+    <string name="log_level_default_label">%1$s (default)</string>
 </resources>

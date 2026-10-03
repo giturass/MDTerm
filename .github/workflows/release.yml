@@ -1,0 +1,112 @@
+name: Release APK
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TERMUX_PACKAGE_VARIANT: apt-android-7
+  TERMUX_APP_ABIS: arm64-v8a
+  TERMUX_SPLIT_APKS_FOR_RELEASE_BUILDS: '1'
+
+jobs:
+  release:
+    name: Signed Android 12+ arm64-v8a release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 ndk;29.0.14206865'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Restore release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MDTERM_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/mdterm-release.p12"
+
+      - name: Test and build release APK
+        env:
+          MDTERM_RELEASE_STORE_FILE: ${{ runner.temp }}/mdterm-release.p12
+          MDTERM_RELEASE_STORE_PASSWORD: ${{ secrets.MDTERM_RELEASE_STORE_PASSWORD }}
+          MDTERM_RELEASE_KEY_ALIAS: ${{ secrets.MDTERM_RELEASE_KEY_ALIAS }}
+          MDTERM_RELEASE_KEY_PASSWORD: ${{ secrets.MDTERM_RELEASE_KEY_PASSWORD }}
+        run: |
+          test -n "$MDTERM_RELEASE_STORE_PASSWORD"
+          test -n "$MDTERM_RELEASE_KEY_ALIAS"
+          test -n "$MDTERM_RELEASE_KEY_PASSWORD"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            export TERMUX_APP_VERSION_NAME="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -n 's/^ *versionName "\([^"]*\)"$/\1/p' app/build.gradle)"
+            export TERMUX_APP_VERSION_NAME="$version+${GITHUB_SHA:0:7}"
+          fi
+          export TERMUX_APK_VERSION_TAG="v${TERMUX_APP_VERSION_NAME}-${TERMUX_PACKAGE_VARIANT}-github-release"
+          ./gradlew --no-daemon testDebugUnitTest :app:assembleRelease
+          echo "APK_NAME=mdterm_${TERMUX_APK_VERSION_TAG}_arm64-v8a.apk" >> "$GITHUB_ENV"
+
+      - name: Verify APK and generate checksum
+        run: |
+          apk_dir=app/build/outputs/apk/release
+          apk="$apk_dir/$APK_NAME"
+          test -f "$apk"
+          test "$(find "$apk_dir" -maxdepth 1 -name '*.apk' | wc -l)" -eq 1
+          test "$(apkanalyzer manifest application-id "$apk")" = com.termux
+          test "$(apkanalyzer manifest min-sdk "$apk")" -ge 31
+          test "$(apkanalyzer manifest debuggable "$apk")" = false
+          test "$(unzip -Z1 "$apk" | awk -F/ '$1 == "lib" && NF == 3 { print $2 }' | sort -u)" = arm64-v8a
+          if unzip -Z1 "$apk" | grep -E 'libmdterm-|libtalloc|libandroid-shmem|assets/mdterm-runtime/'; then
+            echo 'Unexpected coexistence runtime in APK' >&2
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
+          (cd "$apk_dir" && sha256sum "$APK_NAME" > "${APK_NAME%.apk}_sha256sums")
+
+      - name: Upload release APK and checksum
+        uses: actions/upload-artifact@v6
+        with:
+          name: mdterm-release-${{ github.ref_name }}
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/release/*_arm64-v8a.apk
+            app/build/outputs/apk/release/*_arm64-v8a_sha256sums
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "app/build/outputs/apk/release/$APK_NAME" \
+            "app/build/outputs/apk/release/${APK_NAME%.apk}_sha256sums" \
+            --verify-tag --title "MDTerm $GITHUB_REF_NAME" --latest \
+            --notes-file docs/release-notes.md
+
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/mdterm-release.p12"

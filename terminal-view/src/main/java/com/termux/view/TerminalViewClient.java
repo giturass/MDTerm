@@ -38,6 +38,14 @@ public interface TerminalViewClient {
 
     boolean isTerminalViewSelected();
 
+    default boolean shouldUseHorizontalCursorGestures() {
+        return false;
+    }
+
+    default boolean shouldUseVerticalCursorGestures() {
+        return false;
+    }
+
 
 
     void copyModeChanged(boolean copyMode);

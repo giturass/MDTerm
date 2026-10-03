@@ -1,0 +1,11 @@
+<resources>
+    <string name="action_open_file_system">Files</string>
+    <string name="error_system_file_manager_unavailable">The system file manager is unavailable</string>
+    <string name="terminal_actions_title">Terminal actions</string>
+    <string name="action_select_text">Select text</string>
+    <string name="action_paste_text">Paste</string>
+    <string name="action_state_on">On</string>
+    <string name="action_state_off">Off</string>
+    <string name="log_choice_selected">Selected</string>
+    <string name="session_number_description">Session %1$d</string>
+</resources>

@@ -1,49 +1,24 @@
-<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
-
-    <Preference
-        app:key="termux"
-        app:title="@string/termux_preferences_title"
-        app:summary="@string/termux_preferences_summary"
-        app:fragment="com.termux.app.fragments.settings.TermuxPreferencesFragment"/>
-
-    <Preference
-        app:key="termux_api"
-        app:title="@string/termux_api_preferences_title"
-        app:summary="@string/termux_api_preferences_summary"
-        app:isPreferenceVisible="false"
-        app:fragment="com.termux.app.fragments.settings.TermuxAPIPreferencesFragment"/>
-
-    <Preference
-        app:key="termux_float"
-        app:title="@string/termux_float_preferences_title"
-        app:summary="@string/termux_float_preferences_summary"
-        app:isPreferenceVisible="false"
-        app:fragment="com.termux.app.fragments.settings.TermuxFloatPreferencesFragment"/>
-
-    <Preference
-        app:key="termux_tasker"
-        app:title="@string/termux_tasker_preferences_title"
-        app:summary="@string/termux_tasker_preferences_summary"
-        app:isPreferenceVisible="false"
-        app:fragment="com.termux.app.fragments.settings.TermuxTaskerPreferencesFragment"/>
-
-    <Preference
-        app:key="termux_widget"
-        app:title="@string/termux_widget_preferences_title"
-        app:summary="@string/termux_widget_preferences_summary"
-        app:isPreferenceVisible="false"
-        app:fragment="com.termux.app.fragments.settings.TermuxWidgetPreferencesFragment"/>
-
-    <Preference
-        app:key="about"
-        app:title="@string/about_preference_title"
-        app:persistent="false"/>
-    <!-- app:layout="@layout/preference_markdown_text" -->
-
-    <Preference
-        app:key="donate"
-        app:title="@string/donate_preference_title"
-        app:persistent="false"
-        app:isPreferenceVisible="false"/>
-
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto" app:title="@string/mdterm_settings_title" app:summary="@string/mdterm_settings_summary">
+    <PreferenceCategory app:key="appearance" app:title="@string/mdterm_settings_appearance">
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="terminal_margin_adjustment" app:summaryOff="@string/termux_terminal_view_terminal_margin_adjustment_off" app:summaryOn="@string/termux_terminal_view_terminal_margin_adjustment_on" app:title="@string/termux_terminal_view_terminal_margin_adjustment_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:key="input" app:title="@string/mdterm_settings_input">
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="soft_keyboard_enabled" app:summaryOff="@string/termux_soft_keyboard_enabled_off" app:summaryOn="@string/termux_soft_keyboard_enabled_on" app:title="@string/termux_soft_keyboard_enabled_title" />
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="soft_keyboard_enabled_only_if_no_hardware" app:summaryOff="@string/termux_soft_keyboard_enabled_only_if_no_hardware_off" app:summaryOn="@string/termux_soft_keyboard_enabled_only_if_no_hardware_on" app:title="@string/termux_soft_keyboard_enabled_only_if_no_hardware_title" />
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="ime_composing_enabled" app:summaryOff="@string/termux_ime_composing_enabled_off" app:summaryOn="@string/termux_ime_composing_enabled_on" app:title="@string/termux_ime_composing_enabled_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:key="notifications" app:title="@string/mdterm_settings_notifications">
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="plugin_error_notifications_enabled" app:summaryOff="@string/termux_plugin_error_notifications_enabled_off" app:summaryOn="@string/termux_plugin_error_notifications_enabled_on" app:title="@string/termux_plugin_error_notifications_enabled_title" />
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="crash_report_notifications_enabled" app:summaryOff="@string/termux_crash_report_notifications_enabled_off" app:summaryOn="@string/termux_crash_report_notifications_enabled_on" app:title="@string/termux_crash_report_notifications_enabled_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:key="diagnostics" app:title="@string/mdterm_settings_diagnostics">
+        <ListPreference app:defaultValue="1" app:key="log_level" app:title="@string/termux_log_level_title" app:useSimpleSummaryProvider="true" />
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="terminal_view_key_logging_enabled" app:summaryOff="@string/termux_terminal_view_key_logging_enabled_off" app:summaryOn="@string/termux_terminal_view_key_logging_enabled_on" app:title="@string/termux_terminal_view_key_logging_enabled_title" />
+    </PreferenceCategory>
+    <PreferenceCategory app:key="extensions" app:title="@string/mdterm_settings_extensions" app:isPreferenceVisible="false">
+        <Preference app:key="termux_api" app:title="@string/termux_api_preferences_title" app:summary="@string/termux_api_preferences_summary" app:isPreferenceVisible="false" app:fragment="com.termux.app.fragments.settings.TermuxAPIPreferencesFragment" app:icon="@drawable/settings_extension" />
+        <Preference app:key="termux_float" app:title="@string/termux_float_preferences_title" app:summary="@string/termux_float_preferences_summary" app:isPreferenceVisible="false" app:fragment="com.termux.app.fragments.settings.TermuxFloatPreferencesFragment" app:icon="@drawable/settings_extension" />
+        <Preference app:key="termux_tasker" app:title="@string/termux_tasker_preferences_title" app:summary="@string/termux_tasker_preferences_summary" app:isPreferenceVisible="false" app:fragment="com.termux.app.fragments.settings.TermuxTaskerPreferencesFragment" app:icon="@drawable/settings_extension" />
+        <Preference app:key="termux_widget" app:title="@string/termux_widget_preferences_title" app:summary="@string/termux_widget_preferences_summary" app:isPreferenceVisible="false" app:fragment="com.termux.app.fragments.settings.TermuxWidgetPreferencesFragment" app:icon="@drawable/settings_extension" />
+    </PreferenceCategory>
 </PreferenceScreen>

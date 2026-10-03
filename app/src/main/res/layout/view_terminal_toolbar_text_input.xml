@@ -1,16 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<EditText xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/terminal_toolbar_text_input"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:imeOptions="actionSend|flagNoFullscreen"
-    android:maxLines="1"
-    android:inputType="text"
-    android:importantForAutofill="no"
-    android:textColor="@android:color/white"
-    android:textColorHighlight="@android:color/darker_gray"
-    android:paddingTop="0dp"
-    android:textCursorDrawable="@null"
-    android:paddingBottom="0dp"
-    tools:ignore="LabelFor" />
+    android:paddingStart="6dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="2dp"
+    android:paddingBottom="2dp"
+    android:background="?attr/colorSurfaceContainerLow">
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/terminal_toolbar_text_input_layout"
+        style="@style/Widget.MDTerm.TerminalInput"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:hintEnabled="false"
+        app:endIconMode="custom"
+        app:endIconDrawable="@drawable/ic_terminal_send"
+        app:endIconContentDescription="@string/mdterm_terminal_input_send"
+        app:endIconCheckable="false"
+        app:endIconMinSize="48dp"
+        app:endIconTint="?attr/colorPrimary">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/terminal_toolbar_text_input"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:minHeight="48dp"
+            android:imeOptions="actionSend|flagNoFullscreen"
+            android:inputType="text"
+            android:singleLine="true"
+            android:importantForAutofill="no"
+            android:gravity="center_vertical"
+            android:hint="@string/mdterm_terminal_input_hint"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:textColorHint="?attr/colorOnSurfaceVariant"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+</FrameLayout>

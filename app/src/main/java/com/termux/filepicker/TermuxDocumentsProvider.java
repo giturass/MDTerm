@@ -4,9 +4,11 @@ import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.graphics.Point;
+import android.net.Uri;
 import android.os.CancellationSignal;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract.Document;
+import android.provider.DocumentsContract;
 import android.provider.DocumentsContract.Root;
 import android.provider.DocumentsProvider;
 import android.webkit.MimeTypeMap;
@@ -22,7 +24,7 @@ import java.util.LinkedList;
 
 /**
  * A document provider for the Storage Access Framework which exposes the files in the
- * $HOME/ directory to other apps.
+ * MDTerm files directory (including home/ and usr/) to other apps.
  * <p/>
  * Note that this replaces providing an activity matching the ACTION_GET_CONTENT intent:
  * <p/>
@@ -35,7 +37,12 @@ public class TermuxDocumentsProvider extends DocumentsProvider {
 
     private static final String ALL_MIME_TYPES = "*/*";
 
-    private static final File BASE_DIR = TermuxConstants.TERMUX_HOME_DIR;
+    private static final File BASE_DIR = TermuxConstants.TERMUX_FILES_DIR;
+
+    public static Uri getRootUri() {
+        return DocumentsContract.buildRootUri(TermuxConstants.TERMUX_PACKAGE_NAME + ".documents",
+            getDocIdForFile(BASE_DIR));
+    }
 
 
     // The default columns to return information about a root if no specific
@@ -90,9 +97,9 @@ public class TermuxDocumentsProvider extends DocumentsProvider {
     public Cursor queryChildDocuments(String parentDocumentId, String[] projection, String sortOrder) throws FileNotFoundException {
         final MatrixCursor result = new MatrixCursor(projection != null ? projection : DEFAULT_DOCUMENT_PROJECTION);
         final File parent = getFileForDocId(parentDocumentId);
-        for (File file : parent.listFiles()) {
-            includeFile(result, null, file);
-        }
+        File[] children = parent.listFiles();
+        if (children != null)
+            for (File file : children) includeFile(result, null, file);
         return result;
     }
 
@@ -167,17 +174,20 @@ public class TermuxDocumentsProvider extends DocumentsProvider {
         final int MAX_SEARCH_RESULTS = 50;
         while (!pending.isEmpty() && result.getCount() < MAX_SEARCH_RESULTS) {
             final File file = pending.removeFirst();
-            // Avoid directories outside the $HOME directory linked with symlinks (to avoid e.g. search
+            // Avoid directories outside MDTerm's files directory linked with symlinks (to avoid e.g. search
             // through the whole SD card).
-            boolean isInsideHome;
+            boolean isInsideRoot;
             try {
-                isInsideHome = file.getCanonicalPath().startsWith(TermuxConstants.TERMUX_HOME_DIR_PATH);
+                String path = file.getCanonicalPath();
+                isInsideRoot = path.equals(BASE_DIR.getCanonicalPath()) ||
+                    path.startsWith(BASE_DIR.getCanonicalPath() + File.separator);
             } catch (IOException e) {
-                isInsideHome = true;
+                isInsideRoot = false;
             }
-            if (isInsideHome) {
+            if (isInsideRoot) {
                 if (file.isDirectory()) {
-                    Collections.addAll(pending, file.listFiles());
+                    File[] children = file.listFiles();
+                    if (children != null) Collections.addAll(pending, children);
                 } else {
                     if (file.getName().toLowerCase().contains(query)) {
                         includeFile(result, null, file);

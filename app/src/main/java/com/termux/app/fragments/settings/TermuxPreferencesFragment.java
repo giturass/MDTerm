@@ -5,14 +5,14 @@ import android.os.Bundle;
 
 import androidx.annotation.Keep;
 import androidx.preference.PreferenceDataStore;
-import androidx.preference.PreferenceFragmentCompat;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import androidx.preference.PreferenceManager;
 
 import com.termux.R;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 @Keep
-public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
+public class TermuxPreferencesFragment extends MaterialPreferenceFragment {
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {

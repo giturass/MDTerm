@@ -10,7 +10,7 @@
             app:title="@string/termux_log_level_title"
             app:useSimpleSummaryProvider="true" />
 
-        <SwitchPreferenceCompat
+        <com.termux.app.fragments.settings.MaterialSwitchPreference
             app:key="terminal_view_key_logging_enabled"
             app:summaryOff="@string/termux_terminal_view_key_logging_enabled_off"
             app:summaryOn="@string/termux_terminal_view_key_logging_enabled_on"
