@@ -207,8 +207,9 @@ public class TermuxOpenReceiver extends BroadcastReceiver {
                 String callingPackageName = getCallingPackage();
                 Logger.logDebug(LOG_TAG, "Open file request received from " + callingPackageName + " for \"" + path + "\" with mode \"" + mode + "\"");
                 String storagePath = Environment.getExternalStorageDirectory().getCanonicalPath();
+                String filesPath = TermuxConstants.TERMUX_FILES_DIR.getCanonicalPath();
                 // See https://support.google.com/faqs/answer/7496913:
-                if (!(path.startsWith(TermuxConstants.TERMUX_FILES_DIR_PATH) || path.startsWith(storagePath))) {
+                if (!(path.startsWith(filesPath + "/") || path.startsWith(storagePath + "/"))) {
                     throw new IllegalArgumentException("Invalid path: " + path);
                 }
 

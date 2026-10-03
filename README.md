@@ -1,13 +1,23 @@
-# Termux application
+# MDTerm
 
-[![Build status](https://github.com/termux/termux-app/workflows/Build/badge.svg)](https://github.com/termux/termux-app/actions)
-[![Testing status](https://github.com/termux/termux-app/workflows/Unit%20tests/badge.svg)](https://github.com/termux/termux-app/actions)
+[![Release APK](https://github.com/giturass/termux-app/actions/workflows/release.yml/badge.svg)](https://github.com/giturass/termux-app/actions/workflows/release.yml)
+[![Unit tests](https://github.com/giturass/termux-app/actions/workflows/run_tests.yml/badge.svg)](https://github.com/giturass/termux-app/actions/workflows/run_tests.yml)
 [![Join the chat at https://gitter.im/termux/termux](https://badges.gitter.im/termux/termux.svg)](https://gitter.im/termux/termux)
 [![Join the Termux discord server](https://img.shields.io/discord/641256914684084234.svg?label=&logo=discord&logoColor=ffffff&color=5865F2)](https://discord.gg/HXpF69X)
 [![Termux library releases at Jitpack](https://jitpack.io/v/termux/termux-app.svg)](https://jitpack.io/#termux/termux-app)
 
 
 [Termux](https://termux.dev) is an Android terminal application and Linux environment.
+
+MDTerm uses the original `com.termux` application ID and runs official Termux packages directly in `/data/data/com.termux/files/usr`, without PRoot. It replaces the original Termux installation. See [runtime and installation details](docs/mdterm-runtime.md).
+
+This branch targets **Android 12+** with a Material Design 3 interface and wallpaper-based dynamic colors. The interface follows the system language, including Simplified Chinese. Dynamic colors connect the terminal surface, controls and settings. Default ANSI colors adapt for light-mode readability; explicit `~/.termux/colors.properties` values take priority. Terminal preferences appear directly in Settings.
+
+[PR #5242](https://github.com/termux/termux-app/pull/5242) adds an optional inline preview of composing input. Enable it under **Settings → Termux → Terminal I/O → IME Composing Preview** to see Chinese and other IME composition at the cursor before committing it. The preview is disabled by default.
+
+MDTerm 使用原版包名 `com.termux`，直接运行官方 Termux 软件包，不再使用 PRoot，也不再与原版共存。安装和旧版数据迁移说明见[运行环境文档](docs/mdterm-runtime.md)。
+
+本分支面向 **Android 12 及以上版本**，采用 Material Design 3 风格与壁纸动态配色，界面语言跟随系统，支持简体中文。终端主界面、按钮及设置统一使用动态配色，浅色模式下的默认 ANSI 颜色适配可读性；`~/.termux/colors.properties` 中的自定义颜色优先。长按会话直接重命名；长按终端可打开 MD3 操作菜单，选择“选择文本”后拖动选择范围。所有终端设置直接显示在一级设置页，可在 **设置 → 键盘与输入 → 输入法组合文本预览** 中开启 PR #5242 的输入法预编辑功能。
 
 Note that this repository is for the app itself (the user interface and the terminal emulation). For the packages installable inside the app, see [termux/termux-packages](https://github.com/termux/termux-packages).
 
@@ -78,17 +88,21 @@ Only a universal APK is released, which will work on all supported architectures
 
 ### GitHub
 
-Termux application can be obtained on `GitHub` either from [`GitHub Releases`](https://github.com/termux/termux-app/releases) for version `>= 0.118.0` or from [`GitHub Build Action`](https://github.com/termux/termux-app/actions/workflows/debug_build.yml?query=branch%3Amaster+event%3Apush) workflows. **For android `>= 7`, only install `apt-android-7` variants. For android `5` and `6`, only install `apt-android-5` variants.**
+**This branch requires Android 12 or newer (API 31+) and its GitHub Actions build only `arm64-v8a` APKs.** The package environment remains `apt-android-7`; that name describes the package repository, not this app's minimum Android version. Android 5/6 packages and other CPU architectures are not included in the CI artifacts.
 
-The APKs for `GitHub Releases` will be listed under `Assets` drop-down of a release. These are automatically attached when a new version is released.
+Open this repository's **Actions → Build → Run workflow** to build an APK manually, or push a commit/open a pull request to start a build automatically. Download the `mdterm_…_arm64-v8a` artifact from the completed run and extract its APK and SHA-256 checksum. The [build workflow](.github/workflows/debug_build.yml) installs the required Android SDK/NDK and signs the APK with the repository's debug test key; no signing secret is needed.
+
+Download signed **release APKs** from [MDTerm Releases](https://github.com/giturass/termux-app/releases). Pushing a semantic version tag such as `v0.118.0-mdterm.1` runs the [Release APK workflow](.github/workflows/release.yml), tests the project, builds `assembleRelease`, verifies the package and signature, and publishes the APK with its SHA-256 checksum. Manual workflow runs on a branch upload a release APK artifact without publishing a GitHub Release.
 
 The APKs for `GitHub Build` action workflows will be listed under `Artifacts` section of a workflow run. These are created for each commit/push done to the repository and can be used by users who don't want to wait for releases and want to try out the latest features immediately or want to test their pull requests. Note that for action workflows, you need to be [**logged into a `GitHub` account**](https://github.com/login) for the `Artifacts` links to be enabled/clickable. If you are using the [`GitHub` app](https://github.com/mobile), then make sure to open workflow link in a browser like Chrome or Firefox that has your GitHub account logged in since the in-app browser may not be logged in.
 
 The APKs for both of these are [`debuggable`](https://developer.android.com/studio/debug) and are compatible with each other but they are not compatible with other sources.
 
-Both universal and architecture specific APKs are released. The APK and bootstrap installation size will be `~180MB` if using universal and `~120MB` if using architecture specific. Check [here](https://github.com/termux/termux-app/issues/2153) for details.
+Only the `arm64-v8a` APK and its SHA-256 checksum are attached to releases by this branch. No universal APK is generated by CI.
 
-**Security warning**: APK files on GitHub are signed with a test key that has been [shared with community](https://github.com/termux/termux-app/blob/master/app/testkey_untrusted.jks). This IS NOT an official developer key and everyone can use it to generate releases for own testing. Be very careful when using Termux GitHub builds obtained elsewhere except https://github.com/termux/termux-app. Everyone is able to use it to forge a malicious Termux update installable over the GitHub build. Think twice about installing Termux builds distributed via Telegram or other social media. If your device get caught by malware, we will not be able to help you.
+**Debug build security warning**: The debug workflow and upstream Termux GitHub APKs use a test key that has been [shared with community](https://github.com/termux/termux-app/blob/master/app/testkey_untrusted.jks). This IS NOT an official developer key and everyone can use it to generate releases for own testing. Be very careful when using Termux GitHub builds obtained elsewhere except https://github.com/termux/termux-app. Everyone is able to use it to forge a malicious Termux update installable over the GitHub build. Think twice about installing Termux builds distributed via Telegram or other social media. If your device get caught by malware, we will not be able to help you.
+
+MDTerm release APKs use a separate private signing key stored in this fork’s Actions Secrets. They cannot directly update debug builds or upstream Termux installations signed with another key. Back up your data before switching signatures.
 
 The [test key](https://github.com/termux/termux-app/blob/master/app/testkey_untrusted.jks) shall not be used to impersonate @termux and can't be used for this anyway. This key is not trusted by us and it is quite easy to detect its use in user generated content.
 
@@ -227,13 +241,25 @@ Users must post complete report (optionally without sensitive info) when reporti
 
 ## For Maintainers and Contributors
 
+### Build this branch
+
+Use JDK 17, the Android SDK platform 36, build tools 35.0.0, and NDK 29.0.14206865. Set `ANDROID_HOME` to the SDK directory, then run:
+
+```sh
+TERMUX_PACKAGE_VARIANT=apt-android-7 TERMUX_APP_ABIS=arm64-v8a ./gradlew :app:assembleDebug
+```
+
+The signed APK is written to `app/build/outputs/apk/debug/mdterm_apt-android-7-debug_arm64-v8a.apk`. `TERMUX_APP_ABIS` filters native compilation in the app, shared library and terminal emulator, APK splits, and bootstrap downloads. This branch supports only `arm64-v8a`, which is also the default; other ABIs are outside this branch’s current build target. Every APK from this branch still requires Android 12 or newer.
+
+Run the unit tests with `TERMUX_APP_ABIS=arm64-v8a ./gradlew testDebugUnitTest`. Published GitHub releases should use a semantic version tag such as `v0.118.0-mdterm.1`; the [release workflow](.github/workflows/release.yml) builds and uploads a signed release APK and checksum. See [release signing configuration](docs/mdterm-runtime.md#release-signing).
+
 The [termux-shared](termux-shared) library was added in [`v0.109`](https://github.com/termux/termux-app/releases/tag/v0.109). It defines shared constants and utils of the Termux app and its plugins. It was created to allow for the removal of all hardcoded paths in the Termux app. Some of the termux plugins are using this as well and rest will in future. If you are contributing code that is using a constant or a util that may be shared, then define it in `termux-shared` library if it currently doesn't exist and reference it from there. Update the relevant changelogs as well. Pull requests using hardcoded values **will/should not** be accepted. Termux app and plugin specific classes must be added under `com.termux.shared.termux` package and general classes outside it. The [`termux-shared` `LICENSE`](termux-shared/LICENSE.md) must also be checked and updated if necessary when contributing code. The licenses of any external library or code must be honoured.
 
 The main Termux constants are defined by [`TermuxConstants`](https://github.com/termux/termux-app/blob/master/termux-shared/src/main/java/com/termux/shared/termux/TermuxConstants.java) class. It also contains information on how to fork Termux or build it with your own package name. Changing the package name will require building the bootstrap zip packages and other packages with the new `$PREFIX`, check [Building Packages](https://github.com/termux/termux-packages/wiki/Building-packages) for more info.
 
 Check [Termux Libraries](https://github.com/termux/termux-app/wiki/Termux-Libraries) for how to import termux libraries in plugin apps and [Forking and Local Development](https://github.com/termux/termux-app/wiki/Termux-Libraries#forking-and-local-development) for how to update termux libraries for plugins.
 
-The `versionName` in `build.gradle` files of Termux and its plugin apps must follow the [semantic version `2.0.0` spec](https://semver.org/spec/v2.0.0.html) in the format `major.minor.patch(-prerelease)(+buildmetadata)`. When bumping `versionName` in `build.gradle` files and when creating a tag for new releases on GitHub, make sure to include the patch number as well, like `v0.1.0` instead of just `v0.1`. The `build.gradle` files and `attach_debug_apks_to_release` workflow validates the version as well and the build/attachment will fail if `versionName` does not follow the spec.
+The `versionName` in `build.gradle` files of Termux and its plugin apps must follow the [semantic version `2.0.0` spec](https://semver.org/spec/v2.0.0.html) in the format `major.minor.patch(-prerelease)(+buildmetadata)`. When bumping `versionName` in `build.gradle` files and when creating a tag for new releases on GitHub, make sure to include the patch number as well, like `v0.1.0` instead of just `v0.1`. The `build.gradle` files and `release` workflow validates the version as well and the build/attachment will fail if `versionName` does not follow the spec.
 
 ### Commit Messages Guidelines
 

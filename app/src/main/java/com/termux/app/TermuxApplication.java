@@ -3,6 +3,8 @@ package com.termux.app;
 import android.app.Application;
 import android.content.Context;
 
+import com.google.android.material.color.DynamicColors;
+
 import com.termux.BuildConfig;
 import com.termux.shared.errors.Error;
 import com.termux.shared.logger.Logger;
@@ -23,6 +25,10 @@ public class TermuxApplication extends Application {
 
     public void onCreate() {
         super.onCreate();
+
+        // Apply the Android 12+ wallpaper palette before activities inflate
+        // their views. Terminal ANSI colors remain independent of this theme.
+        DynamicColors.applyToActivitiesIfAvailable(this);
 
         Context context = getApplicationContext();
 

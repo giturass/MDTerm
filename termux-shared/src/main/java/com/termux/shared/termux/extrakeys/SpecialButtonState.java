@@ -39,13 +39,16 @@ public class SpecialButtonState {
     public void setIsActive(boolean value) {
         isActive = value;
         for (MaterialButton button : buttons) {
-            button.setTextColor(value ? mExtraKeysView.getButtonActiveTextColor() : mExtraKeysView.getButtonTextColor());
+            mExtraKeysView.updateSpecialButtonAppearance(button, isActive, isLocked);
         }
     }
 
     /** Set {@link #isLocked}. */
     public void setIsLocked(boolean value) {
         isLocked = value;
+        for (MaterialButton button : buttons) {
+            mExtraKeysView.updateSpecialButtonAppearance(button, isActive, isLocked);
+        }
     }
 
 }

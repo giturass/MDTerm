@@ -2,7 +2,6 @@ package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -15,6 +14,11 @@ import android.widget.ListView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import androidx.appcompat.app.AlertDialog;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.color.MaterialColors;
 
 import com.termux.R;
 import com.termux.shared.interact.ShareUtils;
@@ -36,6 +40,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Properties;
+import java.util.Arrays;
+import java.util.Locale;
 
 /** The {@link TerminalSessionClient} implementation that may require an {@link Activity} for its interface methods. */
 public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionClientBase {
@@ -47,6 +53,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     private SoundPool mBellSoundPool;
 
     private int mBellSoundId;
+
+    private boolean mPendingColorReload;
 
     private static final String LOG_TAG = "TermuxTerminalSessionActivityClient";
 
@@ -108,6 +116,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
      * Should be called when mActivity.reloadActivityStyling() is called
      */
     public void onReloadActivityStyling() {
+        mPendingColorReload = true;
         // Set terminal fonts and colors
         checkForFontAndColors();
     }
@@ -366,7 +375,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         if (service == null) return;
 
         if (service.getTermuxSessionsSize() >= MAX_SESSIONS) {
-            new AlertDialog.Builder(mActivity).setTitle(R.string.title_max_terminals_reached).setMessage(R.string.msg_max_terminals_reached)
+            new MaterialAlertDialogBuilder(mActivity).setTitle(R.string.title_max_terminals_reached).setMessage(R.string.msg_max_terminals_reached)
                 .setPositiveButton(android.R.string.ok, null).show();
         } else {
             TerminalSession currentSession = mActivity.getCurrentSession();
@@ -497,18 +506,34 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             File fontFile = TermuxConstants.TERMUX_FONT_FILE;
 
             final Properties props = new Properties();
+            int background = MaterialColors.getColor(mActivity,
+                com.google.android.material.R.attr.colorSurfaceContainer, 0xff202020);
+            int foreground = MaterialColors.getColor(mActivity,
+                com.google.android.material.R.attr.colorOnSurface, 0xffeeeeee);
+            int cursor = MaterialColors.getColor(mActivity,
+                com.google.android.material.R.attr.colorPrimary, foreground);
+            props.setProperty("background", colorProperty(background));
+            props.setProperty("foreground", colorProperty(foreground));
+            props.setProperty("cursor", colorProperty(cursor));
+            // The original bright ANSI defaults are unreadable on a light terminal surface.
+            if (MaterialColors.isColorLight(background)) {
+                int[] lightAnsi = {0x202124, 0xa82020, 0x246b30, 0x755800,
+                    0x2457a6, 0x85359b, 0x00676f, 0x606368,
+                    0x50545a, 0xc02d28, 0x267a35, 0x896400,
+                    0x3064bc, 0x9842ad, 0x007780, 0x73777d};
+                for (int i = 0; i < lightAnsi.length; i++)
+                    props.setProperty("color" + i, colorProperty(lightAnsi[i]));
+            }
             if (colorsFile.isFile()) {
                 try (InputStream in = new FileInputStream(colorsFile)) {
                     props.load(in);
                 }
             }
 
+            int[] previousColors = TerminalColors.COLOR_SCHEME.mDefaultColors.clone();
             TerminalColors.COLOR_SCHEME.updateWith(props);
-            TerminalSession session = mActivity.getCurrentSession();
-            if (session != null && session.getEmulator() != null) {
-                session.getEmulator().mColors.reset();
-            }
-            updateBackgroundColor();
+            mPendingColorReload |= !Arrays.equals(previousColors, TerminalColors.COLOR_SCHEME.mDefaultColors);
+            applyPendingColorChanges();
 
             final Typeface newTypeface = (fontFile.exists() && fontFile.length() > 0) ? Typeface.createFromFile(fontFile) : Typeface.MONOSPACE;
             mActivity.getTerminalView().setTypeface(newTypeface);
@@ -517,12 +542,29 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         }
     }
 
-    public void updateBackgroundColor() {
-        if (!mActivity.isVisible()) return;
-        TerminalSession session = mActivity.getCurrentSession();
-        if (session != null && session.getEmulator() != null) {
-            mActivity.getWindow().getDecorView().setBackgroundColor(session.getEmulator().mColors.mCurrentColors[TextStyle.COLOR_INDEX_BACKGROUND]);
+    /** Apply a changed theme after binding, when existing sessions become available. */
+    public void applyPendingColorChanges() {
+        TermuxService service = mActivity.getTermuxService();
+        if (mPendingColorReload && service != null) {
+            for (TermuxSession session : service.getTermuxSessions()) {
+                if (session.getTerminalSession().getEmulator() != null)
+                    session.getTerminalSession().getEmulator().mColors.reset();
+            }
+            mPendingColorReload = false;
         }
+        updateBackgroundColor();
+    }
+
+    public void updateBackgroundColor() {
+        TerminalSession session = mActivity.getCurrentSession();
+        int color = session != null && session.getEmulator() != null
+            ? session.getEmulator().mColors.mCurrentColors[TextStyle.COLOR_INDEX_BACKGROUND]
+            : TerminalColors.COLOR_SCHEME.mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND];
+        mActivity.setTerminalSurfaceColor(color);
+    }
+
+    private static String colorProperty(int color) {
+        return String.format(Locale.ROOT, "#%06x", color & 0xffffff);
     }
 
 }

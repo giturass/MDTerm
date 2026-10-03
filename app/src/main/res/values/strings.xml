@@ -2,13 +2,13 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux">
-    <!ENTITY TERMUX_API_APP_NAME "Termux:API">
-    <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
-    <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
-    <!ENTITY TERMUX_TASKER_APP_NAME "Termux:Tasker">
-    <!ENTITY TERMUX_WIDGET_APP_NAME "Termux:Widget">
+    <!ENTITY TERMUX_APP_NAME "MDTerm">
+    <!ENTITY TERMUX_API_APP_NAME "MDTerm:API">
+    <!ENTITY TERMUX_BOOT_APP_NAME "MDTerm:Boot">
+    <!ENTITY TERMUX_FLOAT_APP_NAME "MDTerm:Float">
+    <!ENTITY TERMUX_STYLING_APP_NAME "MDTerm:Styling">
+    <!ENTITY TERMUX_TASKER_APP_NAME "MDTerm:Tasker">
+    <!ENTITY TERMUX_WIDGET_APP_NAME "MDTerm:Widget">
     ]>
 
 <resources>
@@ -42,6 +42,7 @@
 
 
     <!-- Terminal Sidebar and Shortcuts -->
+    <string name="terminal_sessions_header">Sessions</string>
     <string name="action_new_session">New session</string>
     <string name="action_new_session_failsafe">Failsafe</string>
     <string name="title_max_terminals_reached">Max terminals reached</string>

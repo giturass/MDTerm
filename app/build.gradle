@@ -41,6 +41,7 @@ android {
     }
 
     defaultConfig {
+        applicationId "com.termux"
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
         versionCode 118
@@ -52,16 +53,17 @@ android {
         buildConfigField "String", "TERMUX_PACKAGE_VARIANT", "\"" + project.ext.packageVariant + "\"" // Used by TermuxApplication class
 
         manifestPlaceholders.TERMUX_PACKAGE_NAME = "com.termux"
-        manifestPlaceholders.TERMUX_APP_NAME = "Termux"
-        manifestPlaceholders.TERMUX_API_APP_NAME = "Termux:API"
-        manifestPlaceholders.TERMUX_BOOT_APP_NAME = "Termux:Boot"
-        manifestPlaceholders.TERMUX_FLOAT_APP_NAME = "Termux:Float"
-        manifestPlaceholders.TERMUX_STYLING_APP_NAME = "Termux:Styling"
-        manifestPlaceholders.TERMUX_TASKER_APP_NAME = "Termux:Tasker"
-        manifestPlaceholders.TERMUX_WIDGET_APP_NAME = "Termux:Widget"
+        manifestPlaceholders.TERMUX_APP_NAME = "MDTerm"
+        manifestPlaceholders.TERMUX_API_APP_NAME = "MDTerm:API"
+        manifestPlaceholders.TERMUX_BOOT_APP_NAME = "MDTerm:Boot"
+        manifestPlaceholders.TERMUX_FLOAT_APP_NAME = "MDTerm:Float"
+        manifestPlaceholders.TERMUX_STYLING_APP_NAME = "MDTerm:Styling"
+        manifestPlaceholders.TERMUX_TASKER_APP_NAME = "MDTerm:Tasker"
+        manifestPlaceholders.TERMUX_WIDGET_APP_NAME = "MDTerm:Widget"
 
         externalNativeBuild {
             ndkBuild {
+                abiFilters(*rootProject.ext.termuxAppAbis)
                 cFlags "-std=c11", "-Wall", "-Wextra", "-Werror", "-Os", "-fno-stack-protector", "-Wl,--gc-sections"
             }
         }
@@ -71,8 +73,8 @@ android {
                 enable ((gradle.startParameter.taskNames.any { it.contains("Debug") } && splitAPKsForDebugBuilds == "1") ||
                     (gradle.startParameter.taskNames.any { it.contains("Release") } && splitAPKsForReleaseBuilds == "1"))
                 reset ()
-                include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
-                universalApk true
+                include(*rootProject.ext.termuxAppAbis)
+                universalApk rootProject.ext.termuxUniversalApk
             }
         }
     }
@@ -84,10 +86,23 @@ android {
             storePassword 'xrj45yWGLbsO7W0v'
             keyPassword 'xrj45yWGLbsO7W0v'
         }
+
+        def releaseStoreFile = System.getenv("MDTERM_RELEASE_STORE_FILE")
+        if (releaseStoreFile) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword System.getenv("MDTERM_RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("MDTERM_RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("MDTERM_RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            if (signingConfigs.findByName("release") != null) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled true
             shrinkResources false // Reproducible builds
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -132,10 +147,10 @@ android {
         variant.outputs.all { output ->
             if (variant.buildType.name == "debug") {
                 def abi = output.getFilter(com.android.build.OutputFile.ABI)
-                outputFileName = new File("termux-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "debug") + "_" + (abi ? abi : "universal") + ".apk")
+                outputFileName = new File("mdterm_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "debug") + "_" + (abi ? abi : rootProject.ext.termuxAppAbis[0]) + ".apk")
             } else if (variant.buildType.name == "release") {
                 def abi = output.getFilter(com.android.build.OutputFile.ABI)
-                outputFileName = new File("termux-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "release") + "_" + (abi ? abi : "universal") + ".apk")
+                outputFileName = new File("mdterm_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "release") + "_" + (abi ? abi : rootProject.ext.termuxAppAbis[0]) + ".apk")
             }
         }
     }
@@ -165,6 +180,9 @@ def validateVersionName(String versionName) {
 }
 
 def downloadBootstrap(String arch, String expectedChecksum, String version) {
+    def bootstrapAbis = [aarch64: "arm64-v8a", arm: "armeabi-v7a", i686: "x86", x86_64: "x86_64"]
+    if (!rootProject.ext.termuxAppAbis.contains(bootstrapAbis[arch])) return
+
     def digest = java.security.MessageDigest.getInstance("SHA-256")
 
     def localUrl = "src/main/cpp/bootstrap-" + arch + ".zip"
@@ -236,8 +254,5 @@ task downloadBootstraps() {
     }
 }
 
-afterEvaluate {
-    android.applicationVariants.all { variant ->
-        variant.javaCompileProvider.get().dependsOn(downloadBootstraps)
-    }
-}
+// Native assembly embeds the bootstrap zip, so it must be available before native compilation too.
+preBuild.dependsOn(downloadBootstraps)

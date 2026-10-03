@@ -46,7 +46,7 @@ public final class TextStyle {
     public final static int NUM_INDEXED_COLORS = 259;
 
     /** Normal foreground and background colors and no effects. */
-    final static long NORMAL = encode(COLOR_INDEX_FOREGROUND, COLOR_INDEX_BACKGROUND, 0);
+    public final static long NORMAL = encode(COLOR_INDEX_FOREGROUND, COLOR_INDEX_BACKGROUND, 0);
 
     static long encode(int foreColor, int backColor, int effect) {
         long result = effect & 0b111111111;

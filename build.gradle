@@ -15,3 +15,12 @@ allprojects {
         maven { url "https://jitpack.io" }
     }
 }
+
+// Restrict both native compilation and APK/bootstrap contents when building for one device.
+def supportedAbis = ["arm64-v8a"]
+def configuredAbis = System.getenv("TERMUX_APP_ABIS")
+ext.termuxAppAbis = configuredAbis == null ? supportedAbis : configuredAbis.split(",", -1).collect { it.trim() }.unique()
+ext.termuxUniversalApk = false
+if (termuxAppAbis.any { !supportedAbis.contains(it) }) {
+    throw new GradleException("TERMUX_APP_ABIS must be a comma-separated list of: " + supportedAbis.join(", "))
+}

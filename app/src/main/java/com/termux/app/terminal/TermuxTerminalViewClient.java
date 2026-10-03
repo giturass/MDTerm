@@ -1,7 +1,6 @@
 package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -16,6 +15,10 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
@@ -231,6 +234,17 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         return mActivity.getTerminalToolbarViewPager() == null || mActivity.isTerminalViewSelected() || mActivity.getTerminalView().hasFocus();
     }
 
+    @Override
+    public boolean shouldUseHorizontalCursorGestures() {
+        return true;
+    }
+
+    @Override
+    public boolean shouldUseVerticalCursorGestures() {
+        return mActivity.getExtraKeysView() != null && Boolean.TRUE.equals(
+            mActivity.getExtraKeysView().readSpecialButton(SpecialButton.CTRL, false));
+    }
+
 
 
     @Override
@@ -357,7 +371,10 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     @Override
     public boolean onLongPress(MotionEvent event) {
-        return false;
+        if (mActivity.getTerminalView().isSelectingText()) return false;
+        boolean shown = mActivity.showTerminalActions(event.getX(), event.getY());
+        if (shown) mActivity.getTerminalView().performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+        return shown;
     }
 
 
@@ -650,10 +667,16 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         }
     }
 
+    public void onHideSoftKeyboardRequest() {
+        KeyboardUtils.setSoftKeyboardVisibility(getShowSoftKeyboardRunnable(), mActivity,
+            mActivity.getTerminalView(), false);
+    }
+
     private Runnable getShowSoftKeyboardRunnable() {
         if (mShowSoftKeyboardRunnable == null) {
             mShowSoftKeyboardRunnable = () -> {
-                KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
+                if (!mActivity.getDrawer().isDrawerVisible(Gravity.START))
+                    KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
             };
         }
         return mShowSoftKeyboardRunnable;
@@ -704,7 +727,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         LinkedHashSet<CharSequence> urlSet = TermuxUrlUtils.extractUrls(text);
         if (urlSet.isEmpty()) {
-            new AlertDialog.Builder(mActivity).setMessage(R.string.title_select_url_none_found).show();
+            new MaterialAlertDialogBuilder(mActivity).setMessage(R.string.title_select_url_none_found).show();
             return;
         }
 
@@ -712,7 +735,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         Collections.reverse(Arrays.asList(urls)); // Latest first.
 
         // Click to copy url to clipboard:
-        final AlertDialog dialog = new AlertDialog.Builder(mActivity).setItems(urls, (di, which) -> {
+        final AlertDialog dialog = new MaterialAlertDialogBuilder(mActivity).setItems(urls, (di, which) -> {
             String url = (String) urls[which];
             ShareUtils.copyTextToClipboard(mActivity, url, mActivity.getString(R.string.msg_select_url_copied_to_clipboard));
         }).setTitle(R.string.title_select_url_dialog).create();

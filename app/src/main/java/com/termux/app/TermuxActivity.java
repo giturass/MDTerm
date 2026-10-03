@@ -1,32 +1,44 @@
 package com.termux.app;
 
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
+
 import android.content.ActivityNotFoundException;
+import android.content.ClipboardManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.view.ContextMenu;
-import android.view.ContextMenu.ContextMenuInfo;
+import android.provider.DocumentsContract;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.MotionEvent;
+import android.os.SystemClock;
+import android.widget.PopupMenu;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.color.MaterialColors;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import com.termux.R;
+import com.termux.filepicker.TermuxDocumentsProvider;
+import com.termux.app.ui.MaterialMenuDialog;
 import com.termux.app.api.file.FileReceiverActivity;
 import com.termux.app.terminal.TermuxActivityRootView;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
@@ -61,11 +73,13 @@ import com.termux.view.TerminalViewClient;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A terminal emulator activity.
@@ -175,7 +189,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private float mTerminalToolbarDefaultHeight;
 
+    private boolean mIsDrawerCompact;
+    private boolean mIsDrawerInputCollapsed;
+    private AlertDialog mActionsDialog;
 
+
+    private static final int CONTEXT_MENU_SELECT_TEXT_ID = 100;
+    private static final int CONTEXT_MENU_PASTE_ID = 101;
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
     private static final int CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1;
     private static final int CONTEXT_MENU_SHARE_SELECTED_TEXT = 10;
@@ -249,9 +269,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setNewSessionButtonView();
 
-        setToggleKeyboardView();
+        setFileSystemView();
 
-        registerForContextMenu(mTerminalView);
+        setAdaptiveDrawerLayout();
+
+        mTerminalView.setContextMenuAction(() ->
+            showTerminalActions(mTerminalView.getWidth() / 2f, mTerminalView.getHeight() / 2f));
 
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);
 
@@ -352,6 +375,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mIsInvalidState) return;
 
+        if (mActionsDialog != null) mActionsDialog.dismiss();
+
         if (mTermuxService != null) {
             // Do not leave service and session clients with references to activity.
             mTermuxService.unsetTermuxTerminalSessionClient();
@@ -388,6 +413,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Logger.logDebug(LOG_TAG, "onServiceConnected");
 
         mTermuxService = ((TermuxService.LocalBinder) service).service;
+        mTermuxTerminalSessionActivityClient.applyPendingColorChanges();
 
         setTermuxSessionsListView();
 
@@ -544,8 +570,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         final boolean showNow = mPreferences.toogleShowTerminalToolbar();
         Logger.showToast(this, (showNow ? getString(R.string.msg_enabling_terminal_toolbar) : getString(R.string.msg_disabling_terminal_toolbar)), true);
-        terminalToolbarViewPager.setVisibility(showNow ? View.VISIBLE : View.GONE);
-        if (showNow && isTerminalToolbarTextInputViewSelected()) {
+        terminalToolbarViewPager.setVisibility(showNow && !mIsDrawerInputCollapsed ? View.VISIBLE : View.GONE);
+        if (showNow && !mIsDrawerInputCollapsed && isTerminalToolbarTextInputViewSelected()) {
             // Focus the text input view if just revealed.
             findViewById(R.id.terminal_toolbar_text_input).requestFocus();
         }
@@ -582,16 +608,95 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         });
     }
 
-    private void setToggleKeyboardView() {
-        findViewById(R.id.toggle_keyboard_button).setOnClickListener(v -> {
-            mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
+    private void setFileSystemView() {
+        findViewById(R.id.file_system_button).setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(TermuxDocumentsProvider.getRootUri(), DocumentsContract.Root.MIME_TYPE_ITEM);
+            List<ResolveInfo> managers = getPackageManager().queryIntentActivities(intent,
+                PackageManager.MATCH_DEFAULT_ONLY | PackageManager.MATCH_SYSTEM_ONLY);
+            if (managers.isEmpty()) {
+                showToast(getString(R.string.error_system_file_manager_unavailable), true);
+                return;
+            }
+            ResolveInfo manager = managers.get(0);
+            intent.setClassName(manager.activityInfo.packageName, manager.activityInfo.name);
+            ActivityUtils.startActivity(this, intent);
             getDrawer().closeDrawers();
         });
+    }
 
-        findViewById(R.id.toggle_keyboard_button).setOnLongClickListener(v -> {
-            toggleTerminalToolbar();
-            return true;
+    public void setTerminalSurfaceColor(int color) {
+        View surface = findViewById(R.id.terminal_surface);
+        if (surface != null) surface.setBackgroundColor(color);
+        getWindow().getDecorView().setBackgroundColor(MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorSurface, 0));
+    }
+
+    /** Keep session navigation usable when the keyboard or split screen reduces the height. */
+    private void setAdaptiveDrawerLayout() {
+        getDrawer().addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
+            @Override
+            public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
+                setDrawerInputCollapsed(slideOffset > 0);
+            }
+
+            @Override
+            public void onDrawerOpened(@NonNull View drawerView) {
+                setDrawerInputCollapsed(true);
+            }
+
+            @Override
+            public void onDrawerClosed(@NonNull View drawerView) {
+                setDrawerInputCollapsed(false);
+            }
         });
+
+        View drawer = findViewById(R.id.left_drawer);
+        View header = findViewById(R.id.terminal_drawer_header);
+        View sessionsHeader = findViewById(R.id.terminal_sessions_header);
+        LinearLayout actions = findViewById(R.id.terminal_drawer_actions);
+        MaterialButton newSessionButton = findViewById(R.id.new_session_button);
+        MaterialButton fileSystemButton = findViewById(R.id.file_system_button);
+        int headerPaddingTop = header.getPaddingTop();
+        int headerPaddingBottom = header.getPaddingBottom();
+        int actionsPaddingTop = actions.getPaddingTop();
+
+        drawer.addOnLayoutChangeListener((view, left, top, right, bottom,
+                                          oldLeft, oldTop, oldRight, oldBottom) -> {
+            int availableHeight = bottom - top;
+            if (availableHeight <= 0) return;
+            boolean compact = availableHeight < ViewUtils.dpToPx(this, 360);
+            // Updating child layout parameters requests another layout; only do it on a transition.
+            if (compact == mIsDrawerCompact) return;
+            mIsDrawerCompact = compact;
+
+            sessionsHeader.setVisibility(compact ? View.GONE : View.VISIBLE);
+            header.setPaddingRelative(header.getPaddingStart(), compact ? 0 : headerPaddingTop,
+                header.getPaddingEnd(), compact ? 0 : headerPaddingBottom);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+            actions.setPaddingRelative(actions.getPaddingStart(), compact ? 0 : actionsPaddingTop,
+                actions.getPaddingEnd(), actions.getPaddingBottom());
+
+            for (MaterialButton button : new MaterialButton[]{newSessionButton, fileSystemButton}) {
+                LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) button.getLayoutParams();
+                params.width = 0;
+                params.weight = 1;
+                button.setLayoutParams(params);
+                button.setMinHeight(Math.round(ViewUtils.dpToPx(this, compact ? 48 : 52)));
+            }
+        });
+    }
+
+    private void setDrawerInputCollapsed(boolean collapsed) {
+        if (mIsDrawerInputCollapsed == collapsed) return;
+        mIsDrawerInputCollapsed = collapsed;
+        getTerminalToolbarViewPager().setVisibility(
+            !collapsed && mPreferences.shouldShowTerminalToolbar() ? View.VISIBLE : View.GONE);
+        if (collapsed) {
+            // Move focus away from the hidden text input and cancel any pending keyboard reveal.
+            mTerminalView.requestFocus();
+            mTermuxTerminalViewClient.onHideSoftKeyboardRequest();
+        }
     }
 
 
@@ -626,8 +731,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
 
 
-    @Override
-    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
+    public boolean showTerminalActions(float selectionX, float selectionY) {
+        TerminalSession session = getCurrentSession();
+        if (session == null || isFinishing()) return false;
+        if (mActionsDialog != null && mActionsDialog.isShowing()) return true;
+        Menu menu = new PopupMenu(this, mTerminalView).getMenu();
+        menu.add(Menu.NONE, CONTEXT_MENU_SELECT_TEXT_ID, Menu.NONE, R.string.action_select_text)
+            .setIcon(R.drawable.ic_action_select).setEnabled(session.getEmulator() != null);
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        menu.add(Menu.NONE, CONTEXT_MENU_PASTE_ID, Menu.NONE, R.string.action_paste_text).setIcon(R.drawable.ic_action_paste)
+            .setEnabled(session.isRunning() && clipboard != null && clipboard.hasPrimaryClip());
+        populateTerminalActions(menu);
+        mActionsDialog = MaterialMenuDialog.show(this, getString(R.string.terminal_actions_title), menu, item -> {
+            if (session != getCurrentSession()) return;
+            if (item.getItemId() == CONTEXT_MENU_SELECT_TEXT_ID) {
+                mTerminalView.post(() -> {
+                    if (isFinishing() || session != getCurrentSession() || session.getEmulator() == null) return;
+                    long now = SystemClock.uptimeMillis();
+                    MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, selectionX, selectionY, 0);
+                    mTerminalView.startTextSelectionMode(event);
+                    event.recycle();
+                });
+            } else if (item.getItemId() == CONTEXT_MENU_PASTE_ID) {
+                session.onPasteTextFromClipboard();
+            } else {
+                onContextItemSelected(item);
+            }
+        }, () -> mTerminalView.onContextMenuClosed(menu));
+        return true;
+    }
+
+    private void populateTerminalActions(Menu menu) {
         TerminalSession currentSession = getCurrentSession();
         if (currentSession == null) return;
 
@@ -646,8 +780,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal);
         menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn());
         menu.add(Menu.NONE, CONTEXT_MENU_HELP_ID, Menu.NONE, R.string.action_open_help);
-        menu.add(Menu.NONE, CONTEXT_MENU_SETTINGS_ID, Menu.NONE, R.string.action_open_settings);
         menu.add(Menu.NONE, CONTEXT_MENU_REPORT_ID, Menu.NONE, R.string.action_report_issue);
+        int[][] icons = {{CONTEXT_MENU_SELECT_URL_ID, R.drawable.ic_action_link},
+            {CONTEXT_MENU_SHARE_TRANSCRIPT_ID, R.drawable.ic_action_share},
+            {CONTEXT_MENU_SHARE_SELECTED_TEXT, R.drawable.ic_action_share},
+            {CONTEXT_MENU_AUTOFILL_USERNAME, R.drawable.ic_action_paste},
+            {CONTEXT_MENU_AUTOFILL_PASSWORD, R.drawable.ic_action_paste},
+            {CONTEXT_MENU_RESET_TERMINAL_ID, R.drawable.ic_action_reset},
+            {CONTEXT_MENU_KILL_PROCESS_ID, R.drawable.ic_action_close},
+            {CONTEXT_MENU_STYLING_ID, R.drawable.settings_tune},
+            {CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, R.drawable.ic_action_screen},
+            {CONTEXT_MENU_HELP_ID, R.drawable.ic_action_help},
+            {CONTEXT_MENU_REPORT_ID, R.drawable.ic_action_report}};
+        for (int[] icon : icons) {
+            MenuItem item = menu.findItem(icon[0]);
+            if (item != null) item.setIcon(icon[1]);
+        }
     }
 
     /** Hook system menu to show context menu instead. */
@@ -687,7 +835,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 showStylingDialog();
                 return true;
             case CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON:
-                toggleKeepScreenOn();
+                setKeepScreenOn(item.isChecked());
                 return true;
             case CONTEXT_MENU_HELP_ID:
                 ActivityUtils.startActivity(this, new Intent(this, HelpActivity.class));
@@ -713,7 +861,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void showKillSessionDialog(TerminalSession session) {
         if (session == null) return;
 
-        final AlertDialog.Builder b = new AlertDialog.Builder(this);
+        final AlertDialog.Builder b = new MaterialAlertDialogBuilder(this);
         b.setIcon(android.R.drawable.ic_dialog_alert);
         b.setMessage(R.string.title_confirm_kill_process);
         b.setPositiveButton(android.R.string.yes, (dialog, id) -> {
@@ -742,20 +890,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } catch (ActivityNotFoundException | IllegalArgumentException e) {
             // The startActivity() call is not documented to throw IllegalArgumentException.
             // However, crash reporting shows that it sometimes does, so catch it here.
-            new AlertDialog.Builder(this).setMessage(getString(R.string.error_styling_not_installed))
+            new MaterialAlertDialogBuilder(this).setMessage(getString(R.string.error_styling_not_installed))
                 .setPositiveButton(R.string.action_styling_install,
                     (dialog, which) -> ActivityUtils.startActivity(this, new Intent(Intent.ACTION_VIEW, Uri.parse(TermuxConstants.TERMUX_STYLING_FDROID_PACKAGE_URL))))
                 .setNegativeButton(android.R.string.cancel, null).show();
         }
     }
-    private void toggleKeepScreenOn() {
-        if (mTerminalView.getKeepScreenOn()) {
-            mTerminalView.setKeepScreenOn(false);
-            mPreferences.setKeepScreenOn(false);
-        } else {
-            mTerminalView.setKeepScreenOn(true);
-            mPreferences.setKeepScreenOn(true);
-        }
+    private void setKeepScreenOn(boolean enabled) {
+        mTerminalView.setKeepScreenOn(enabled);
+        mPreferences.setKeepScreenOn(enabled);
     }
 
 

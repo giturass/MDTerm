@@ -1,0 +1,11 @@
+<resources>
+    <string name="action_open_file_system">文件系统</string>
+    <string name="error_system_file_manager_unavailable">系统文件管理器不可用</string>
+    <string name="terminal_actions_title">终端操作</string>
+    <string name="action_select_text">选择文本</string>
+    <string name="action_paste_text">粘贴</string>
+    <string name="action_state_on">已开启</string>
+    <string name="action_state_off">已关闭</string>
+    <string name="log_choice_selected">已选择</string>
+    <string name="session_number_description">会话 %1$d</string>
+</resources>

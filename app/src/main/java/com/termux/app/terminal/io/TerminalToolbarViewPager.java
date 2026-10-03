@@ -9,6 +9,7 @@ import androidx.annotation.NonNull;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
+import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
@@ -58,13 +59,14 @@ public class TerminalToolbarViewPager {
             } else {
                 layout = inflater.inflate(R.layout.view_terminal_toolbar_text_input, collection, false);
                 final EditText editText = layout.findViewById(R.id.terminal_toolbar_text_input);
+                final TextInputLayout inputLayout = layout.findViewById(R.id.terminal_toolbar_text_input_layout);
 
                 if (mSavedTextInput != null) {
                     editText.setText(mSavedTextInput);
                     mSavedTextInput = null;
                 }
 
-                editText.setOnEditorActionListener((v, actionId, event) -> {
+                Runnable sendTextInput = () -> {
                     TerminalSession session = mActivity.getCurrentSession();
                     if (session != null) {
                         if (session.isRunning()) {
@@ -76,6 +78,10 @@ public class TerminalToolbarViewPager {
                         }
                         editText.setText("");
                     }
+                };
+                inputLayout.setEndIconOnClickListener(view -> sendTextInput.run());
+                editText.setOnEditorActionListener((v, actionId, event) -> {
+                    sendTextInput.run();
                     return true;
                 });
             }

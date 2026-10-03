@@ -42,6 +42,8 @@ import androidx.annotation.RequiresApi;
 import com.termux.terminal.KeyHandler;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
+import com.termux.terminal.TerminalColors;
+import com.termux.terminal.TextStyle;
 import com.termux.view.textselection.TextSelectionCursorController;
 
 /** View displaying and interacting with a {@link TerminalSession}. */
@@ -84,6 +86,11 @@ public final class TerminalView extends View {
 
     /** What was left in from scrolling movement. */
     float mScrollRemainder;
+
+    private int mTouchScrollAxis; // 0: undecided, 1: horizontal, 2: vertical
+    private boolean mTouchScrollMovesCursor;
+    private boolean mMultiTouchGesture;
+    private float mCursorScrollRemainder;
 
     /** If non-zero, this is the last unicode code point received if that was a combining character. */
     int mCombiningAccent;
@@ -163,7 +170,8 @@ public final class TerminalView extends View {
             @Override
             public boolean onUp(MotionEvent event) {
                 mScrollRemainder = 0.0f;
-                if (mEmulator != null && mEmulator.isMouseTrackingActive() && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger) {
+                mCursorScrollRemainder = 0.0f;
+                if (mEmulator != null && mEmulator.isMouseTrackingActive() && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger && !mMultiTouchGesture) {
                     // Quick event processing when mouse tracking is active - do not wait for check of double tapping
                     // for zooming.
                     sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, true);
@@ -190,6 +198,7 @@ public final class TerminalView extends View {
             @Override
             public boolean onScroll(MotionEvent e, float distanceX, float distanceY) {
                 if (mEmulator == null) return true;
+                if (mMultiTouchGesture || mGestureRecognizer.isInProgress()) return true;
                 if (mEmulator.isMouseTrackingActive() && e.isFromSource(InputDevice.SOURCE_MOUSE)) {
                     // If moving with mouse pointer while pressing button, report that instead of scroll.
                     // This means that we never report moving with button press-events for touch input,
@@ -198,6 +207,20 @@ public final class TerminalView extends View {
                     sendMouseEventCode(e, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
                 } else {
                     scrolledWithFinger = true;
+                    if (!e.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText()) {
+                        // Keep a diagonal drag on its initial axis and sample CTRL once per gesture.
+                        if (mTouchScrollAxis == 0) {
+                            mTouchScrollAxis = Math.abs(distanceX) > Math.abs(distanceY) ? 1 : 2;
+                            mTouchScrollMovesCursor = mTouchScrollAxis == 1
+                                ? mClient.shouldUseHorizontalCursorGestures()
+                                : mClient.shouldUseVerticalCursorGestures();
+                        }
+                        if (mTouchScrollMovesCursor) {
+                            moveCursorByScroll(mTouchScrollAxis == 1 ? distanceX : distanceY,
+                                mTouchScrollAxis == 1);
+                            return true;
+                        }
+                    }
                     distanceY += mScrollRemainder;
                     int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
                     mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
@@ -217,6 +240,8 @@ public final class TerminalView extends View {
             @Override
             public boolean onFling(final MotionEvent e2, float velocityX, float velocityY) {
                 if (mEmulator == null) return true;
+                // Cursor movement stops with the finger; pinching must not start a scroll fling.
+                if (mTouchScrollMovesCursor || mMultiTouchGesture) return true;
                 // Do not start scrolling until last fling has been taken care of:
                 if (!mScroller.isFinished()) return true;
 
@@ -252,6 +277,13 @@ public final class TerminalView extends View {
 
             @Override
             public boolean onDown(float x, float y) {
+                mTouchScrollAxis = 0;
+                mTouchScrollMovesCursor = false;
+                mMultiTouchGesture = false;
+                mCursorScrollRemainder = 0;
+                mScrollRemainder = 0;
+                scrolledWithFinger = false;
+                mScroller.abortAnimation();
                 // Why is true not returned here?
                 // https://developer.android.com/training/gestures/detector.html#detect-a-subset-of-supported-gestures
                 // Although setting this to true still does not solve the following errors when long pressing in terminal view text area
@@ -283,6 +315,27 @@ public final class TerminalView extends View {
     }
 
 
+
+    private Runnable mContextMenuAction;
+
+    /** Let the host supply its own menu for keyboard, mouse and selection overflow actions. */
+    public void setContextMenuAction(Runnable action) {
+        mContextMenuAction = action;
+    }
+
+    @Override
+    public boolean showContextMenu() {
+        if (mContextMenuAction == null) return super.showContextMenu();
+        mContextMenuAction.run();
+        return true;
+    }
+
+    @Override
+    public boolean showContextMenu(float x, float y) {
+        if (mContextMenuAction == null) return super.showContextMenu(x, y);
+        mContextMenuAction.run();
+        return true;
+    }
 
     /**
      * @param client The {@link TerminalViewClient} interface implementation to allow
@@ -637,6 +690,26 @@ public final class TerminalView extends View {
         mEmulator.sendMouseEvent(button, x, y, pressed);
     }
 
+    private void moveCursorByScroll(float distance, boolean horizontal) {
+        if (mTermSession == null || mRenderer == null) return;
+        float density = getResources().getDisplayMetrics().density;
+        float step = horizontal ? Math.max(mRenderer.mFontWidth, 12 * density)
+            : Math.max(mRenderer.mFontLineSpacing, 18 * density);
+        mCursorScrollRemainder += distance;
+        int count = (int) (mCursorScrollRemainder / step);
+        mCursorScrollRemainder -= count * step;
+        if (count == 0) return;
+
+        finalizeComposingIfActive();
+        setTopRow(0);
+        int keyCode = horizontal
+            ? (count > 0 ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_RIGHT)
+            : (count > 0 ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN);
+        // CTRL selects vertical cursor mode without modifying or consuming these arrow keys.
+        for (int i = 0; i < Math.abs(count); i++) handleKeyCode(keyCode, 0);
+        invalidate();
+    }
+
     /** Perform a scroll, either from dragging the screen or by scrolling a mouse wheel. */
     void doScroll(MotionEvent event, int rowsDown) {
         boolean up = rowsDown < 0;
@@ -673,6 +746,13 @@ public final class TerminalView extends View {
     public boolean onTouchEvent(MotionEvent event) {
         if (mEmulator == null) return true;
         final int action = event.getAction();
+        if (event.getPointerCount() > 1) mMultiTouchGesture = true;
+        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+            mCursorScrollRemainder = 0;
+            mScrollRemainder = 0;
+            mTouchScrollAxis = 0;
+            mTouchScrollMovesCursor = false;
+        }
 
         if (isSelectingText()) {
             updateFloatingToolbarVisibility(event);
@@ -1100,7 +1180,7 @@ public final class TerminalView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         if (mEmulator == null) {
-            canvas.drawColor(0XFF000000);
+            canvas.drawColor(TerminalColors.COLOR_SCHEME.mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND]);
         } else {
             // render the terminal view and highlight any selected text
             int[] sel = mDefaultSelectors;
@@ -1167,6 +1247,9 @@ public final class TerminalView extends View {
      */
     private void drawComposingText(Canvas canvas) {
         if (mEmulator == null || mRenderer == null) return;
+        // Some IMEs still send composing text for TYPE_NULL. Respect the preview preference
+        // independently of inputType, without discarding the IME's pending text.
+        if (!mClient.shouldEnableImeComposing()) return;
         CharSequence composing = mComposingText;
         if (composing == null || composing.length() == 0) return;
         // Read the IME's pre-edit cursor (its Selection within the composing span of the fake
