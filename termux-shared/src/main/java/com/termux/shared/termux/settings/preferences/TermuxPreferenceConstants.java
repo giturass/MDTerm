@@ -90,6 +90,8 @@ public final class TermuxPreferenceConstants {
      * Termux app constants.
      */
     public static final class TERMUX_APP {
+        public static final String KEY_TERMINAL_FULLSCREEN = "terminal_fullscreen";
+        public static final String KEY_TERMINAL_VIBRATION = "terminal_vibration";
 
         /**
          * Defines the key for whether terminal view margin adjustment that is done to prevent soft

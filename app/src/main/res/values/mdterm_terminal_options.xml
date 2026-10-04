@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="terminal_fullscreen_title">Fullscreen terminal</string>
+    <string name="terminal_fullscreen_summary">Hide the status and navigation bars. Swipe from an edge to show them temporarily.</string>
+    <string name="terminal_vibration_title">Vibration</string>
+    <string name="terminal_vibration_summary">Use system vibration for terminal alerts and touch feedback</string>
+    <string name="session_actions_description">Actions for session %1$d</string>
+    <string name="action_close_session">Close session (terminate process)</string>
+    <string name="action_rename_session">Rename</string>
+</resources>

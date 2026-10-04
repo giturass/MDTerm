@@ -73,6 +73,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
@@ -201,7 +204,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_AUTOFILL_USERNAME = 11;
     private static final int CONTEXT_MENU_AUTOFILL_PASSWORD = 2;
     private static final int CONTEXT_MENU_RESET_TERMINAL_ID = 3;
-    private static final int CONTEXT_MENU_KILL_PROCESS_ID = 4;
     private static final int CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 6;
     private static final int CONTEXT_MENU_HELP_ID = 7;
     private static final int CONTEXT_MENU_SETTINGS_ID = 8;
@@ -254,10 +256,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mNavBarHeight = insets.getSystemWindowInsetBottom();
             return insets;
         });
-
-        if (mProperties.isUsingFullScreen()) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        }
 
         setTermuxTerminalViewAndClients();
 
@@ -337,6 +335,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
+
+        applyTerminalDisplayPreferences();
 
         // Check if a crash happened on last run of the app or if a plugin crashed and show a
         // notification with the crash details if it did
@@ -528,7 +528,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTermuxSessionListViewController = new TermuxSessionsListViewController(this, mTermuxService.getTermuxSessions());
         termuxSessionsListView.setAdapter(mTermuxSessionListViewController);
         termuxSessionsListView.setOnItemClickListener(mTermuxSessionListViewController);
-        termuxSessionsListView.setOnItemLongClickListener(mTermuxSessionListViewController);
     }
 
 
@@ -791,7 +790,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username);
         if (autoFillEnabled)
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password);
-        menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE, getResources().getString(R.string.action_kill_process, getCurrentSession().getPid())).setEnabled(currentSession.isRunning());
         menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn());
         menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
         int[][] icons = {{CONTEXT_MENU_SELECT_URL_ID, R.drawable.ic_action_link},
@@ -799,7 +797,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             {CONTEXT_MENU_SHARE_SELECTED_TEXT, R.drawable.ic_action_share},
             {CONTEXT_MENU_AUTOFILL_USERNAME, R.drawable.ic_action_paste},
             {CONTEXT_MENU_AUTOFILL_PASSWORD, R.drawable.ic_action_paste},
-            {CONTEXT_MENU_KILL_PROCESS_ID, R.drawable.ic_action_close},
             {CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, R.drawable.ic_action_screen}};
         for (int[] icon : icons) {
             MenuItem item = menu.findItem(icon[0]);
@@ -837,9 +834,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             case CONTEXT_MENU_RESET_TERMINAL_ID:
                 onResetTerminalSession(session);
                 return true;
-            case CONTEXT_MENU_KILL_PROCESS_ID:
-                showKillSessionDialog(session);
-                return true;
             case CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON:
                 setKeepScreenOn(item.isChecked());
                 return true;
@@ -864,15 +858,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTerminalView.onContextMenuClosed(menu);
     }
 
-    private void showKillSessionDialog(TerminalSession session) {
+    public void showCloseSessionDialog(TerminalSession session) {
         if (session == null) return;
 
         final AlertDialog.Builder b = new MaterialAlertDialogBuilder(this);
         b.setIcon(android.R.drawable.ic_dialog_alert);
+        b.setTitle(R.string.action_close_session);
         b.setMessage(R.string.title_confirm_kill_process);
         b.setPositiveButton(android.R.string.yes, (dialog, id) -> {
             dialog.dismiss();
-            session.finishIfRunning();
+            mTermuxTerminalSessionActivityClient.closeSession(session);
         });
         b.setNegativeButton(android.R.string.no, null);
         b.show();
@@ -891,6 +886,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setKeepScreenOn(boolean enabled) {
         mTerminalView.setKeepScreenOn(enabled);
         mPreferences.setKeepScreenOn(enabled);
+    }
+
+    private void applyTerminalDisplayPreferences() {
+        // Insets-based immersive mode keeps IME resizing available, unlike FLAG_FULLSCREEN.
+        WindowInsetsControllerCompat controller =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        controller.setSystemBarsBehavior(
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        if (mPreferences.isTerminalFullscreenEnabled()) {
+            controller.hide(WindowInsetsCompat.Type.systemBars());
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars());
+        }
+        setTerminalHapticFeedback(getWindow().getDecorView(), mPreferences.isTerminalVibrationEnabled());
+    }
+
+    private void setTerminalHapticFeedback(View view, boolean enabled) {
+        view.setHapticFeedbackEnabled(enabled);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++)
+                setTerminalHapticFeedback(group.getChildAt(i), enabled);
+        }
     }
 
 

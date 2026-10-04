@@ -1,7 +1,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:minHeight="64dp" android:orientation="horizontal" android:gravity="center_vertical"
-    android:padding="16dp"
+    android:paddingStart="16dp" android:paddingEnd="4dp" android:paddingVertical="8dp"
     android:screenReaderFocusable="true" android:background="@drawable/session_background_selected">
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/session_number" android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -24,4 +24,12 @@
             android:ellipsize="end" android:maxLines="2" android:textStyle="normal"
             android:textColor="@color/terminal_session_text" android:textAppearance="?attr/textAppearanceBodyMedium" />
     </LinearLayout>
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/session_actions"
+        android:layout_width="48dp" android:layout_height="48dp"
+        android:layout_marginStart="4dp" android:padding="12dp"
+        android:focusable="false"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_session_more"
+        android:tint="?attr/colorOnSurfaceVariant" />
 </LinearLayout>

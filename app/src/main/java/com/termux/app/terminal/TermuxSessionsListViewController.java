@@ -3,6 +3,7 @@ package com.termux.app.terminal;
 import android.annotation.SuppressLint;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
+import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -10,6 +11,7 @@ import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.widget.PopupMenu;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
@@ -18,7 +20,7 @@ import com.termux.terminal.TerminalSession;
 
 import java.util.List;
 
-public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession> implements AdapterView.OnItemClickListener, AdapterView.OnItemLongClickListener {
+public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession> implements AdapterView.OnItemClickListener {
 
     final TermuxActivity mActivity;
 
@@ -44,6 +46,11 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
 
         TerminalSession sessionAtRow = getItem(position).getTerminalSession();
+        View actions = sessionRowView.findViewById(R.id.session_actions);
+        actions.setContentDescription(mActivity.getString(R.string.session_actions_description, position + 1));
+        actions.setEnabled(sessionAtRow != null);
+        actions.setHapticFeedbackEnabled(mActivity.getPreferences().isTerminalVibrationEnabled());
+        actions.setOnClickListener(view -> showSessionActions(view, sessionAtRow));
         String name = sessionAtRow == null ? null : sessionAtRow.mSessionName;
         String summary = sessionAtRow == null ? null : sessionAtRow.getTitle();
         sessionNameView.setText(name);
@@ -67,11 +74,22 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         mActivity.getDrawer().closeDrawers();
     }
 
-    @Override
-    public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
-        final TermuxSession selectedSession = getItem(position);
-        mActivity.getTermuxTerminalSessionClient().renameSession(selectedSession.getTerminalSession());
-        return true;
+    private void showSessionActions(View anchor, TerminalSession session) {
+        if (session == null) return;
+        PopupMenu popup = new PopupMenu(mActivity, anchor);
+        popup.getMenu().add(Menu.NONE, 1, Menu.NONE, R.string.action_rename_session);
+        popup.getMenu().add(Menu.NONE, 2, Menu.NONE, R.string.action_close_session);
+        popup.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 1) {
+                mActivity.getTermuxTerminalSessionClient().renameSession(session);
+            } else if (item.getItemId() == 2) {
+                mActivity.showCloseSessionDialog(session);
+            } else {
+                return false;
+            }
+            return true;
+        });
+        popup.show();
     }
 
 }
