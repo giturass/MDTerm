@@ -39,7 +39,6 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
 
         TextView sessionNameView = sessionRowView.findViewById(R.id.session_name);
         TextView sessionTitleView = sessionRowView.findViewById(R.id.session_title);
-        View activityIndicator = sessionRowView.findViewById(R.id.session_activity_indicator);
         TextView sessionNumberView = sessionRowView.findViewById(R.id.session_number);
         sessionNumberView.setText(String.valueOf(position + 1));
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
@@ -54,7 +53,6 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
 
         boolean current = sessionAtRow != null && sessionAtRow == mActivity.getCurrentSession();
         sessionRowView.setActivated(current);
-        activityIndicator.setVisibility(sessionAtRow != null && sessionAtRow.isRunning() ? View.VISIBLE : View.GONE);
         // State is available to screen readers without adding labels to the card.
         sessionRowView.setStateDescription(sessionAtRow == null ? null : mActivity.getString(
             !sessionAtRow.isRunning() ? R.string.session_status_finished

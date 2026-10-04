@@ -36,7 +36,7 @@
 
 
     <!-- Terminal Sidebar and Shortcuts -->
-    <string name="terminal_sessions_header">会话</string>
+    <string name="terminal_sessions_header">会话列表</string>
     <string name="action_new_session">新建会话</string>
     <string name="action_new_session_failsafe">故障安全模式</string>
     <string name="title_max_terminals_reached">已达到终端数量上限</string>
