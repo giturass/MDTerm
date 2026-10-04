@@ -10,8 +10,6 @@
     <string name="session_number_description">会话 %1$d</string>
     <string name="session_status_current">当前会话</string>
     <string name="session_status_running">运行中</string>
-    <string name="session_status_starting">启动中</string>
     <string name="session_status_finished">已结束</string>
-    <string name="session_status_failed">已退出 · %1$d</string>
     <string name="session_exit_notification">%1$s 已结束</string>
 </resources>

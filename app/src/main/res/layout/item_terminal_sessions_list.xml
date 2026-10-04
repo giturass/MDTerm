@@ -1,6 +1,6 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:minHeight="88dp" android:orientation="horizontal" android:gravity="top"
+    android:minHeight="64dp" android:orientation="horizontal" android:gravity="center_vertical"
     android:padding="16dp"
     android:screenReaderFocusable="true" android:background="@drawable/session_background_selected">
     <com.google.android.material.textview.MaterialTextView
@@ -14,20 +14,23 @@
         android:layout_weight="1" android:orientation="vertical" android:duplicateParentState="true">
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/session_name" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp" android:visibility="gone"
             android:duplicateParentState="true" android:ellipsize="end" android:maxLines="1"
             android:textStyle="bold" android:textColor="@color/terminal_session_text"
             android:textAppearance="?attr/textAppearanceTitleSmall" />
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/session_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" android:duplicateParentState="true"
-            android:ellipsize="end" android:maxLines="2" android:textStyle="normal"
-            android:textColor="@color/terminal_session_text" android:textAppearance="?attr/textAppearanceBodyMedium" />
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/session_status" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:paddingHorizontal="10dp" android:paddingVertical="4dp"
-            android:gravity="center_vertical" android:maxLines="1"
-            android:background="@drawable/session_status_background"
-            android:drawableStart="@drawable/session_status_dot" android:drawablePadding="6dp"
-            android:textAppearance="?attr/textAppearanceLabelSmall" />
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="top" android:duplicateParentState="true">
+            <com.termux.app.terminal.SessionActivityIndicator
+                android:id="@+id/session_activity_indicator"
+                android:layout_width="20dp" android:layout_height="20dp"
+                android:layout_marginEnd="4dp" android:visibility="gone"
+                android:importantForAccessibility="no" />
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/session_title" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:duplicateParentState="true"
+                android:ellipsize="end" android:maxLines="2" android:textStyle="normal"
+                android:textColor="@color/terminal_session_text" android:textAppearance="?attr/textAppearanceBodyMedium" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
