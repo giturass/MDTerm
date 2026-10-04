@@ -3,6 +3,7 @@ package com.termux.shared.termux.extrakeys;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -496,6 +497,7 @@ public final class ExtraKeysView extends GridLayout {
     private MaterialButton createMaterialKeyButton() {
         MaterialButton button = new MaterialButton(getContext());
         button.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelLarge);
+        button.setTypeface(button.getTypeface(), Typeface.BOLD);
         button.setTextColor(new ColorStateList(
             new int[][] {new int[] {android.R.attr.state_checked}, new int[] {}},
             new int[] {mButtonActiveTextColor, mButtonTextColor}));
