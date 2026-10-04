@@ -149,6 +149,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         }
 
         int index = service.getIndexOfSession(finishedSession);
+        // A session closed from its card has already been removed and its result delivered.
+        if (index < 0) return;
 
         // For plugin commands that expect the result back, we should immediately close the session
         // and send the result back instead of waiting fo the user to press enter.
@@ -207,7 +209,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
         switch (mActivity.getProperties().getBellBehaviour()) {
             case TermuxPropertyConstants.IVALUE_BELL_BEHAVIOUR_VIBRATE:
-                BellHandler.getInstance(mActivity).doBell();
+                if (mActivity.getPreferences().isTerminalVibrationEnabled())
+                    BellHandler.getInstance(mActivity).doBell();
                 break;
             case TermuxPropertyConstants.IVALUE_BELL_BEHAVIOUR_BEEP:
                 loadBellSoundPool();
@@ -431,13 +434,35 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         TermuxService service = mActivity.getTermuxService();
         if (service == null) return;
 
+        if (finishedSession == null || finishedSession.isRunning()) return;
+        boolean wasCurrent = finishedSession == mActivity.getCurrentSession();
         int index = service.removeTermuxSession(finishedSession);
+        if (index < 0) return;
+        selectSessionAfterRemoval(service, index, wasCurrent);
+    }
 
+    public void closeSession(TerminalSession session) {
+        TermuxService service = mActivity.getTermuxService();
+        if (service == null || session == null) return;
+        int index = service.getIndexOfSession(session);
+        if (index < 0) return;
+        if (!session.isRunning()) {
+            removeFinishedSession(session);
+            return;
+        }
+        boolean wasCurrent = session == mActivity.getCurrentSession();
+        TermuxSession termuxSession = service.getTermuxSession(index);
+        // Send the failure result to plugins, remove the card, and terminate its process.
+        termuxSession.killIfExecuting(mActivity, true);
+        selectSessionAfterRemoval(service, index, wasCurrent);
+    }
+
+    private void selectSessionAfterRemoval(TermuxService service, int index, boolean wasCurrent) {
         int size = service.getTermuxSessionsSize();
         if (size == 0) {
             // There are no sessions to show, so finish the activity.
             mActivity.finishActivityIfNotFinishing();
-        } else {
+        } else if (wasCurrent) {
             if (index >= size) {
                 index = size - 1;
             }
@@ -445,6 +470,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             if (termuxSession != null)
                 setCurrentSession(termuxSession.getTerminalSession());
         }
+        termuxSessionListNotifyUpdated();
     }
 
     public void termuxSessionListNotifyUpdated() {

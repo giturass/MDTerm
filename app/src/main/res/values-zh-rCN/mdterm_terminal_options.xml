@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="terminal_fullscreen_title">终端界面全屏显示</string>
+    <string name="terminal_fullscreen_summary">隐藏状态栏和导航栏，从屏幕边缘滑动可临时显示</string>
+    <string name="terminal_vibration_title">振动</string>
+    <string name="terminal_vibration_summary">使用系统振动提供终端提示和触摸反馈</string>
+    <string name="session_actions_description">会话 %1$d 的操作菜单</string>
+    <string name="action_close_session">关闭会话（终止进程）</string>
+    <string name="action_rename_session">重命名</string>
+</resources>
