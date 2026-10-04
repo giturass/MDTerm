@@ -21,10 +21,15 @@
         <LinearLayout
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal" android:gravity="top" android:duplicateParentState="true">
-            <com.termux.app.terminal.SessionActivityIndicator
+            <ProgressBar
                 android:id="@+id/session_activity_indicator"
                 android:layout_width="20dp" android:layout_height="20dp"
                 android:layout_marginEnd="4dp" android:visibility="gone"
+                android:indeterminate="true" android:indeterminateOnly="true"
+                android:indeterminateDrawable="@drawable/session_activity_orbit"
+                android:indeterminateTint="?attr/colorPrimary"
+                android:indeterminateDuration="1600" android:indeterminateBehavior="repeat"
+                android:interpolator="@android:interpolator/linear"
                 android:importantForAccessibility="no" />
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/session_title" android:layout_width="0dp" android:layout_height="wrap_content"
