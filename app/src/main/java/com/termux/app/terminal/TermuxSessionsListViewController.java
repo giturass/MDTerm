@@ -1,7 +1,6 @@
 package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
-import android.content.res.ColorStateList;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -12,7 +11,6 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
-import com.google.android.material.color.MaterialColors;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
@@ -41,7 +39,7 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
 
         TextView sessionNameView = sessionRowView.findViewById(R.id.session_name);
         TextView sessionTitleView = sessionRowView.findViewById(R.id.session_title);
-        TextView sessionStatusView = sessionRowView.findViewById(R.id.session_status);
+        SessionActivityIndicator activityIndicator = sessionRowView.findViewById(R.id.session_activity_indicator);
         TextView sessionNumberView = sessionRowView.findViewById(R.id.session_number);
         sessionNumberView.setText(String.valueOf(position + 1));
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
@@ -49,44 +47,19 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         TerminalSession sessionAtRow = getItem(position).getTerminalSession();
         String name = sessionAtRow == null ? null : sessionAtRow.mSessionName;
         String summary = sessionAtRow == null ? null : sessionAtRow.getTitle();
-        sessionNameView.setText(TextUtils.isEmpty(name)
-            ? mActivity.getString(R.string.session_number_description, position + 1) : name);
+        sessionNameView.setText(name);
+        sessionNameView.setVisibility(TextUtils.isEmpty(name) ? View.GONE : View.VISIBLE);
         sessionTitleView.setText(summary);
         sessionTitleView.setVisibility(TextUtils.isEmpty(summary) ? View.GONE : View.VISIBLE);
 
         boolean current = sessionAtRow != null && sessionAtRow == mActivity.getCurrentSession();
         sessionRowView.setActivated(current);
-        bindSessionStatus(sessionStatusView, sessionAtRow, current);
+        activityIndicator.setActive(sessionAtRow != null && sessionAtRow.isRunning());
+        // State is available to screen readers without adding labels to the card.
+        sessionRowView.setStateDescription(sessionAtRow == null ? null : mActivity.getString(
+            !sessionAtRow.isRunning() ? R.string.session_status_finished
+                : current ? R.string.session_status_current : R.string.session_status_running));
         return sessionRowView;
-    }
-
-    private void bindSessionStatus(TextView statusView, TerminalSession session, boolean current) {
-        int backgroundAttr;
-        int textAttr;
-        if (session == null) {
-            statusView.setText(R.string.session_status_starting);
-            backgroundAttr = com.google.android.material.R.attr.colorSurfaceContainerHighest;
-            textAttr = com.google.android.material.R.attr.colorOnSurfaceVariant;
-        } else if (!session.isRunning()) {
-            boolean failed = session.getExitStatus() != 0;
-            statusView.setText(failed
-                ? mActivity.getString(R.string.session_status_failed, session.getExitStatus())
-                : mActivity.getString(R.string.session_status_finished));
-            backgroundAttr = failed ? com.google.android.material.R.attr.colorErrorContainer
-                : com.google.android.material.R.attr.colorSurfaceContainerHighest;
-            textAttr = failed ? com.google.android.material.R.attr.colorOnErrorContainer
-                : com.google.android.material.R.attr.colorOnSurfaceVariant;
-        } else {
-            statusView.setText(current ? R.string.session_status_current : R.string.session_status_running);
-            backgroundAttr = current ? com.google.android.material.R.attr.colorPrimary
-                : com.google.android.material.R.attr.colorTertiaryContainer;
-            textAttr = current ? com.google.android.material.R.attr.colorOnPrimary
-                : com.google.android.material.R.attr.colorOnTertiaryContainer;
-        }
-        int textColor = MaterialColors.getColor(statusView, textAttr);
-        statusView.setTextColor(textColor);
-        statusView.setCompoundDrawableTintList(ColorStateList.valueOf(textColor));
-        statusView.setBackgroundTintList(ColorStateList.valueOf(MaterialColors.getColor(statusView, backgroundAttr)));
     }
 
     @Override
