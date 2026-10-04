@@ -3,6 +3,7 @@ package com.termux.app;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.Application;
+import android.os.Looper;
 import android.view.View;
 import android.widget.FrameLayout;
 
@@ -12,6 +13,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
 import org.robolectric.android.controller.ActivityController;
@@ -37,6 +39,7 @@ public class SessionActivityIndicatorTest {
         ValueAnimator animator = ReflectionHelpers.getField(indicator, "mAnimator");
 
         indicator.setActive(true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue(animator.isStarted());
         card.setVisibility(View.INVISIBLE);
         assertFalse(animator.isStarted());
@@ -52,6 +55,7 @@ public class SessionActivityIndicatorTest {
         card.removeView(indicator);
         assertFalse(animator.isStarted());
         card.addView(indicator);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue(animator.isStarted());
 
         controller.pause().stop().destroy();

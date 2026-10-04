@@ -768,30 +768,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean autoFillEnabled = mTerminalView.isAutoFillEnabled();
 
         menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url);
-        menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
         if (!DataUtils.isNullOrEmpty(mTerminalView.getStoredSelectedText()))
             menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text);
         if (autoFillEnabled)
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username);
         if (autoFillEnabled)
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password);
-        menu.add(Menu.NONE, CONTEXT_MENU_RESET_TERMINAL_ID, Menu.NONE, R.string.action_reset_terminal);
         menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE, getResources().getString(R.string.action_kill_process, getCurrentSession().getPid())).setEnabled(currentSession.isRunning());
         menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal);
         menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn());
-        menu.add(Menu.NONE, CONTEXT_MENU_HELP_ID, Menu.NONE, R.string.action_open_help);
-        menu.add(Menu.NONE, CONTEXT_MENU_REPORT_ID, Menu.NONE, R.string.action_report_issue);
+        menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
         int[][] icons = {{CONTEXT_MENU_SELECT_URL_ID, R.drawable.ic_action_link},
             {CONTEXT_MENU_SHARE_TRANSCRIPT_ID, R.drawable.ic_action_share},
             {CONTEXT_MENU_SHARE_SELECTED_TEXT, R.drawable.ic_action_share},
             {CONTEXT_MENU_AUTOFILL_USERNAME, R.drawable.ic_action_paste},
             {CONTEXT_MENU_AUTOFILL_PASSWORD, R.drawable.ic_action_paste},
-            {CONTEXT_MENU_RESET_TERMINAL_ID, R.drawable.ic_action_reset},
             {CONTEXT_MENU_KILL_PROCESS_ID, R.drawable.ic_action_close},
             {CONTEXT_MENU_STYLING_ID, R.drawable.settings_tune},
-            {CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, R.drawable.ic_action_screen},
-            {CONTEXT_MENU_HELP_ID, R.drawable.ic_action_help},
-            {CONTEXT_MENU_REPORT_ID, R.drawable.ic_action_report}};
+            {CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, R.drawable.ic_action_screen}};
         for (int[] icon : icons) {
             MenuItem item = menu.findItem(icon[0]);
             if (item != null) item.setIcon(icon[1]);
