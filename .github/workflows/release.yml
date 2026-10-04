@@ -90,7 +90,7 @@ jobs:
       - name: Upload release APK and checksum
         uses: actions/upload-artifact@v6
         with:
-          name: mdterm-release-${{ github.ref_name }}
+          name: mdterm-release-${{ github.sha }}
           if-no-files-found: error
           path: |
             app/build/outputs/apk/release/*_arm64-v8a.apk
