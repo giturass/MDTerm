@@ -80,6 +80,16 @@
                         android:textColor="?attr/colorOnSurface" />
 
                     <ImageButton
+                        android:id="@+id/toggle_keyboard_button"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_keyboard"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/action_toggle_soft_keyboard"
+                        app:tint="?attr/termuxActivityDrawerImageTint" />
+
+                    <ImageButton
                         android:id="@+id/settings_button"
                         android:layout_width="48dp"
                         android:layout_height="48dp"

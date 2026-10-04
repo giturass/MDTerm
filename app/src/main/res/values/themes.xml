@@ -19,10 +19,10 @@
         <item name="termuxActivityDrawerBackground">?attr/colorSurfaceContainerLow</item>
         <item name="termuxActivityDrawerImageTint">?attr/colorOnSurfaceVariant</item>
 
-        <!-- Shared tonal surfaces connect the terminal controls to the settings UI. -->
+        <!-- Use the primary/on-primary pair to make active controls stand out. -->
         <item name="extraKeysButtonTextColor">?attr/colorOnSurfaceVariant</item>
-        <item name="extraKeysButtonActiveTextColor">?attr/colorOnSecondaryContainer</item>
+        <item name="extraKeysButtonActiveTextColor">?attr/colorOnPrimary</item>
         <item name="extraKeysButtonBackgroundColor">?attr/colorSurfaceContainerHigh</item>
-        <item name="extraKeysButtonActiveBackgroundColor">?attr/colorSecondaryContainer</item>
+        <item name="extraKeysButtonActiveBackgroundColor">?attr/colorPrimary</item>
     </style>
 </resources>

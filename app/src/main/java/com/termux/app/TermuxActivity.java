@@ -2,7 +2,6 @@ package com.termux.app;
 
 import android.annotation.SuppressLint;
 
-import android.content.ActivityNotFoundException;
 import android.content.ClipboardManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -12,7 +11,6 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.provider.DocumentsContract;
@@ -191,6 +189,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private boolean mIsDrawerCompact;
     private boolean mIsDrawerInputCollapsed;
+    private boolean mToggleSoftKeyboardOnDrawerClose;
     private AlertDialog mActionsDialog;
 
 
@@ -203,7 +202,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_AUTOFILL_PASSWORD = 2;
     private static final int CONTEXT_MENU_RESET_TERMINAL_ID = 3;
     private static final int CONTEXT_MENU_KILL_PROCESS_ID = 4;
-    private static final int CONTEXT_MENU_STYLING_ID = 5;
     private static final int CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 6;
     private static final int CONTEXT_MENU_HELP_ID = 7;
     private static final int CONTEXT_MENU_SETTINGS_ID = 8;
@@ -266,6 +264,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setTerminalToolbarView(savedInstanceState);
 
         setSettingsButtonView();
+
+        setToggleKeyboardView();
 
         setNewSessionButtonView();
 
@@ -596,6 +596,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         });
     }
 
+    private void setToggleKeyboardView() {
+        View keyboardButton = findViewById(R.id.toggle_keyboard_button);
+        keyboardButton.setOnClickListener(v -> {
+            if (getDrawer().isDrawerVisible(Gravity.START)) {
+                // Wait until the drawer restores input and stops suppressing keyboard requests.
+                mToggleSoftKeyboardOnDrawerClose = true;
+                getDrawer().closeDrawers();
+            } else {
+                mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
+            }
+        });
+    }
+
     private void setNewSessionButtonView() {
         View newSessionButton = findViewById(R.id.new_session_button);
         newSessionButton.setOnClickListener(v -> mTermuxTerminalSessionActivityClient.addNewSession(false, null));
@@ -648,6 +661,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @Override
             public void onDrawerClosed(@NonNull View drawerView) {
                 setDrawerInputCollapsed(false);
+                if (mToggleSoftKeyboardOnDrawerClose) {
+                    mToggleSoftKeyboardOnDrawerClose = false;
+                    mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
+                }
             }
         });
 
@@ -775,7 +792,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (autoFillEnabled)
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password);
         menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE, getResources().getString(R.string.action_kill_process, getCurrentSession().getPid())).setEnabled(currentSession.isRunning());
-        menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal);
         menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn());
         menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
         int[][] icons = {{CONTEXT_MENU_SELECT_URL_ID, R.drawable.ic_action_link},
@@ -784,7 +800,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             {CONTEXT_MENU_AUTOFILL_USERNAME, R.drawable.ic_action_paste},
             {CONTEXT_MENU_AUTOFILL_PASSWORD, R.drawable.ic_action_paste},
             {CONTEXT_MENU_KILL_PROCESS_ID, R.drawable.ic_action_close},
-            {CONTEXT_MENU_STYLING_ID, R.drawable.settings_tune},
             {CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, R.drawable.ic_action_screen}};
         for (int[] icon : icons) {
             MenuItem item = menu.findItem(icon[0]);
@@ -824,9 +839,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return true;
             case CONTEXT_MENU_KILL_PROCESS_ID:
                 showKillSessionDialog(session);
-                return true;
-            case CONTEXT_MENU_STYLING_ID:
-                showStylingDialog();
                 return true;
             case CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON:
                 setKeepScreenOn(item.isChecked());
@@ -876,20 +888,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
-    private void showStylingDialog() {
-        Intent stylingIntent = new Intent();
-        stylingIntent.setClassName(TermuxConstants.TERMUX_STYLING_PACKAGE_NAME, TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME);
-        try {
-            startActivity(stylingIntent);
-        } catch (ActivityNotFoundException | IllegalArgumentException e) {
-            // The startActivity() call is not documented to throw IllegalArgumentException.
-            // However, crash reporting shows that it sometimes does, so catch it here.
-            new MaterialAlertDialogBuilder(this).setMessage(getString(R.string.error_styling_not_installed))
-                .setPositiveButton(R.string.action_styling_install,
-                    (dialog, which) -> ActivityUtils.startActivity(this, new Intent(Intent.ACTION_VIEW, Uri.parse(TermuxConstants.TERMUX_STYLING_FDROID_PACKAGE_URL))))
-                .setNegativeButton(android.R.string.cancel, null).show();
-        }
-    }
     private void setKeepScreenOn(boolean enabled) {
         mTerminalView.setKeepScreenOn(enabled);
         mPreferences.setKeepScreenOn(enabled);

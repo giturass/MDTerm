@@ -104,6 +104,32 @@ public class MaterialTerminalControlsTest {
     }
 
     @Test
+    public void keyboardButtonTogglesInputOnlyAfterDrawerCloses() {
+        TermuxActivity activity = drawerActivity(true);
+        int[] toggleRequests = {0};
+        activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, null) {
+            @Override
+            public void onToggleSoftKeyboardRequest() {
+                assertFalse(activity.getDrawer().isDrawerVisible(Gravity.START));
+                assertEquals(View.VISIBLE, activity.getTerminalToolbarViewPager().getVisibility());
+                toggleRequests[0]++;
+            }
+        };
+        activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
+
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        activity.findViewById(R.id.toggle_keyboard_button).performClick();
+        assertEquals(0, toggleRequests[0]);
+        activity.getDrawer().closeDrawer(Gravity.START, false);
+        assertEquals(1, toggleRequests[0]);
+        assertTrue(activity.getPreferences().shouldShowTerminalToolbar());
+
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        activity.getDrawer().closeDrawer(Gravity.START, false);
+        assertEquals(1, toggleRequests[0]);
+    }
+
+    @Test
     public void closingDrawerRespectsDisabledToolbarAndChangesMadeWhileOpen() {
         TermuxActivity activity = drawerActivity(false);
         activity.getDrawer().openDrawer(Gravity.START, false);
@@ -131,6 +157,7 @@ public class MaterialTerminalControlsTest {
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, null);
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
         activity.getTerminalToolbarViewPager().setVisibility(showToolbar ? View.VISIBLE : View.GONE);
+        ReflectionHelpers.callInstanceMethod(activity, "setToggleKeyboardView");
         ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
         measure(activity.getDrawer(), activity, 320, 640);
         return activity;
