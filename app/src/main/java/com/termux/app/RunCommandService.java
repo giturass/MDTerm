@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -283,6 +284,7 @@ public class RunCommandService extends Service {
 
         // Set notification icon
         builder.setSmallIcon(R.drawable.ic_service_notification);
+        builder.setLargeIcon(Icon.createWithResource(this, R.drawable.mdterm_icon));
 
         // Set background color for small notification icon
         builder.setColor(0xFF607D8B);

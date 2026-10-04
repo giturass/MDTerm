@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="mdterm_settings_title">设置</string>
-    <string name="mdterm_settings_summary">调整终端外观、输入与通知</string>
     <string name="mdterm_settings_appearance">外观</string>
     <string name="mdterm_settings_input">键盘与输入</string>
     <string name="mdterm_settings_notifications">通知</string>

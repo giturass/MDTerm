@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="mdterm_settings_title">Settings</string>
-    <string name="mdterm_settings_summary">Make the terminal work your way</string>
     <string name="mdterm_settings_appearance">Appearance</string>
     <string name="mdterm_settings_input">Keyboard and input</string>
     <string name="mdterm_settings_notifications">Notifications</string>

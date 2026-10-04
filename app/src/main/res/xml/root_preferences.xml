@@ -1,4 +1,4 @@
-<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto" app:title="@string/mdterm_settings_title" app:summary="@string/mdterm_settings_summary">
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto" app:title="@string/mdterm_settings_title">
     <PreferenceCategory app:key="appearance" app:title="@string/mdterm_settings_appearance">
         <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="terminal_margin_adjustment" app:summaryOff="@string/termux_terminal_view_terminal_margin_adjustment_off" app:summaryOn="@string/termux_terminal_view_terminal_margin_adjustment_on" app:title="@string/termux_terminal_view_terminal_margin_adjustment_title" />
     </PreferenceCategory>

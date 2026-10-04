@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
+import android.graphics.drawable.Icon;
 import android.net.wifi.WifiManager;
 import android.os.Binder;
 import android.os.Build;
@@ -817,6 +818,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         // Set notification icon
         builder.setSmallIcon(R.drawable.ic_service_notification);
+        builder.setLargeIcon(Icon.createWithResource(this, R.drawable.mdterm_icon));
 
         // Set background color for small notification icon
         builder.setColor(0xFF607D8B);
