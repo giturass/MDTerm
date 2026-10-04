@@ -30,7 +30,7 @@ public class SessionActivityIndicatorTest {
 
     @Test
     public void rippleStopsForHiddenDetachedAndFinishedSessions() {
-        ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).setup().visible();
+        ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).create();
         Activity activity = controller.get();
         FrameLayout card = new FrameLayout(activity);
         activity.setContentView(card);
@@ -39,7 +39,13 @@ public class SessionActivityIndicatorTest {
         ValueAnimator animator = ReflectionHelpers.getField(indicator, "mAnimator");
 
         indicator.setActive(true);
+        assertFalse(animator.isStarted());
+        controller.start().resume().visible();
         Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(indicator.isAttachedToWindow());
+        assertTrue(indicator.isShown());
+        assertEquals(View.VISIBLE, indicator.getWindowVisibility());
+        assertTrue(ValueAnimator.areAnimatorsEnabled());
         assertTrue(animator.isStarted());
         card.setVisibility(View.INVISIBLE);
         assertFalse(animator.isStarted());
