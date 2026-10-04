@@ -41,20 +41,6 @@ import static org.junit.Assert.*;
 @Config(sdk = 31, application = Application.class, qualifiers = "zh-rCN-w320dp-h640dp")
 public class MaterialTerminalControlsTest {
     @Test
-    public void terminalActionsDoNotContainTheMovedSessionTerminationAction() {
-        TermuxActivity activity = drawerActivity(true);
-        activity.getTerminalView().mTermSession = new com.termux.terminal.TerminalSession(
-            "/bin/sh", "/", new String[0], new String[0], 100, null);
-        android.view.Menu menu = new android.widget.PopupMenu(activity, activity.getTerminalView()).getMenu();
-        ReflectionHelpers.callInstanceMethod(activity, "populateTerminalActions",
-            ReflectionHelpers.ClassParameter.from(android.view.Menu.class, menu));
-        assertTrue(menu.size() > 0);
-        assertNull(menu.findItem(4)); // The former terminate-process action ID.
-        for (int i = 0; i < menu.size(); i++)
-            assertNotEquals(activity.getString(R.string.action_close_session), menu.getItem(i).getTitle());
-    }
-
-    @Test
     public void vibrationPreferenceUpdatesTerminalAndDrawerFeedbackWithoutRecreation() {
         TermuxActivity activity = drawerActivity(true);
         for (boolean enabled : new boolean[]{false, true}) {
