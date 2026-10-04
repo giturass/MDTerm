@@ -1,12 +1,8 @@
 package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
-import android.graphics.Paint;
-import android.graphics.Typeface;
-import android.text.SpannableString;
-import android.text.Spanned;
+import android.content.res.ColorStateList;
 import android.text.TextUtils;
-import android.text.style.StyleSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,7 +11,6 @@ import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
 
 import com.google.android.material.color.MaterialColors;
 import com.termux.R;
@@ -28,8 +23,6 @@ import java.util.List;
 public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession> implements AdapterView.OnItemClickListener, AdapterView.OnItemLongClickListener {
 
     final TermuxActivity mActivity;
-
-    final StyleSpan italicSpan = new StyleSpan(Typeface.ITALIC);
 
     public TermuxSessionsListViewController(TermuxActivity activity, List<TermuxSession> sessionList) {
         super(activity.getApplicationContext(), R.layout.item_terminal_sessions_list, sessionList);
@@ -46,45 +39,54 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
             sessionRowView = inflater.inflate(R.layout.item_terminal_sessions_list, parent, false);
         }
 
+        TextView sessionNameView = sessionRowView.findViewById(R.id.session_name);
         TextView sessionTitleView = sessionRowView.findViewById(R.id.session_title);
+        TextView sessionStatusView = sessionRowView.findViewById(R.id.session_status);
         TextView sessionNumberView = sessionRowView.findViewById(R.id.session_number);
         sessionNumberView.setText(String.valueOf(position + 1));
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
 
         TerminalSession sessionAtRow = getItem(position).getTerminalSession();
-        if (sessionAtRow == null) {
-            sessionTitleView.setVisibility(View.GONE);
-            return sessionRowView;
-        }
+        String name = sessionAtRow == null ? null : sessionAtRow.mSessionName;
+        String summary = sessionAtRow == null ? null : sessionAtRow.getTitle();
+        sessionNameView.setText(TextUtils.isEmpty(name)
+            ? mActivity.getString(R.string.session_number_description, position + 1) : name);
+        sessionTitleView.setText(summary);
+        sessionTitleView.setVisibility(TextUtils.isEmpty(summary) ? View.GONE : View.VISIBLE);
 
-        String name = sessionAtRow.mSessionName;
-        String sessionTitle = sessionAtRow.getTitle();
-
-        String sessionNamePart = (TextUtils.isEmpty(name) ? "" : name);
-        String sessionTitlePart = (TextUtils.isEmpty(sessionTitle) ? "" : ((sessionNamePart.isEmpty() ? "" : "\n") + sessionTitle));
-
-        String fullSessionTitle = sessionNamePart + sessionTitlePart;
-        SpannableString fullSessionTitleStyled = new SpannableString(fullSessionTitle);
-        if (!sessionTitlePart.isEmpty())
-            fullSessionTitleStyled.setSpan(italicSpan, sessionNamePart.length(), fullSessionTitle.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-        sessionTitleView.setText(fullSessionTitleStyled);
-        sessionTitleView.setVisibility(fullSessionTitle.isEmpty() ? View.GONE : View.VISIBLE);
-
-        boolean sessionRunning = sessionAtRow.isRunning();
-
-        if (sessionRunning) {
-            sessionTitleView.setPaintFlags(sessionTitleView.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-        } else {
-            sessionTitleView.setPaintFlags(sessionTitleView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-        }
-        if (sessionRunning || sessionAtRow.getExitStatus() == 0) {
-            sessionTitleView.setTextColor(ContextCompat.getColorStateList(mActivity, R.color.terminal_session_text));
-        } else {
-            sessionTitleView.setTextColor(MaterialColors.getColor(sessionTitleView,
-                com.google.android.material.R.attr.colorError));
-        }
+        boolean current = sessionAtRow != null && sessionAtRow == mActivity.getCurrentSession();
+        sessionRowView.setActivated(current);
+        bindSessionStatus(sessionStatusView, sessionAtRow, current);
         return sessionRowView;
+    }
+
+    private void bindSessionStatus(TextView statusView, TerminalSession session, boolean current) {
+        int backgroundAttr;
+        int textAttr;
+        if (session == null) {
+            statusView.setText(R.string.session_status_starting);
+            backgroundAttr = com.google.android.material.R.attr.colorSurfaceContainerHighest;
+            textAttr = com.google.android.material.R.attr.colorOnSurfaceVariant;
+        } else if (!session.isRunning()) {
+            boolean failed = session.getExitStatus() != 0;
+            statusView.setText(failed
+                ? mActivity.getString(R.string.session_status_failed, session.getExitStatus())
+                : mActivity.getString(R.string.session_status_finished));
+            backgroundAttr = failed ? com.google.android.material.R.attr.colorErrorContainer
+                : com.google.android.material.R.attr.colorSurfaceContainerHighest;
+            textAttr = failed ? com.google.android.material.R.attr.colorOnErrorContainer
+                : com.google.android.material.R.attr.colorOnSurfaceVariant;
+        } else {
+            statusView.setText(current ? R.string.session_status_current : R.string.session_status_running);
+            backgroundAttr = current ? com.google.android.material.R.attr.colorPrimary
+                : com.google.android.material.R.attr.colorTertiaryContainer;
+            textAttr = current ? com.google.android.material.R.attr.colorOnPrimary
+                : com.google.android.material.R.attr.colorOnTertiaryContainer;
+        }
+        int textColor = MaterialColors.getColor(statusView, textAttr);
+        statusView.setTextColor(textColor);
+        statusView.setCompoundDrawableTintList(ColorStateList.valueOf(textColor));
+        statusView.setBackgroundTintList(ColorStateList.valueOf(MaterialColors.getColor(statusView, backgroundAttr)));
     }
 
     @Override

@@ -8,4 +8,10 @@
     <string name="action_state_off">Off</string>
     <string name="log_choice_selected">Selected</string>
     <string name="session_number_description">Session %1$d</string>
+    <string name="session_status_current">Current</string>
+    <string name="session_status_running">Running</string>
+    <string name="session_status_starting">Starting</string>
+    <string name="session_status_finished">Finished</string>
+    <string name="session_status_failed">Exited · %1$d</string>
+    <string name="session_exit_notification">%1$s finished</string>
 </resources>
