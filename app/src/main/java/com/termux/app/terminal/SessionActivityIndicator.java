@@ -19,7 +19,6 @@ public final class SessionActivityIndicator extends View {
     private final ValueAnimator mAnimator = ValueAnimator.ofFloat(0f, 1f);
     private final float mDensity;
     private boolean mActive;
-    private boolean mVisibleToUser;
     private float mProgress;
 
     public SessionActivityIndicator(Context context, @Nullable AttributeSet attrs) {
@@ -43,21 +42,33 @@ public final class SessionActivityIndicator extends View {
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        updateAnimation();
+    }
+
+    @Override
     public void onVisibilityAggregated(boolean isVisible) {
         super.onVisibilityAggregated(isVisible);
-        mVisibleToUser = isVisible;
+        if (isVisible) updateAnimation();
+        else stopAnimation();
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
         updateAnimation();
     }
 
     @Override
     protected void onDetachedFromWindow() {
-        mVisibleToUser = false;
         stopAnimation();
         super.onDetachedFromWindow();
     }
 
     private void updateAnimation() {
-        if (mActive && mVisibleToUser && isAttachedToWindow() && ValueAnimator.areAnimatorsEnabled()) {
+        if (mActive && isAttachedToWindow() && isShown() && getWindowVisibility() == VISIBLE
+            && ValueAnimator.areAnimatorsEnabled()) {
             if (!mAnimator.isStarted()) mAnimator.start();
         } else {
             stopAnimation();
