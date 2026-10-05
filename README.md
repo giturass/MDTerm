@@ -18,7 +18,7 @@ MDTerm 是基于 [Termux](https://github.com/termux/termux-app) 的 Android 终�
 | 系统与架构 | 覆盖更广的 Android 版本和设备架构 | 最低 Android 12（API 31），仅 `arm64-v8a` |
 | 应用界面 | 原有终端界面、菜单和偏好设置 | Material Design 3 风格，重做会话列表、菜单、设置、图标与通知样式 |
 | 配色 | 使用原有主题与终端颜色配置 | 支持壁纸动态配色，统一终端、控件与设置颜色，并调整浅色模式下默认 ANSI 颜色的可读性 |
-| 会话与终端操作 | 原有会话和终端操作入口 | 提供会话卡片、活动指示、长按改名、横向滚动工具栏和 MD3 操作菜单 |
+| 会话与终端操作 | 原有会话和终端操作入口 | 提供会话卡片、活动指示、长按改名、光标滑动手势、横向滚动工具栏和 MD3 操作菜单 |
 | 设置组织 | 原有多层偏好设置 | 将终端设置集中到一级设置页，按显示、键盘与输入等类别组织 |
 | 输入法预编辑 | 取决于上游版本是否包含相关改动 | 已纳入上游 [PR #5242](https://github.com/termux/termux-app/pull/5242) 的可选组合文本预览，默认关闭 |
 | APK 发布 | 由各上游分发渠道构建和签名 | 本仓库 Actions 构建，发布版使用独立 MDTerm 签名，并提供 SHA-256 校验文件 |
@@ -74,34 +74,17 @@ Termux 插件仍需满足 Android 的签名及共享用户 ID 要求；包名相
 ## 常用操作
 
 - **会话改名**：长按侧栏中的会话。
+- **横向移动光标**：在终端内容区域左右滑动，发送左、右方向键，方便调整命令行中的编辑位置。
+- **纵向光标操作**：点击工具栏中的手指图标（“纵向光标手势”）启用后，在终端内容区域上下滑动会发送上、下方向键；在 Shell 中通常用于切换历史命令，在编辑器中按程序规则移动光标。再次点击图标关闭，恢复普通纵向滚动。此开关会保持启用，不会因按下其他按键自动关闭。
+- **工具栏滚动**：在工具栏区域横向滑动，可查看未显示的快捷键；光标手势在终端内容区域操作。
 - **文本选择**：长按终端打开操作菜单，选择“选择文本”后拖动选择范围。
 - **终端偏好**：打开设置，在一级页面中调整显示、键盘与输入等选项。
 - **输入法组合文本预览**：在“设置 → 键盘与输入”中启用“输入法组合文本预览”，即可在光标处预览中文等输入法尚未提交的文字。该功能默认关闭。
 - **自定义终端颜色**：编辑 `~/.termux/colors.properties`；显式设置的颜色优先。
 
+光标手势模拟方向键，具体效果由当前终端程序决定；文本选择模式下不触发光标滑动手势。
+
 Android 对后台进程和子进程的系统限制仍然适用，MDTerm 不保证终端任务能绕过系统的进程管理。
-
-## 从源码构建
-
-构建环境参考仓库的 [Release 工作流](.github/workflows/release.yml)：JDK 17、Android SDK Platform 36、Build Tools 35.0.0，以及 NDK `29.0.14206865`。使用项目自带的 Gradle Wrapper，并配置 Android SDK 路径。
-
-```sh
-git clone https://github.com/giturass/MDTerm.git
-cd MDTerm
-./gradlew :app:assembleDebug testDebugUnitTest
-```
-
-Debug APK 输出至 `app/build/outputs/apk/debug/`。构建过程会下载依赖及官方 bootstrap，需要网络访问。Debug 使用公开测试密钥，适合开发验证；日常安装请使用发布版。
-
-构建签名 Release 的环境变量及密钥配置见[签名说明](docs/mdterm-runtime.md#release-signing)。本地未配置发布签名时，Release 构建不会自动获得 MDTerm 的发布签名。
-
-### 发布流程
-
-[Release APK 工作流](.github/workflows/release.yml)运行单元测试、构建 Release APK，并检查包名、最低系统版本、架构和签名，随后生成 SHA-256 校验文件。
-
-- 推送语义化版本标签（例如 `v0.118.0-mdterm.1`）会创建 GitHub Release 并上传 APK 与校验文件。
-- 在分支上手动运行工作流只上传 Actions 构建产物，不创建 Release。
-- 发布说明维护在 [docs/release-notes.md](docs/release-notes.md)。
 
 ## 问题反馈与上游资料
 
