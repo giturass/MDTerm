@@ -80,13 +80,13 @@
                         android:textColor="?attr/colorOnSurface" />
 
                     <ImageButton
-                        android:id="@+id/toggle_keyboard_button"
+                        android:id="@+id/file_system_button"
                         android:layout_width="48dp"
                         android:layout_height="48dp"
                         android:padding="12dp"
-                        android:src="@drawable/ic_keyboard"
+                        android:src="@drawable/ic_folder"
                         android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/action_toggle_soft_keyboard"
+                        android:contentDescription="@string/action_open_file_system"
                         app:tint="?attr/termuxActivityDrawerImageTint" />
 
                     <ImageButton
@@ -123,41 +123,33 @@
                     android:listSelector="@android:color/transparent"
                     android:scrollbars="none"
                     android:choiceMode="singleChoice"
-                    android:longClickable="true" />
+                    android:longClickable="false" />
 
                 <LinearLayout
                     android:id="@+id/terminal_drawer_actions"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:paddingTop="12dp"
+                    android:gravity="end"
                     android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/file_system_button"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:paddingHorizontal="12dp"
-                        android:minHeight="52dp"
-                        android:layout_marginEnd="8dp"
-                        android:text="@string/action_open_file_system"
-                        app:iconSize="20dp"
-                        app:iconPadding="6dp"
-                        app:icon="@drawable/ic_folder"
-                        app:iconGravity="textStart" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/new_session_button"
                         style="@style/Widget.Material3.Button"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:paddingHorizontal="12dp"
-                        android:minHeight="52dp"
-                        android:text="@string/action_new_session"
-                        app:iconSize="20dp"
-                        app:iconPadding="6dp"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="12dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:insetLeft="0dp"
+                        android:insetRight="0dp"
+                        android:contentDescription="@string/action_new_session"
+                        android:tooltipText="@string/action_new_session"
+                        app:cornerRadius="16dp"
+                        app:iconSize="24dp"
+                        app:iconPadding="0dp"
                         app:icon="@drawable/ic_new_session"
                         app:iconGravity="textStart" />
                 </LinearLayout>

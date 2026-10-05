@@ -428,17 +428,26 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     }
 
     public void removeFinishedSession(TerminalSession finishedSession) {
-        // Return pressed with finished session - remove it.
-        TermuxService service = mActivity.getTermuxService();
-        if (service == null) return;
+        removeSession(finishedSession, false);
+    }
 
-        int index = service.removeTermuxSession(finishedSession);
+    public void closeSession(TerminalSession session) {
+        removeSession(session, true);
+    }
+
+    private void removeSession(TerminalSession session, boolean closeRunningSession) {
+        TermuxService service = mActivity.getTermuxService();
+        if (service == null || session == null) return;
+
+        boolean wasCurrent = session == mActivity.getCurrentSession();
+        int index = closeRunningSession ? service.closeTermuxSession(session) : service.removeTermuxSession(session);
+        if (index < 0) return;
 
         int size = service.getTermuxSessionsSize();
         if (size == 0) {
             // There are no sessions to show, so finish the activity.
             mActivity.finishActivityIfNotFinishing();
-        } else {
+        } else if (wasCurrent) {
             if (index >= size) {
                 index = size - 1;
             }

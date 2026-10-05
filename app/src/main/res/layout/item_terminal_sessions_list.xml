@@ -1,4 +1,5 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:minHeight="64dp" android:orientation="horizontal" android:gravity="center_vertical"
     android:padding="16dp"
@@ -24,4 +25,12 @@
             android:ellipsize="end" android:maxLines="2" android:textStyle="normal"
             android:textColor="@color/terminal_session_text" android:textAppearance="?attr/textAppearanceBodyMedium" />
     </LinearLayout>
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/session_menu_button"
+        android:layout_width="48dp" android:layout_height="48dp"
+        android:layout_marginStart="4dp" android:padding="12dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:focusable="false" android:duplicateParentState="true"
+        app:srcCompat="@drawable/ic_more_vert"
+        app:tint="@color/terminal_session_text" />
 </LinearLayout>

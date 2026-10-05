@@ -418,14 +418,16 @@ public final class ExtraKeysView extends GridLayout {
 
                 button.setText(buttonInfo.getDisplay());
                 button.setAllCaps(mButtonTextAllCaps);
-                if (SpecialButton.CURSOR.getKey().equals(buttonInfo.getKey())) {
+                boolean isCursorButton = SpecialButton.CURSOR.getKey().equals(buttonInfo.getKey());
+                if (isCursorButton || "KEYBOARD".equals(buttonInfo.getKey())) {
                     button.setText("");
-                    button.setIconResource(R.drawable.ic_touch_app);
+                    button.setIconResource(isCursorButton ? R.drawable.ic_touch_app : R.drawable.ic_keyboard);
                     button.setIconSize(dp(24));
                     button.setIconPadding(0);
                     button.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
                     button.setIconTint(button.getTextColors());
-                    button.setContentDescription(getContext().getString(R.string.extra_keys_cursor_description));
+                    button.setContentDescription(getContext().getString(isCursorButton
+                        ? R.string.extra_keys_cursor_description : R.string.extra_keys_keyboard_description));
                 }
 
                 button.setOnClickListener(view -> {
