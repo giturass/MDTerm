@@ -23,7 +23,7 @@ import android.view.MotionEvent;
 import android.os.SystemClock;
 import android.widget.PopupMenu;
 import android.view.WindowManager;
-import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -54,7 +54,6 @@ import com.termux.app.activities.SettingsActivity;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
-import com.termux.app.terminal.io.TerminalToolbarViewPager;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
@@ -77,7 +76,6 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
-import androidx.viewpager.widget.ViewPager;
 
 import java.util.Arrays;
 import java.util.List;
@@ -210,7 +208,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_SETTINGS_ID = 8;
     private static final int CONTEXT_MENU_REPORT_ID = 9;
 
-    private static final String ARG_TERMINAL_TOOLBAR_TEXT_INPUT = "terminal_toolbar_text_input";
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
 
     private static final String LOG_TAG = "TermuxActivity";
@@ -260,7 +257,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setTermuxTerminalViewAndClients();
 
-        setTerminalToolbarView(savedInstanceState);
+        setTerminalToolbarView();
 
         setSettingsButtonView();
 
@@ -396,7 +393,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Logger.logVerbose(LOG_TAG, "onSaveInstanceState");
 
         super.onSaveInstanceState(savedInstanceState);
-        saveTerminalToolbarTextInput(savedInstanceState);
         savedInstanceState.putBoolean(ARG_ACTIVITY_RECREATED, true);
     }
 
@@ -534,58 +530,42 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
 
 
-    private void setTerminalToolbarView(Bundle savedInstanceState) {
+    private void setTerminalToolbarView() {
         mTermuxTerminalExtraKeys = new TermuxTerminalExtraKeys(this, mTerminalView,
             mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient);
 
-        final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
-        if (mPreferences.shouldShowTerminalToolbar()) terminalToolbarViewPager.setVisibility(View.VISIBLE);
+        final HorizontalScrollView terminalToolbar = getTerminalToolbar();
+        if (mPreferences.shouldShowTerminalToolbar()) terminalToolbar.setVisibility(View.VISIBLE);
 
-        ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
+        ViewGroup.LayoutParams layoutParams = terminalToolbar.getLayoutParams();
         mTerminalToolbarDefaultHeight = layoutParams.height;
 
         setTerminalToolbarHeight();
 
-        String savedTextInput = null;
-        if (savedInstanceState != null)
-            savedTextInput = savedInstanceState.getString(ARG_TERMINAL_TOOLBAR_TEXT_INPUT);
-
-        terminalToolbarViewPager.setAdapter(new TerminalToolbarViewPager.PageAdapter(this, savedTextInput));
-        terminalToolbarViewPager.addOnPageChangeListener(new TerminalToolbarViewPager.OnPageChangeListener(this, terminalToolbarViewPager));
+        mExtraKeysView = findViewById(R.id.terminal_toolbar_extra_keys);
+        mExtraKeysView.setExtraKeysViewClient(mTermuxTerminalExtraKeys);
+        mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
+        mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
     }
 
     private void setTerminalToolbarHeight() {
-        final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
-        if (terminalToolbarViewPager == null) return;
+        final HorizontalScrollView terminalToolbar = getTerminalToolbar();
+        if (terminalToolbar == null) return;
 
-        ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
+        ViewGroup.LayoutParams layoutParams = terminalToolbar.getLayoutParams();
         layoutParams.height = Math.round(mTerminalToolbarDefaultHeight *
             (mTermuxTerminalExtraKeys.getExtraKeysInfo() == null ? 0 : mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length) *
             mProperties.getTerminalToolbarHeightScaleFactor());
-        terminalToolbarViewPager.setLayoutParams(layoutParams);
+        terminalToolbar.setLayoutParams(layoutParams);
     }
 
     public void toggleTerminalToolbar() {
-        final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
-        if (terminalToolbarViewPager == null) return;
+        final HorizontalScrollView terminalToolbar = getTerminalToolbar();
+        if (terminalToolbar == null) return;
 
         final boolean showNow = mPreferences.toogleShowTerminalToolbar();
         Logger.showToast(this, (showNow ? getString(R.string.msg_enabling_terminal_toolbar) : getString(R.string.msg_disabling_terminal_toolbar)), true);
-        terminalToolbarViewPager.setVisibility(showNow && !mIsDrawerInputCollapsed ? View.VISIBLE : View.GONE);
-        if (showNow && !mIsDrawerInputCollapsed && isTerminalToolbarTextInputViewSelected()) {
-            // Focus the text input view if just revealed.
-            findViewById(R.id.terminal_toolbar_text_input).requestFocus();
-        }
-    }
-
-    private void saveTerminalToolbarTextInput(Bundle savedInstanceState) {
-        if (savedInstanceState == null) return;
-
-        final EditText textInputView = findViewById(R.id.terminal_toolbar_text_input);
-        if (textInputView != null) {
-            String textInput = textInputView.getText().toString();
-            if (!textInput.isEmpty()) savedInstanceState.putString(ARG_TERMINAL_TOOLBAR_TEXT_INPUT, textInput);
-        }
+        terminalToolbar.setVisibility(showNow && !mIsDrawerInputCollapsed ? View.VISIBLE : View.GONE);
     }
 
 
@@ -708,10 +688,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setDrawerInputCollapsed(boolean collapsed) {
         if (mIsDrawerInputCollapsed == collapsed) return;
         mIsDrawerInputCollapsed = collapsed;
-        getTerminalToolbarViewPager().setVisibility(
+        getTerminalToolbar().setVisibility(
             !collapsed && mPreferences.shouldShowTerminalToolbar() ? View.VISIBLE : View.GONE);
         if (collapsed) {
-            // Move focus away from the hidden text input and cancel any pending keyboard reveal.
+            // Keep terminal focus and cancel any pending keyboard reveal.
             mTerminalView.requestFocus();
             mTermuxTerminalViewClient.onHideSoftKeyboardRequest();
         }
@@ -997,22 +977,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
 
-    public ViewPager getTerminalToolbarViewPager() {
-        return (ViewPager) findViewById(R.id.terminal_toolbar_view_pager);
+    public HorizontalScrollView getTerminalToolbar() {
+        return findViewById(R.id.terminal_toolbar);
     }
-
-    public float getTerminalToolbarDefaultHeight() {
-        return mTerminalToolbarDefaultHeight;
-    }
-
-    public boolean isTerminalViewSelected() {
-        return getTerminalToolbarViewPager().getCurrentItem() == 0;
-    }
-
-    public boolean isTerminalToolbarTextInputViewSelected() {
-        return getTerminalToolbarViewPager().getCurrentItem() == 1;
-    }
-
 
     public void termuxSessionListNotifyUpdated() {
         mTermuxSessionListViewController.notifyDataSetChanged();

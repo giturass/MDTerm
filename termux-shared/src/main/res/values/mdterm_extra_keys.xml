@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="extra_keys_cursor_description">Vertical cursor gestures</string>
     <string name="extra_keys_state_active">Active</string>
     <string name="extra_keys_state_inactive">Inactive</string>
     <string name="extra_keys_state_locked">Locked</string>

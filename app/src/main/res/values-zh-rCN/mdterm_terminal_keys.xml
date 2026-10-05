@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="mdterm_terminal_input_hint">输入文本或命令</string>
-    <string name="mdterm_terminal_input_send">发送到终端</string>
-</resources>

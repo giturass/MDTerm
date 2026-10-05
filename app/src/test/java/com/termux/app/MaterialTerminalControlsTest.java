@@ -12,10 +12,14 @@ import android.view.Gravity;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.MotionEvent;
+import android.widget.EditText;
+import android.widget.HorizontalScrollView;
+import android.os.SystemClock;
 import android.view.inputmethod.InputMethodManager;
 
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
 import com.termux.filepicker.TermuxDocumentsProvider;
 import com.termux.shared.termux.TermuxConstants;
@@ -25,6 +29,7 @@ import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
 import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.termux.extrakeys.SpecialButton;
+import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -76,20 +81,47 @@ public class MaterialTerminalControlsTest {
     }
 
     @Test
-    public void ctrlSelectsVerticalCursorModeWithoutBeingConsumedByGestures() throws Exception {
+    public void cursorToggleIsIndependentOfCtrlAndStaysActiveAcrossKeyPresses() throws Exception {
         TermuxActivity activity = drawerActivity(true);
         ExtraKeysView keys = (ExtraKeysView) LayoutInflater.from(activity)
             .inflate(R.layout.view_terminal_toolbar_extra_keys, null);
-        keys.reload(new ExtraKeysInfo("[['CTRL']]", "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
+        ExtraKeysInfo info = new ExtraKeysInfo("[['CTRL', 'CURSOR', 'ESC']]", "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+        keys.reload(info, 52);
         activity.setExtraKeysView(keys);
+        int[] keyPresses = {0};
+        keys.setExtraKeysViewClient(new TerminalExtraKeys(activity.getTerminalView()) {
+            @Override
+            protected void onTerminalExtraKeyButtonClick(View view, String key, boolean ctrl, boolean alt, boolean shift, boolean fn) {
+                assertEquals("ESC", key);
+                keyPresses[0]++;
+            }
+        });
         TermuxTerminalViewClient client = activity.getTermuxTerminalViewClient();
+        MaterialButton ctrl = (MaterialButton) keys.getChildAt(0);
+        MaterialButton cursor = (MaterialButton) keys.getChildAt(1);
+        assertTrue(client.shouldUseHorizontalCursorGestures());
         assertFalse(client.shouldUseVerticalCursorGestures());
-        keys.getChildAt(0).performClick();
+        ctrl.performClick();
+        assertFalse(client.shouldUseVerticalCursorGestures());
+        cursor.performClick();
         assertTrue(client.shouldUseVerticalCursorGestures());
         assertTrue(client.shouldUseVerticalCursorGestures());
-        assertTrue(((MaterialButton) keys.getChildAt(0)).isChecked());
-        keys.getChildAt(0).performClick();
+        assertTrue(cursor.isChecked());
+        assertTrue(ctrl.isChecked());
+        assertEquals(0, keyPresses[0]);
+        assertTrue(client.readControlKey());
+        assertFalse(client.readControlKey());
+        assertFalse(ctrl.isChecked());
+        keys.getChildAt(2).performClick();
+        assertEquals(1, keyPresses[0]);
+        assertTrue(client.shouldUseVerticalCursorGestures());
+        keys.reload(info, 52);
+        cursor = (MaterialButton) keys.getChildAt(1);
+        assertTrue(cursor.isChecked());
+        cursor.performClick();
         assertFalse(client.shouldUseVerticalCursorGestures());
+        assertFalse(cursor.isChecked());
+        assertTrue(client.shouldUseHorizontalCursorGestures());
     }
 
     @Test
@@ -100,7 +132,7 @@ public class MaterialTerminalControlsTest {
         assertTrue(Shadows.shadowOf(input).isSoftInputVisible());
 
         activity.getDrawer().openDrawer(Gravity.START, false);
-        assertEquals(View.GONE, activity.getTerminalToolbarViewPager().getVisibility());
+        assertEquals(View.GONE, activity.getTerminalToolbar().getVisibility());
         assertFalse(Shadows.shadowOf(input).isSoftInputVisible());
         assertTrue(activity.getPreferences().shouldShowTerminalToolbar());
 
@@ -110,7 +142,7 @@ public class MaterialTerminalControlsTest {
         assertFalse(Shadows.shadowOf(input).isSoftInputVisible());
 
         activity.getDrawer().closeDrawer(Gravity.START, false);
-        assertEquals(View.VISIBLE, activity.getTerminalToolbarViewPager().getVisibility());
+        assertEquals(View.VISIBLE, activity.getTerminalToolbar().getVisibility());
         assertFalse(Shadows.shadowOf(input).isSoftInputVisible());
     }
 
@@ -122,7 +154,7 @@ public class MaterialTerminalControlsTest {
             @Override
             public void onToggleSoftKeyboardRequest() {
                 assertFalse(activity.getDrawer().isDrawerVisible(Gravity.START));
-                assertEquals(View.VISIBLE, activity.getTerminalToolbarViewPager().getVisibility());
+                assertEquals(View.VISIBLE, activity.getTerminalToolbar().getVisibility());
                 toggleRequests[0]++;
             }
         };
@@ -145,14 +177,14 @@ public class MaterialTerminalControlsTest {
         TermuxActivity activity = drawerActivity(false);
         activity.getDrawer().openDrawer(Gravity.START, false);
         activity.getDrawer().closeDrawer(Gravity.START, false);
-        assertEquals(View.GONE, activity.getTerminalToolbarViewPager().getVisibility());
+        assertEquals(View.GONE, activity.getTerminalToolbar().getVisibility());
 
         activity.getDrawer().openDrawer(Gravity.START, false);
         activity.toggleTerminalToolbar();
         assertTrue(activity.getPreferences().shouldShowTerminalToolbar());
-        assertEquals(View.GONE, activity.getTerminalToolbarViewPager().getVisibility());
+        assertEquals(View.GONE, activity.getTerminalToolbar().getVisibility());
         activity.getDrawer().closeDrawer(Gravity.START, false);
-        assertEquals(View.VISIBLE, activity.getTerminalToolbarViewPager().getVisibility());
+        assertEquals(View.VISIBLE, activity.getTerminalToolbar().getVisibility());
     }
 
     private static TermuxActivity drawerActivity(boolean showToolbar) {
@@ -167,7 +199,7 @@ public class MaterialTerminalControlsTest {
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, null);
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
-        activity.getTerminalToolbarViewPager().setVisibility(showToolbar ? View.VISIBLE : View.GONE);
+        activity.getTerminalToolbar().setVisibility(showToolbar ? View.VISIBLE : View.GONE);
         ReflectionHelpers.callInstanceMethod(activity, "setToggleKeyboardView");
         ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
         measure(activity.getDrawer(), activity, 320, 640);
@@ -186,32 +218,87 @@ public class MaterialTerminalControlsTest {
         assertTrue(newSession.getWidth() > 0);
         assertNotNull(newSession.getIcon());
         assertNotNull(files.getIcon());
-
-        View input = LayoutInflater.from(context).inflate(R.layout.view_terminal_toolbar_text_input, null);
-        measure(input, context, 320, 52);
-        TextInputLayout field = input.findViewById(R.id.terminal_toolbar_text_input_layout);
-        assertNotNull(field.getEditText());
-        assertTrue(field.getEditText().getHeight() > 0);
-        assertTrue(field.getEditText().getBottom() <= field.getHeight());
     }
 
     @Test
-    public void denseFunctionKeyRowShowsHomeWithoutTruncation() throws Exception {
+    public void toolbarScrollsOneRowWithCursorAfterEndAndNoTextInput() throws Exception {
         Context context = themedContext();
-        ExtraKeysView keys = (ExtraKeysView) LayoutInflater.from(context)
-            .inflate(R.layout.view_terminal_toolbar_extra_keys, null);
+        View root = LayoutInflater.from(context).inflate(R.layout.activity_termux, null);
+        HorizontalScrollView toolbar = root.findViewById(R.id.terminal_toolbar);
+        toolbar.setVisibility(View.VISIBLE);
+        ExtraKeysView keys = toolbar.findViewById(R.id.terminal_toolbar_extra_keys);
         keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
             "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
-        measure(keys, context, 304, 52);
-        String[] labels = {"ESC", "CTRL", "ALT", "HOME", "END", "PGUP", "PGDN"};
+        measure(toolbar, context, 304, 52);
+        String[] labels = {"ESC", "CTRL", "ALT", "HOME", "END", "", "PGUP", "PGDN"};
         assertEquals(labels.length, keys.getChildCount());
+        assertEquals(1, toolbar.getChildCount());
+        assertEquals(1, keys.getRowCount());
+        assertNoTextInput(toolbar);
+        MaterialButton cursor = (MaterialButton) keys.getChildAt(5);
+        assertNotNull(cursor.getIcon());
+        assertEquals(context.getString(com.termux.shared.R.string.extra_keys_cursor_description),
+            cursor.getContentDescription());
+        float density = context.getResources().getDisplayMetrics().density;
         for (int i = 0; i < labels.length; i++) {
             MaterialButton key = (MaterialButton) keys.getChildAt(i);
             assertEquals(labels[i], key.getText().toString());
             assertEquals(keys.getChildAt(0).getTop(), key.getTop());
+            assertTrue(key.getWidth() >= Math.round(48 * density));
+            assertTrue(key.getHeight() > 0);
+            assertTrue(key.getBottom() <= toolbar.getHeight());
             assertNotNull(key.getLayout());
             assertEquals(0, key.getLayout().getEllipsisCount(0));
             assertTrue(key.getLayout().getLineWidth(0) <= key.getWidth() - key.getCompoundPaddingLeft() - key.getCompoundPaddingRight());
+        }
+        assertTrue(toolbar.canScrollHorizontally(1));
+        toolbar.scrollTo(keys.getWidth(), 0);
+        assertTrue(toolbar.getScrollX() > 0);
+        View lastKey = keys.getChildAt(keys.getChildCount() - 1);
+        assertTrue(lastKey.getRight() - toolbar.getScrollX() <= toolbar.getWidth());
+        assertFalse(toolbar.canScrollHorizontally(1));
+
+        // A wider viewport fills the available space without adding another row.
+        measure(toolbar, context, 600, 52);
+        assertEquals(toolbar.getWidth(), keys.getWidth());
+        assertFalse(toolbar.canScrollHorizontally(1));
+        assertEquals(keys.getChildAt(0).getTop(), lastKey.getTop());
+    }
+
+    @Test
+    public void draggingToolbarDoesNotToggleOrLockThePressedKey() throws Exception {
+        Context context = themedContext();
+        View root = LayoutInflater.from(context).inflate(R.layout.activity_termux, null);
+        HorizontalScrollView toolbar = root.findViewById(R.id.terminal_toolbar);
+        toolbar.setVisibility(View.VISIBLE);
+        ExtraKeysView keys = toolbar.findViewById(R.id.terminal_toolbar_extra_keys);
+        keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
+            "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
+        measure(toolbar, context, 304, 52);
+        View ctrl = keys.getChildAt(1);
+        float x = (ctrl.getLeft() + ctrl.getRight()) / 2f;
+        float y = toolbar.getHeight() / 2f;
+        float step = 20 * context.getResources().getDisplayMetrics().density;
+        long time = SystemClock.uptimeMillis();
+        int[] actions = {MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP};
+        for (int i = 0; i < actions.length; i++) {
+            MotionEvent event = MotionEvent.obtain(time, time + i * 30, actions[i], x - i * step, y, 0);
+            toolbar.dispatchTouchEvent(event);
+            event.recycle();
+        }
+        assertTrue(toolbar.getScrollX() > 0);
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1));
+        assertEquals(Boolean.FALSE, keys.readSpecialButton(SpecialButton.CTRL, false));
+        assertEquals(Boolean.FALSE, keys.readSpecialButton(SpecialButton.CURSOR, false));
+        assertFalse(((MaterialButton) ctrl).isChecked());
+        assertEquals(0, ((MaterialButton) ctrl).getStrokeWidth());
+    }
+
+    private static void assertNoTextInput(View view) {
+        assertFalse(view instanceof EditText);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) assertNoTextInput(group.getChildAt(i));
         }
     }
 
