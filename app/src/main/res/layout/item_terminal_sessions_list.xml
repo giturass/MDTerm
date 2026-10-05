@@ -1,36 +1,43 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:minHeight="64dp" android:orientation="horizontal" android:gravity="center_vertical"
-    android:padding="16dp"
+    android:minHeight="64dp"
     android:screenReaderFocusable="true" android:background="@drawable/session_background_selected">
-    <com.google.android.material.textview.MaterialTextView
-        android:id="@+id/session_number" android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:minWidth="32dp" android:minHeight="32dp" android:gravity="center"
-        android:paddingHorizontal="6dp" android:paddingVertical="2dp" android:layout_marginEnd="12dp"
-        android:duplicateParentState="true" android:background="@drawable/session_number_background"
-        android:textColor="@color/session_number_text" android:textAppearance="@style/TextAppearance.Material3.LabelLarge" />
     <LinearLayout
-        android:layout_width="0dp" android:layout_height="wrap_content"
-        android:layout_weight="1" android:orientation="vertical" android:duplicateParentState="true">
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:padding="16dp" android:paddingEnd="60dp"
+        android:duplicateParentState="true">
         <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/session_name" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp" android:visibility="gone"
-            android:duplicateParentState="true" android:ellipsize="end" android:maxLines="1"
-            android:textStyle="bold" android:textColor="@color/terminal_session_text"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/session_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:duplicateParentState="true"
-            android:ellipsize="end" android:maxLines="2" android:textStyle="normal"
-            android:textColor="@color/terminal_session_text" android:textAppearance="?attr/textAppearanceBodyMedium" />
+            android:id="@+id/session_number" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:minWidth="32dp" android:minHeight="32dp" android:gravity="center"
+            android:paddingHorizontal="6dp" android:paddingVertical="2dp" android:layout_marginEnd="12dp"
+            android:duplicateParentState="true" android:background="@drawable/session_number_background"
+            android:textColor="@color/session_number_text" android:textAppearance="@style/TextAppearance.Material3.LabelLarge" />
+        <LinearLayout
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:duplicateParentState="true">
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/session_name" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" android:visibility="gone"
+                android:duplicateParentState="true" android:ellipsize="end" android:maxLines="1"
+                android:textStyle="bold" android:textColor="@color/terminal_session_text"
+                android:textAppearance="?attr/textAppearanceTitleSmall" />
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/session_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:duplicateParentState="true"
+                android:ellipsize="end" android:maxLines="2" android:textStyle="normal"
+                android:textColor="@color/terminal_session_text" android:textAppearance="?attr/textAppearanceBodyMedium" />
+        </LinearLayout>
     </LinearLayout>
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/session_menu_button"
         android:layout_width="48dp" android:layout_height="48dp"
-        android:layout_marginStart="4dp" android:padding="12dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="8dp" android:padding="12dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:focusable="false" android:duplicateParentState="true"
         app:srcCompat="@drawable/ic_more_vert"
         app:tint="@color/terminal_session_text" />
-</LinearLayout>
+</FrameLayout>
