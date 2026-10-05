@@ -1,7 +1,7 @@
 # MDTerm
 
-[![Release APK](https://github.com/giturass/termux-app/actions/workflows/release.yml/badge.svg)](https://github.com/giturass/termux-app/actions/workflows/release.yml)
-[![Unit tests](https://github.com/giturass/termux-app/actions/workflows/run_tests.yml/badge.svg)](https://github.com/giturass/termux-app/actions/workflows/run_tests.yml)
+[![Release APK](https://github.com/giturass/MDTerm/actions/workflows/release.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/release.yml)
+[![Unit tests](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml)
 [![Join the chat at https://gitter.im/termux/termux](https://badges.gitter.im/termux/termux.svg)](https://gitter.im/termux/termux)
 [![Join the Termux discord server](https://img.shields.io/discord/641256914684084234.svg?label=&logo=discord&logoColor=ffffff&color=5865F2)](https://discord.gg/HXpF69X)
 [![Termux library releases at Jitpack](https://jitpack.io/v/termux/termux-app.svg)](https://jitpack.io/#termux/termux-app)
@@ -92,7 +92,7 @@ Only a universal APK is released, which will work on all supported architectures
 
 Open this repository's **Actions → Build → Run workflow** to build an APK manually, or push a commit/open a pull request to start a build automatically. Download the `mdterm_…_arm64-v8a` artifact from the completed run and extract its APK and SHA-256 checksum. The [build workflow](.github/workflows/debug_build.yml) installs the required Android SDK/NDK and signs the APK with the repository's debug test key; no signing secret is needed.
 
-Download signed **release APKs** from [MDTerm Releases](https://github.com/giturass/termux-app/releases). Pushing a semantic version tag such as `v0.118.0-mdterm.1` runs the [Release APK workflow](.github/workflows/release.yml), tests the project, builds `assembleRelease`, verifies the package and signature, and publishes the APK with its SHA-256 checksum. Manual workflow runs on a branch upload a release APK artifact without publishing a GitHub Release.
+Download signed **release APKs** from [MDTerm Releases](https://github.com/giturass/MDTerm/releases). Pushing a semantic version tag such as `v0.118.0-mdterm.1` runs the [Release APK workflow](.github/workflows/release.yml), tests the project, builds `assembleRelease`, verifies the package and signature, and publishes the APK with its SHA-256 checksum. Manual workflow runs on a branch upload a release APK artifact without publishing a GitHub Release.
 
 The APKs for `GitHub Build` action workflows will be listed under `Artifacts` section of a workflow run. These are created for each commit/push done to the repository and can be used by users who don't want to wait for releases and want to try out the latest features immediately or want to test their pull requests. Note that for action workflows, you need to be [**logged into a `GitHub` account**](https://github.com/login) for the `Artifacts` links to be enabled/clickable. If you are using the [`GitHub` app](https://github.com/mobile), then make sure to open workflow link in a browser like Chrome or Firefox that has your GitHub account logged in since the in-app browser may not be logged in.
 
