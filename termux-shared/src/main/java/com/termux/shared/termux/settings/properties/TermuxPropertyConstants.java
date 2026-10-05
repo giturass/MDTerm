@@ -192,7 +192,7 @@ public final class TermuxPropertyConstants {
     public static final String KEY_TERMINAL_CURSOR_BLINK_RATE =  "terminal-cursor-blink-rate"; // Default: "terminal-cursor-blink-rate"
     public static final int IVALUE_TERMINAL_CURSOR_BLINK_RATE_MIN = TerminalView.TERMINAL_CURSOR_BLINK_RATE_MIN;
     public static final int IVALUE_TERMINAL_CURSOR_BLINK_RATE_MAX = TerminalView.TERMINAL_CURSOR_BLINK_RATE_MAX;
-    public static final int DEFAULT_IVALUE_TERMINAL_CURSOR_BLINK_RATE = 0;
+    public static final int DEFAULT_IVALUE_TERMINAL_CURSOR_BLINK_RATE = 500;
 
 
 
