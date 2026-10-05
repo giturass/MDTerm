@@ -4,6 +4,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      apk_name:
+        description: 'Optional APK filename (including .apk)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -52,11 +57,16 @@ jobs:
 
       - name: Test and build release APK
         env:
+          REQUESTED_APK_NAME: ${{ inputs.apk_name }}
           MDTERM_RELEASE_STORE_FILE: ${{ runner.temp }}/mdterm-release.p12
           MDTERM_RELEASE_STORE_PASSWORD: ${{ secrets.MDTERM_RELEASE_STORE_PASSWORD }}
           MDTERM_RELEASE_KEY_ALIAS: ${{ secrets.MDTERM_RELEASE_KEY_ALIAS }}
           MDTERM_RELEASE_KEY_PASSWORD: ${{ secrets.MDTERM_RELEASE_KEY_PASSWORD }}
         run: |
+          if [[ -n "$REQUESTED_APK_NAME" && ! "$REQUESTED_APK_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.apk$ ]]; then
+            echo 'APK filename must contain only letters, digits, dots, underscores or hyphens and end in .apk' >&2
+            exit 1
+          fi
           test -n "$MDTERM_RELEASE_STORE_PASSWORD"
           test -n "$MDTERM_RELEASE_KEY_ALIAS"
           test -n "$MDTERM_RELEASE_KEY_PASSWORD"
@@ -68,7 +78,12 @@ jobs:
           fi
           export TERMUX_APK_VERSION_TAG="v${TERMUX_APP_VERSION_NAME}-${TERMUX_PACKAGE_VARIANT}-github-release"
           ./gradlew --no-daemon testDebugUnitTest :app:assembleRelease
-          echo "APK_NAME=mdterm_${TERMUX_APK_VERSION_TAG}_arm64-v8a.apk" >> "$GITHUB_ENV"
+          built_apk="mdterm_${TERMUX_APK_VERSION_TAG}_arm64-v8a.apk"
+          apk_name="${REQUESTED_APK_NAME:-$built_apk}"
+          if [[ "$apk_name" != "$built_apk" ]]; then
+            mv "app/build/outputs/apk/release/$built_apk" "app/build/outputs/apk/release/$apk_name"
+          fi
+          echo "APK_NAME=$apk_name" >> "$GITHUB_ENV"
 
       - name: Verify APK and generate checksum
         run: |
@@ -93,8 +108,8 @@ jobs:
           name: mdterm-release-${{ github.sha }}
           if-no-files-found: error
           path: |
-            app/build/outputs/apk/release/*_arm64-v8a.apk
-            app/build/outputs/apk/release/*_arm64-v8a_sha256sums
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/release/*_sha256sums
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
