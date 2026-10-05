@@ -9,12 +9,16 @@ on:
         description: 'Optional APK filename (including .apk)'
         required: false
         type: string
+      release_tag:
+        description: 'Publish to this Release tag; leave empty for artifacts only. Existing tags rebuild their tagged commit.'
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -32,6 +36,26 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v6
+
+      - name: Resolve release source
+        env:
+          REQUESTED_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          release_tag="$REQUESTED_RELEASE_TAG"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            release_tag="$GITHUB_REF_NAME"
+          fi
+          if [[ -n "$release_tag" ]]; then
+            [[ "$release_tag" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+            git check-ref-format "refs/tags/$release_tag"
+            remote_tag="$(git ls-remote --tags origin "refs/tags/$release_tag")"
+            if [[ -n "$remote_tag" ]]; then
+              git fetch --no-tags origin "refs/tags/$release_tag"
+              git checkout --detach FETCH_HEAD
+            fi
+          fi
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          echo "SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Setup Java 17
         uses: actions/setup-java@v5
@@ -74,7 +98,7 @@ jobs:
             export TERMUX_APP_VERSION_NAME="${GITHUB_REF_NAME#v}"
           else
             version="$(sed -n 's/^ *versionName "\([^"]*\)"$/\1/p' app/build.gradle)"
-            export TERMUX_APP_VERSION_NAME="$version+${GITHUB_SHA:0:7}"
+            export TERMUX_APP_VERSION_NAME="$version+${SOURCE_SHA:0:7}"
           fi
           export TERMUX_APK_VERSION_TAG="v${TERMUX_APP_VERSION_NAME}-${TERMUX_PACKAGE_VARIANT}-github-release"
           ./gradlew --no-daemon testDebugUnitTest :app:assembleRelease
@@ -112,15 +136,28 @@ jobs:
             app/build/outputs/apk/release/*_sha256sums
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "app/build/outputs/apk/release/$APK_NAME" \
-            "app/build/outputs/apk/release/${APK_NAME%.apk}_sha256sums" \
-            --verify-tag --title "MDTerm $GITHUB_REF_NAME" --latest \
-            --notes-file docs/release-notes.md
+          notes="$RUNNER_TEMP/mdterm-release-notes.md"
+          cp docs/release-notes.md "$notes"
+          printf '\n\nBuilt and published by [GitHub Actions](%s/%s/actions/runs/%s).\nSource commit: `%s`.\n' \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$SOURCE_SHA" >> "$notes"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              "app/build/outputs/apk/release/$APK_NAME" \
+              "app/build/outputs/apk/release/${APK_NAME%.apk}_sha256sums" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_TAG" --latest --notes-file "$notes"
+          else
+            gh release create "$RELEASE_TAG" \
+              "app/build/outputs/apk/release/$APK_NAME" \
+              "app/build/outputs/apk/release/${APK_NAME%.apk}_sha256sums" \
+              --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" \
+              --title "$RELEASE_TAG" --latest --notes-file "$notes"
+          fi
 
       - name: Remove temporary signing key
         if: always()
