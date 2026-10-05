@@ -13,6 +13,7 @@ public class SpecialButton {
     public static final SpecialButton ALT = new SpecialButton("ALT");
     public static final SpecialButton SHIFT = new SpecialButton("SHIFT");
     public static final SpecialButton FN = new SpecialButton("FN");
+    public static final SpecialButton CURSOR = new SpecialButton("CURSOR");
 
     /** The special button key. */
     private final String key;

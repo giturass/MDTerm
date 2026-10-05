@@ -37,7 +37,7 @@ public class TerminalCursorGestureTest {
     }
 
     @Test
-    public void verticalSwipesScrollHistoryUntilCtrlIsActive() {
+    public void verticalSwipesScrollHistoryWhenCursorModeIsOff() {
         TerminalView view = terminal(false);
         byte[] lines = new byte[160];
         for (int i = 0; i < lines.length; i += 4) {
@@ -54,7 +54,7 @@ public class TerminalCursorGestureTest {
     }
 
     @Test
-    public void ctrlVerticalSwipesSendUnmodifiedArrowsAndDoNotFling() {
+    public void cursorModeVerticalSwipesSendUnmodifiedArrowsAndDoNotFling() {
         TerminalView view = terminal(true);
         swipe(view, 0, -80);
         assertOnlyArrow(view, "\u001b[A");
@@ -123,11 +123,11 @@ public class TerminalCursorGestureTest {
         assertOnlyArrow(view, "\u001b[C");
     }
 
-    private static TerminalView terminal(boolean ctrl) {
+    private static TerminalView terminal(boolean cursorMode) {
         TerminalView view = new TerminalView(RuntimeEnvironment.getApplication(), null);
         view.setTerminalViewClient(new TermuxTerminalViewClientBase() {
             @Override public boolean shouldUseHorizontalCursorGestures() { return true; }
-            @Override public boolean shouldUseVerticalCursorGestures() { return ctrl; }
+            @Override public boolean shouldUseVerticalCursorGestures() { return cursorMode; }
             @Override public boolean readControlKey() {
                 throw new AssertionError("Cursor gestures must not consume CTRL");
             }

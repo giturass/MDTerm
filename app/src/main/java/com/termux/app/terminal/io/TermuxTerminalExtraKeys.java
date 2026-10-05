@@ -58,7 +58,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         mExtraKeysInfo = null;
 
         try {
-            // Keep MDTerm's compact seven-key row even when an older properties file is present.
+            // Keep MDTerm's single scrolling row even when an older properties file is present.
             String extrakeys = TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS;
             String extraKeysStyle = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, true);
 

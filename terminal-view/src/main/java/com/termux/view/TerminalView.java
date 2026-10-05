@@ -208,7 +208,7 @@ public final class TerminalView extends View {
                 } else {
                     scrolledWithFinger = true;
                     if (!e.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText()) {
-                        // Keep a diagonal drag on its initial axis and sample CTRL once per gesture.
+                        // Keep a diagonal drag on its initial axis and sample cursor mode once per gesture.
                         if (mTouchScrollAxis == 0) {
                             mTouchScrollAxis = Math.abs(distanceX) > Math.abs(distanceY) ? 1 : 2;
                             mTouchScrollMovesCursor = mTouchScrollAxis == 1
@@ -705,7 +705,7 @@ public final class TerminalView extends View {
         int keyCode = horizontal
             ? (count > 0 ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_RIGHT)
             : (count > 0 ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN);
-        // CTRL selects vertical cursor mode without modifying or consuming these arrow keys.
+        // Cursor gestures send plain arrows without consuming keyboard modifiers.
         for (int i = 0; i < Math.abs(count); i++) handleKeyCode(keyCode, 0);
         invalidate();
     }

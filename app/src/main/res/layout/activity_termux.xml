@@ -21,7 +21,7 @@
             android:id="@+id/drawer_layout"
             android:layout_width="match_parent"
             android:layout_alignParentTop="true"
-            android:layout_above="@+id/terminal_toolbar_view_pager"
+            android:layout_above="@+id/terminal_toolbar"
             android:layout_height="match_parent">
 
             <FrameLayout
@@ -165,14 +165,21 @@
 
         </androidx.drawerlayout.widget.DrawerLayout>
 
-        <androidx.viewpager.widget.ViewPager
-            android:id="@+id/terminal_toolbar_view_pager"
+        <HorizontalScrollView
+            android:id="@+id/terminal_toolbar"
             android:visibility="gone"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginBottom="6dp"
             android:background="@drawable/terminal_keys_surface"
-            android:layout_alignParentBottom="true" />
+            android:layout_alignParentBottom="true"
+            android:fillViewport="true"
+            android:layoutDirection="ltr"
+            android:scrollbars="none">
+
+            <include layout="@layout/view_terminal_toolbar_extra_keys" />
+
+        </HorizontalScrollView>
 
     </RelativeLayout>
 

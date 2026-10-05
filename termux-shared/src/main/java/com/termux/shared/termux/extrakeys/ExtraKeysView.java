@@ -47,33 +47,33 @@ import com.termux.shared.theme.ThemeUtils;
  * keyboards.
  *
  * To use it, add following to a layout file and import it in your activity layout file or inflate
- * it with a {@link androidx.viewpager.widget.ViewPager}.:
+ * it inside a {@link android.widget.HorizontalScrollView}:
  * {@code
  * <?xml version="1.0" encoding="utf-8"?>
  * <com.termux.shared.termux.extrakeys.ExtraKeysView xmlns:android="http://schemas.android.com/apk/res/android"
  *     android:id="@+id/extra_keys"
  *     style="?android:attr/buttonBarStyle"
- *     android:layout_width="match_parent"
+ *     android:layout_width="wrap_content"
  *     android:layout_height="match_parent"
  *     android:layout_alignParentBottom="true"
  *     android:orientation="horizontal" />
  * }
  *
  * Then in your activity, get its reference by a call to {@link android.app.Activity#findViewById(int)}
- * or {@link LayoutInflater#inflate(int, ViewGroup)} if using {@link androidx.viewpager.widget.ViewPager}.
+ * or {@link LayoutInflater#inflate(int, ViewGroup)}.
  * Then call {@link #setExtraKeysViewClient(IExtraKeysView)} and pass it the implementation of
  * {@link IExtraKeysView} so that you can receive callbacks. You can also override other values set
  * in {@link ExtraKeysView#ExtraKeysView(Context, AttributeSet)} by calling the respective functions.
  * If you extend {@link ExtraKeysView}, you can also set them in the constructor, but do call super().
  *
- * After this you will have to make a call to {@link ExtraKeysView#reload(ExtraKeysInfo, float) and pass
+ * After this you will have to make a call to {@link ExtraKeysView#reload(ExtraKeysInfo, float)} and pass
  * it the {@link ExtraKeysInfo} to load and display the extra keys. Read its class javadocs for more
  * info on how to create it.
  *
  * Termux app defines the view in res/layout/view_terminal_toolbar_extra_keys and
- * inflates it in TerminalToolbarViewPager.instantiateItem() and sets the {@link ExtraKeysView} client
- * and calls {@link ExtraKeysView#reload(ExtraKeysInfo).
- * The {@link ExtraKeysInfo} is created by TermuxAppSharedProperties.setExtraKeys().
+ * sets the {@link ExtraKeysView} client in TermuxActivity.setTerminalToolbarView()
+ * and calls {@link ExtraKeysView#reload(ExtraKeysInfo, float)}.
+ * The {@link ExtraKeysInfo} is created by TermuxTerminalExtraKeys.setExtraKeys().
  * Then its got and the view height is adjusted in TermuxActivity.setTerminalToolbarHeight().
  * The client used is TermuxTerminalExtraKeys, which extends
  * {@link TerminalExtraKeys } to handle Termux app specific logic and
@@ -376,6 +376,7 @@ public final class ExtraKeysView extends GridLayout {
             put(SpecialButton.ALT, new SpecialButtonState(extraKeysView));
             put(SpecialButton.SHIFT, new SpecialButtonState(extraKeysView));
             put(SpecialButton.FN, new SpecialButtonState(extraKeysView));
+            put(SpecialButton.CURSOR, new SpecialButtonState(extraKeysView));
         }};
     }
 
@@ -417,6 +418,15 @@ public final class ExtraKeysView extends GridLayout {
 
                 button.setText(buttonInfo.getDisplay());
                 button.setAllCaps(mButtonTextAllCaps);
+                if (SpecialButton.CURSOR.getKey().equals(buttonInfo.getKey())) {
+                    button.setText("");
+                    button.setIconResource(R.drawable.ic_touch_app);
+                    button.setIconSize(dp(24));
+                    button.setIconPadding(0);
+                    button.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
+                    button.setIconTint(button.getTextColors());
+                    button.setContentDescription(getContext().getString(R.string.extra_keys_cursor_description));
+                }
 
                 button.setOnClickListener(view -> {
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
@@ -476,7 +486,8 @@ public final class ExtraKeysView extends GridLayout {
                 });
 
                 LayoutParams param = new GridLayout.LayoutParams();
-                param.width = 0;
+                // Let a horizontal scroll container retain readable key widths on narrow screens.
+                param.width = LayoutParams.WRAP_CONTENT;
                 if(Build.VERSION.SDK_INT == Build.VERSION_CODES.LOLLIPOP) {
                    param.height = (int)(heightPx + 0.5);
                 } else {
@@ -511,8 +522,8 @@ public final class ExtraKeysView extends GridLayout {
         button.setInsetTop(0);
         button.setInsetBottom(0);
         button.setMinHeight(0);
-        button.setMinWidth(0);
-        button.setMinimumWidth(0);
+        button.setMinWidth(dp(48));
+        button.setMinimumWidth(dp(48));
         button.setMinimumHeight(0);
         button.setPadding(dp(4), 0, dp(4), 0);
         button.setIncludeFontPadding(false);
@@ -598,7 +609,8 @@ public final class ExtraKeysView extends GridLayout {
                 mLongPressCount++;
                 onExtraKeyButtonClick(view, buttonInfo, button);
             }, mLongPressTimeout, mLongPressRepeatDelay, TimeUnit.MILLISECONDS);
-        } else if (isSpecialButton(buttonInfo)) {
+        } else if (isSpecialButton(buttonInfo) && !SpecialButton.CURSOR.getKey().equals(buttonInfo.getKey())) {
+            // Cursor mode is a persistent toggle and does not need a separate lock state.
             // Lock the key if long pressed by running mSpecialButtonsLongHoldRunnable after
             // waiting for mLongPressTimeout milliseconds. If user does not long press, then the
             // ACTION_UP triggered will cancel the runnable by calling stopScheduledExecutors before
