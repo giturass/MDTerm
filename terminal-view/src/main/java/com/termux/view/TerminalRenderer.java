@@ -231,7 +231,8 @@ public final class TerminalRenderer {
         if (cursor != 0) {
             mTextPaint.setColor(cursor);
             float cursorHeight = mFontLineSpacingAndAscent - mFontAscent;
-            if (cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE) cursorHeight /= 4.f;
+            // Keep the underline thin while scaling with the terminal font size.
+            if (cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE) cursorHeight = Math.max(1.f, cursorHeight / 16.f);
             else if (cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR) right -= (((right - left) * 3) / 4.f);
             canvas.drawRect(left, y - cursorHeight, right, y, mTextPaint);
         }
