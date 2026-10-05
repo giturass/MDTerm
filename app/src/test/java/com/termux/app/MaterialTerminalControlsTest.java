@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.os.SystemClock;
 import android.view.inputmethod.InputMethodManager;
 
@@ -24,6 +25,8 @@ import com.termux.R;
 import com.termux.filepicker.TermuxDocumentsProvider;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.app.terminal.TermuxTerminalViewClient;
+import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
 import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
@@ -147,7 +150,7 @@ public class MaterialTerminalControlsTest {
     }
 
     @Test
-    public void keyboardButtonTogglesInputOnlyAfterDrawerCloses() {
+    public void toolbarKeyboardButtonTogglesInputAfterCursorControl() {
         TermuxActivity activity = drawerActivity(true);
         int[] toggleRequests = {0};
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, null) {
@@ -159,17 +162,29 @@ public class MaterialTerminalControlsTest {
             }
         };
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
+        ReflectionHelpers.setField(activity, "mProperties", TermuxAppSharedProperties.init(activity));
+        TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
+            activity.mTermuxTerminalViewClient, null);
+        ExtraKeysView keys = activity.findViewById(R.id.terminal_toolbar_extra_keys);
+        keys.setExtraKeysViewClient(extraKeys);
+        keys.reload(extraKeys.getExtraKeysInfo(), 52);
+        MaterialButton keyboard = (MaterialButton) keys.getChildAt(6);
+        assertEquals("CURSOR", extraKeys.getExtraKeysInfo().getMatrix()[0][5].getKey());
+        assertEquals("KEYBOARD", extraKeys.getExtraKeysInfo().getMatrix()[0][6].getKey());
+        assertNotNull(keyboard.getIcon());
+        assertEquals("", keyboard.getText().toString());
+        assertEquals(activity.getString(com.termux.shared.R.string.extra_keys_keyboard_description),
+            keyboard.getContentDescription());
 
-        activity.getDrawer().openDrawer(Gravity.START, false);
-        activity.findViewById(R.id.toggle_keyboard_button).performClick();
-        assertEquals(0, toggleRequests[0]);
-        activity.getDrawer().closeDrawer(Gravity.START, false);
+        keyboard.performClick();
         assertEquals(1, toggleRequests[0]);
+        keyboard.performClick();
+        assertEquals(2, toggleRequests[0]);
         assertTrue(activity.getPreferences().shouldShowTerminalToolbar());
 
         activity.getDrawer().openDrawer(Gravity.START, false);
         activity.getDrawer().closeDrawer(Gravity.START, false);
-        assertEquals(1, toggleRequests[0]);
+        assertEquals(2, toggleRequests[0]);
     }
 
     @Test
@@ -200,24 +215,30 @@ public class MaterialTerminalControlsTest {
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, null);
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
         activity.getTerminalToolbar().setVisibility(showToolbar ? View.VISIBLE : View.GONE);
-        ReflectionHelpers.callInstanceMethod(activity, "setToggleKeyboardView");
         ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
         measure(activity.getDrawer(), activity, 320, 640);
         return activity;
     }
 
     @Test
-    public void sessionAndFileActionsFitSideBySideOnNarrowScreen() {
-        Context context = themedContext();
-        View root = LayoutInflater.from(context).inflate(R.layout.activity_termux, null);
-        measure(root, context, 320, 640);
-        MaterialButton newSession = root.findViewById(R.id.new_session_button);
-        MaterialButton files = root.findViewById(R.id.file_system_button);
-        assertEquals(newSession.getTop(), files.getTop());
-        assertTrue(files.getRight() <= newSession.getLeft());
-        assertTrue(newSession.getWidth() > 0);
+    public void drawerIconActionsFitNarrowAndCompactLayouts() {
+        TermuxActivity activity = drawerActivity(true);
+        MaterialButton newSession = activity.findViewById(R.id.new_session_button);
+        ImageButton files = activity.findViewById(R.id.file_system_button);
+        ImageButton settings = activity.findViewById(R.id.settings_button);
+        for (int height : new int[]{640, 320, 640}) {
+            measure(activity.getDrawer(), activity, 320, height);
+            assertSame(settings.getParent(), files.getParent());
+            assertEquals(settings.getTop(), files.getTop());
+            assertTrue(files.getRight() <= settings.getLeft());
+            assertEquals(newSession.getWidth(), newSession.getHeight());
+            assertTrue(newSession.getWidth() >= Math.round(48 * activity.getResources().getDisplayMetrics().density));
+        }
+        assertEquals("", newSession.getText().toString());
+        assertEquals(activity.getString(R.string.action_new_session), newSession.getContentDescription());
+        assertEquals(activity.getString(R.string.action_open_file_system), files.getContentDescription());
         assertNotNull(newSession.getIcon());
-        assertNotNull(files.getIcon());
+        assertNotNull(files.getDrawable());
     }
 
     @Test
@@ -230,7 +251,7 @@ public class MaterialTerminalControlsTest {
         keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
             "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
         measure(toolbar, context, 304, 52);
-        String[] labels = {"ESC", "CTRL", "ALT", "HOME", "END", "", "PGUP", "PGDN"};
+        String[] labels = {"ESC", "CTRL", "ALT", "HOME", "END", "", "", "PGUP", "PGDN"};
         assertEquals(labels.length, keys.getChildCount());
         assertEquals(1, toolbar.getChildCount());
         assertEquals(1, keys.getRowCount());

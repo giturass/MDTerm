@@ -190,7 +190,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private boolean mIsDrawerCompact;
     private boolean mIsDrawerInputCollapsed;
-    private boolean mToggleSoftKeyboardOnDrawerClose;
     private AlertDialog mActionsDialog;
 
 
@@ -202,7 +201,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_AUTOFILL_USERNAME = 11;
     private static final int CONTEXT_MENU_AUTOFILL_PASSWORD = 2;
     private static final int CONTEXT_MENU_RESET_TERMINAL_ID = 3;
-    private static final int CONTEXT_MENU_KILL_PROCESS_ID = 4;
     private static final int CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 6;
     private static final int CONTEXT_MENU_HELP_ID = 7;
     private static final int CONTEXT_MENU_SETTINGS_ID = 8;
@@ -261,7 +259,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setSettingsButtonView();
 
-        setToggleKeyboardView();
 
         setNewSessionButtonView();
 
@@ -525,7 +522,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTermuxSessionListViewController = new TermuxSessionsListViewController(this, mTermuxService.getTermuxSessions());
         termuxSessionsListView.setAdapter(mTermuxSessionListViewController);
         termuxSessionsListView.setOnItemClickListener(mTermuxSessionListViewController);
-        termuxSessionsListView.setOnItemLongClickListener(mTermuxSessionListViewController);
     }
 
 
@@ -574,19 +570,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ImageButton settingsButton = findViewById(R.id.settings_button);
         settingsButton.setOnClickListener(v -> {
             ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
-        });
-    }
-
-    private void setToggleKeyboardView() {
-        View keyboardButton = findViewById(R.id.toggle_keyboard_button);
-        keyboardButton.setOnClickListener(v -> {
-            if (getDrawer().isDrawerVisible(Gravity.START)) {
-                // Wait until the drawer restores input and stops suppressing keyboard requests.
-                mToggleSoftKeyboardOnDrawerClose = true;
-                getDrawer().closeDrawers();
-            } else {
-                mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
-            }
         });
     }
 
@@ -642,10 +625,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @Override
             public void onDrawerClosed(@NonNull View drawerView) {
                 setDrawerInputCollapsed(false);
-                if (mToggleSoftKeyboardOnDrawerClose) {
-                    mToggleSoftKeyboardOnDrawerClose = false;
-                    mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
-                }
             }
         });
 
@@ -654,7 +633,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View sessionsHeader = findViewById(R.id.terminal_sessions_header);
         LinearLayout actions = findViewById(R.id.terminal_drawer_actions);
         MaterialButton newSessionButton = findViewById(R.id.new_session_button);
-        MaterialButton fileSystemButton = findViewById(R.id.file_system_button);
         int headerPaddingTop = header.getPaddingTop();
         int headerPaddingBottom = header.getPaddingBottom();
         int actionsPaddingTop = actions.getPaddingTop();
@@ -671,17 +649,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             sessionsHeader.setVisibility(compact ? View.GONE : View.VISIBLE);
             header.setPaddingRelative(header.getPaddingStart(), compact ? 0 : headerPaddingTop,
                 header.getPaddingEnd(), compact ? 0 : headerPaddingBottom);
-            actions.setOrientation(LinearLayout.HORIZONTAL);
             actions.setPaddingRelative(actions.getPaddingStart(), compact ? 0 : actionsPaddingTop,
                 actions.getPaddingEnd(), actions.getPaddingBottom());
 
-            for (MaterialButton button : new MaterialButton[]{newSessionButton, fileSystemButton}) {
-                LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) button.getLayoutParams();
-                params.width = 0;
-                params.weight = 1;
-                button.setLayoutParams(params);
-                button.setMinHeight(Math.round(ViewUtils.dpToPx(this, compact ? 48 : 52)));
-            }
+            LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) newSessionButton.getLayoutParams();
+            int buttonSize = Math.round(ViewUtils.dpToPx(this, compact ? 48 : 56));
+            params.width = buttonSize;
+            params.height = buttonSize;
+            newSessionButton.setLayoutParams(params);
         });
     }
 
@@ -772,7 +747,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username);
         if (autoFillEnabled)
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password);
-        menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE, getResources().getString(R.string.action_kill_process, getCurrentSession().getPid())).setEnabled(currentSession.isRunning());
         menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn());
         menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
         int[][] icons = {{CONTEXT_MENU_SELECT_URL_ID, R.drawable.ic_action_link},
@@ -780,7 +754,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             {CONTEXT_MENU_SHARE_SELECTED_TEXT, R.drawable.ic_action_share},
             {CONTEXT_MENU_AUTOFILL_USERNAME, R.drawable.ic_action_paste},
             {CONTEXT_MENU_AUTOFILL_PASSWORD, R.drawable.ic_action_paste},
-            {CONTEXT_MENU_KILL_PROCESS_ID, R.drawable.ic_action_close},
             {CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, R.drawable.ic_action_screen}};
         for (int[] icon : icons) {
             MenuItem item = menu.findItem(icon[0]);
@@ -818,9 +791,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             case CONTEXT_MENU_RESET_TERMINAL_ID:
                 onResetTerminalSession(session);
                 return true;
-            case CONTEXT_MENU_KILL_PROCESS_ID:
-                showKillSessionDialog(session);
-                return true;
             case CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON:
                 setKeepScreenOn(item.isChecked());
                 return true;
@@ -845,17 +815,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTerminalView.onContextMenuClosed(menu);
     }
 
-    private void showKillSessionDialog(TerminalSession session) {
+    public void showCloseSessionDialog(TerminalSession session) {
         if (session == null) return;
+
+        if (!session.isRunning()) {
+            mTermuxTerminalSessionActivityClient.closeSession(session);
+            return;
+        }
 
         final AlertDialog.Builder b = new MaterialAlertDialogBuilder(this);
         b.setIcon(android.R.drawable.ic_dialog_alert);
-        b.setMessage(R.string.title_confirm_kill_process);
-        b.setPositiveButton(android.R.string.yes, (dialog, id) -> {
+        b.setMessage(R.string.title_confirm_close_session);
+        b.setPositiveButton(R.string.action_close_session, (dialog, id) -> {
             dialog.dismiss();
-            session.finishIfRunning();
+            mTermuxTerminalSessionActivityClient.closeSession(session);
         });
-        b.setNegativeButton(android.R.string.no, null);
+        b.setNegativeButton(android.R.string.cancel, null);
         b.show();
     }
 

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="extra_keys_cursor_description">纵向光标手势</string>
+    <string name="extra_keys_keyboard_description">切换键盘</string>
     <string name="extra_keys_state_active">已启用</string>
     <string name="extra_keys_state_inactive">未启用</string>
     <string name="extra_keys_state_locked">已锁定</string>

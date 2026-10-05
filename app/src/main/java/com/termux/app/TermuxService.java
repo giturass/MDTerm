@@ -626,6 +626,22 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         return newTermuxSession;
     }
 
+    /** Close a session and process its result, including when its shell is still running. */
+    public synchronized int closeTermuxSession(TerminalSession sessionToClose) {
+        int index = getIndexOfSession(sessionToClose);
+        if (index < 0) return index;
+
+        TermuxSession session = mShellManager.mTermuxSessions.get(index);
+        // Removed sessions must not retain an activity while waiting for the shell to exit.
+        sessionToClose.updateTerminalSessionClient(mTermuxTerminalSessionServiceClient);
+        if (sessionToClose.isRunning()) {
+            session.killIfExecuting(this, true);
+        } else {
+            session.finish();
+        }
+        return index;
+    }
+
     /** Remove a TermuxSession. */
     public synchronized int removeTermuxSession(TerminalSession sessionToRemove) {
         int index = getIndexOfSession(sessionToRemove);
