@@ -4,6 +4,7 @@ import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -26,6 +27,8 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
     private final TerminalBookmarkStore store;
     private final ListView list;
     private final View drawer;
+    private final ImageButton toggle;
+    private boolean collapsed;
 
     public TerminalBookmarksListViewController(TermuxActivity activity, TerminalBookmarkStore store,
                                                 OnBookmarkClickListener listener) {
@@ -34,6 +37,14 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         this.store = store;
         list = activity.findViewById(R.id.terminal_bookmarks_list);
         drawer = activity.findViewById(R.id.left_drawer);
+        toggle = activity.findViewById(R.id.terminal_bookmarks_toggle);
+        collapsed = store.isCollapsed();
+        toggle.setOnClickListener(view -> {
+            collapsed = !collapsed;
+            store.setCollapsed(collapsed);
+            updateExpandedState();
+        });
+        updateExpandedState();
         list.setAdapter(this);
         list.setOnItemClickListener((parent, view, position, id) -> {
             TerminalBookmark bookmark = getItem(position);
@@ -70,7 +81,16 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         list.post(this::resizeList);
     }
 
+    private void updateExpandedState() {
+        list.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+        toggle.setImageResource(collapsed ? R.drawable.ic_bookmarks_expand : R.drawable.ic_bookmarks_collapse);
+        toggle.setContentDescription(activity.getString(collapsed
+            ? R.string.action_expand_bookmarks : R.string.action_collapse_bookmarks));
+        if (!collapsed) list.post(this::resizeList);
+    }
+
     private void resizeList() {
+        if (collapsed) return;
         // Let long collections scroll while reserving most drawer space for sessions.
         int width = list.getWidth();
         if (width <= 0 || drawer.getHeight() <= 0) return;
@@ -117,10 +137,6 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         name.setVisibility(View.VISIBLE);
         TextView summary = row.findViewById(R.id.session_title);
         if (convertView == null) {
-            summary.setDuplicateParentStateEnabled(false);
-            summary.setSingleLine(true);
-            summary.setEllipsize(TextUtils.TruncateAt.MARQUEE);
-            summary.setMarqueeRepeatLimit(-1);
             summary.setSelected(true);
         }
         String environment = "proot".equals(bookmark.kind) ? bookmark.distro

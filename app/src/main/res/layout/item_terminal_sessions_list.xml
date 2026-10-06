@@ -27,8 +27,9 @@
                 android:textAppearance="?attr/textAppearanceTitleSmall" />
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/session_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:duplicateParentState="true"
-                android:ellipsize="end" android:maxLines="2" android:textStyle="normal"
+                android:duplicateParentState="false"
+                android:ellipsize="marquee" android:singleLine="true"
+                android:marqueeRepeatLimit="marquee_forever" android:textStyle="normal"
                 android:textColor="@color/terminal_session_text" android:textAppearance="?attr/textAppearanceBodyMedium" />
         </LinearLayout>
     </LinearLayout>

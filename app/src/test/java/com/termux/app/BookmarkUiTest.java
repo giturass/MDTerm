@@ -43,6 +43,55 @@ import static org.junit.Assert.*;
 @Config(sdk = 31, application = Application.class, qualifiers = "zh-rCN-w320dp-h640dp")
 public class BookmarkUiTest {
     @Test
+    public void collapsingBookmarksReclaimsSpaceAndSurvivesRefreshAndRecreation() {
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller);
+        TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
+        store.add(bookmark());
+        TerminalBookmarksListViewController adapter =
+            new TerminalBookmarksListViewController(activity, store, item -> {});
+        View drawer = activity.getDrawer();
+        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        View sessions = activity.findViewById(R.id.terminal_sessions_list);
+        View toggle = activity.findViewById(R.id.terminal_bookmarks_toggle);
+        controller.visible();
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measureDrawer(drawer);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        int expandedSessionsHeight = sessions.getHeight();
+        assertTrue(list.getHeight() > 0);
+        toggle.performClick();
+        measureDrawer(drawer);
+        assertEquals(View.GONE, list.getVisibility());
+        assertTrue(sessions.getHeight() > expandedSessionsHeight);
+        assertEquals(activity.getString(R.string.action_expand_bookmarks), toggle.getContentDescription());
+        store.rename("location", "Updated while collapsed");
+        adapter.refresh();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(View.GONE, list.getVisibility());
+
+        ActivityController<TermuxActivity> recreatedController = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity recreated = recreatedController.get();
+        recreated.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
+        recreated.setContentView(R.layout.activity_termux);
+        TerminalBookmarksListViewController restored = new TerminalBookmarksListViewController(
+            recreated, new TerminalBookmarkStore(recreated), item -> {});
+        ListView restoredList = recreated.findViewById(R.id.terminal_bookmarks_list);
+        assertEquals(View.GONE, restoredList.getVisibility());
+        recreatedController.visible();
+        recreated.getDrawer().openDrawer(Gravity.START, false);
+        recreated.findViewById(R.id.terminal_bookmarks_toggle).performClick();
+        measureDrawer(recreated.getDrawer());
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(recreated.getDrawer());
+        assertEquals(View.VISIBLE, restoredList.getVisibility());
+        assertTrue(restoredList.getHeight() > 0);
+        assertEquals("Updated while collapsed", restored.getItem(0).name);
+        assertFalse(new TerminalBookmarkStore(recreated).isCollapsed());
+    }
+
+    @Test
     @Config(shadows = SessionActionsTest.ShadowTerminalSession.class)
     public void terminalActionsOfferSavingOnlyForRunningSessions() {
         TermuxActivity activity = host();
@@ -90,7 +139,9 @@ public class BookmarkUiTest {
             assertEquals(1, path.getLineCount());
             assertEquals(TextUtils.TruncateAt.MARQUEE, path.getEllipsize());
             assertTrue("Long bookmark paths must be selected for marquee scrolling", path.isSelected());
-            assertEquals(2, ((TextView) session.findViewById(R.id.session_title)).getMaxLines());
+            TextView summary = session.findViewById(R.id.session_title);
+            assertEquals(1, summary.getLineCount());
+            assertEquals(TextUtils.TruncateAt.MARQUEE, summary.getEllipsize());
             assertTrue(bookmark.getHeight() <= session.getHeight());
         }
     }

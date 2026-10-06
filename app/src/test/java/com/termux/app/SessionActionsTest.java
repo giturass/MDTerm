@@ -4,6 +4,7 @@ import android.app.Application;
 import android.graphics.Rect;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -11,6 +12,7 @@ import android.view.ViewGroup;
 import android.widget.ListView;
 import android.widget.PopupWindow;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -220,6 +222,9 @@ public class SessionActionsTest {
         measure(drawer, widthDp, heightDp);
         ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
         View menuButton = sessions.getChildAt(0).findViewById(R.id.session_menu_button);
+        TextView summary = sessions.getChildAt(0).findViewById(R.id.session_title);
+        assertEquals(TextUtils.TruncateAt.MARQUEE, summary.getEllipsize());
+        assertTrue("Session summaries must be selected for marquee scrolling", summary.isSelected());
         Rect bounds = new Rect(0, 0, menuButton.getWidth(), menuButton.getHeight());
         drawer.offsetDescendantRectToMyCoords(menuButton, bounds);
         assertTrue(menuButton.isShown());
