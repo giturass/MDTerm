@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="terminal_bookmarks_header">Bookmarks</string>
+    <string name="terminal_bookmark_description">Bookmark</string>
+    <string name="action_save_bookmark">Save as bookmark</string>
+    <string name="action_rename_bookmark">Rename bookmark</string>
+    <string name="action_delete_bookmark">Delete bookmark</string>
+    <string name="bookmark_menu_description">Manage bookmark %1$s</string>
+    <string name="bookmark_saving">Reading current directory…</string>
+    <string name="bookmark_query_prompt">Read the path at the shell prompt. Unsubmitted input is cleared.</string>
+    <string name="bookmark_entering_environment">Entering environment…</string>
+    <string name="bookmark_save_failed">Could not read the current directory. Return to the shell prompt and try again.</string>
+    <string name="bookmark_saved">Bookmark saved</string>
+    <string name="bookmark_directory_unavailable">The bookmarked directory no longer exists or cannot be accessed.</string>
+</resources>

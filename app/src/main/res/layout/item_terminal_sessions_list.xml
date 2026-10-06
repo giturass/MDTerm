@@ -1,13 +1,13 @@
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:minHeight="64dp"
+    android:minHeight="64dp" android:orientation="horizontal" android:gravity="center_vertical"
     android:screenReaderFocusable="true" android:background="@drawable/session_background_selected">
     <LinearLayout
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
+        android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1"
         android:orientation="horizontal" android:gravity="center_vertical"
-        android:padding="16dp" android:paddingEnd="60dp"
+        android:padding="16dp" android:paddingEnd="4dp"
         android:duplicateParentState="true">
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/session_number" android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -40,4 +40,4 @@
         android:focusable="false" android:duplicateParentState="true"
         app:srcCompat="@drawable/ic_more_vert"
         app:tint="@color/terminal_session_text" />
-</FrameLayout>
+</LinearLayout>

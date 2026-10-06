@@ -385,6 +385,34 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         }
     }
 
+    /** Open saved locations in their own PTY so the current environment is preserved. */
+    public void openBookmark(TerminalBookmark bookmark) {
+        TermuxService service = mActivity.getTermuxService();
+        if (service == null) return;
+        if (service.getTermuxSessionsSize() >= MAX_SESSIONS) {
+            new MaterialAlertDialogBuilder(mActivity).setTitle(R.string.title_max_terminals_reached)
+                .setMessage(R.string.msg_max_terminals_reached)
+                .setPositiveButton(android.R.string.ok, null).show();
+            return;
+        }
+        boolean local = "local".equals(bookmark.kind);
+        String directory = BookmarkEnvironment.launchWorkingDirectory(bookmark);
+        if (local && !new File(directory).isDirectory()) {
+            mActivity.showToast(mActivity.getString(R.string.bookmark_directory_unavailable), true);
+            return;
+        }
+        String executable = local ? null : TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/sh";
+        String[] arguments = local ? null : new String[]{"-c", "printf '%s\\n' "
+            + BookmarkEnvironment.quote(mActivity.getString(R.string.bookmark_entering_environment))
+            + "; " + BookmarkEnvironment.launchCommand(bookmark)};
+        TermuxSession created = service.createTermuxSession(executable, arguments, null,
+            directory, false, bookmark.name);
+        if (created == null) return;
+        setCurrentSession(created.getTerminalSession());
+        mActivity.getDrawer().closeDrawers();
+        if (!local) mActivity.showToast(mActivity.getString(R.string.bookmark_entering_environment), true);
+    }
+
     public void setCurrentStoredSession() {
         TerminalSession currentSession = mActivity.getCurrentSession();
         if (currentSession != null)

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="terminal_bookmarks_header">书签</string>
+    <string name="terminal_bookmark_description">书签</string>
+    <string name="action_save_bookmark">存为书签</string>
+    <string name="action_rename_bookmark">重命名书签</string>
+    <string name="action_delete_bookmark">删除书签</string>
+    <string name="bookmark_menu_description">管理书签 %1$s</string>
+    <string name="bookmark_saving">正在读取当前路径…</string>
+    <string name="bookmark_query_prompt">请在 Shell 提示符保存；读取环境路径会清除未执行的输入。</string>
+    <string name="bookmark_entering_environment">进入环境中…</string>
+    <string name="bookmark_save_failed">无法读取当前路径，请返回 Shell 提示符后重试。</string>
+    <string name="bookmark_saved">书签已保存</string>
+    <string name="bookmark_directory_unavailable">书签目录不存在或无法访问。</string>
+</resources>
