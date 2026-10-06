@@ -404,9 +404,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             return;
         }
         String executable = local ? null : TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/sh";
-        String[] arguments = local ? null : new String[]{"-c", "printf '%s\\n' "
-            + BookmarkEnvironment.quote(mActivity.getString(R.string.bookmark_entering_environment))
-            + "; " + BookmarkEnvironment.launchCommand(bookmark)};
+        String[] arguments = local ? null : new String[]{"-c", BookmarkEnvironment.launchCommand(bookmark)};
         TermuxSession created = service.createTermuxSession(executable, arguments, null,
             directory, false, null);
         if (created == null) return;

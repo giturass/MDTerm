@@ -67,19 +67,45 @@ final class BookmarkProcessSnapshot {
         Process foreground = null;
         for (int i = foregroundChain.size() - 1; i >= 0; i--) {
             int pid = foregroundChain.get(i).pid;
-            String command = new String(readBytes(new File(new File(procDirectory,
-                Integer.toString(pid)), "cmdline")), StandardCharsets.UTF_8);
-            List<String> args = new ArrayList<>();
-            if (!command.isEmpty()) {
-                // Remove the final terminator only; an empty last argv is meaningful too.
-                if (command.endsWith("\u0000")) command = command.substring(0, command.length() - 1);
-                Collections.addAll(args, command.split("\u0000", -1));
-            }
             // Read argv only for the selected ancestry. A background job's unreadable
             // command line must not prevent saving a usable foreground shell.
-            foreground = new Process(pid, args, foreground);
+            foreground = readProcess(procDirectory, pid, foreground);
         }
+        foreground = sshpassClient(procDirectory, processes, foreground);
         return new BookmarkProcessSnapshot(root.foregroundGroup, foreground);
+    }
+
+    private static Process readProcess(File procDirectory, int pid, Process parent) throws IOException {
+        String command = new String(readBytes(new File(new File(procDirectory,
+            Integer.toString(pid)), "cmdline")), StandardCharsets.UTF_8);
+        List<String> args = new ArrayList<>();
+        if (!command.isEmpty()) {
+            // Remove the final terminator only; an empty last argv is meaningful too.
+            if (command.endsWith("\u0000")) command = command.substring(0, command.length() - 1);
+            Collections.addAll(args, command.split("\u0000", -1));
+        }
+        return new Process(pid, args, parent);
+    }
+
+    private static Process sshpassClient(File procDirectory, Map<Integer, Stat> processes,
+                                         Process foreground) throws IOException {
+        if (foreground.args.isEmpty()
+            || !"sshpass".equals(new File(foreground.args.get(0)).getName())) return foreground;
+
+        // sshpass runs its client on a private PTY, outside the original foreground group.
+        // Only cross this boundary for its direct, foreground SSH child. Arbitrary
+        // descendants may be background jobs, and SSH children may be jump-host helpers.
+        Process client = null;
+        for (Stat process : processes.values()) {
+            if (process.parentPid != foreground.pid || process.group <= 0
+                || process.group != process.foregroundGroup) continue;
+            Process child = readProcess(procDirectory, process.pid, foreground);
+            if (child.args.isEmpty() || !"ssh".equals(new File(child.args.get(0)).getName())) continue;
+            if (client != null)
+                throw new IllegalStateException("无法确认 sshpass 中的 SSH 连接，请直接使用 ssh 后保存");
+            client = child;
+        }
+        return client == null ? foreground : client;
     }
 
     private static List<Stat> ancestors(Map<Integer, Stat> processes, Stat process, int rootPid) {

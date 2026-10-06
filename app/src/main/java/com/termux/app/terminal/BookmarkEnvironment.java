@@ -41,13 +41,20 @@ public final class BookmarkEnvironment {
             try {
                 BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(session.getPid());
                 BookmarkProcessSnapshot.Process foreground = snapshot.foreground;
-                BookmarkProcessSnapshot.Process ssh = null;
+                BookmarkProcessSnapshot.Process ssh = findSshProcess(foreground);
                 String distro = "";
                 boolean proot = false;
-                for (BookmarkProcessSnapshot.Process process = foreground; process != null; process = process.parent) {
-                    if (ssh == null && "ssh".equals(executable(process.args))) ssh = process;
+                BookmarkProcessSnapshot.Process prootProcess = null;
+                int prootCount = 0;
+                // A proxy helper's environment does not belong to the selected SSH client.
+                for (BookmarkProcessSnapshot.Process process = ssh != null ? ssh : foreground;
+                     process != null; process = process.parent) {
                     boolean isProot = "proot".equals(executable(process.args));
-                    if (isProot) proot = true;
+                    if (isProot) {
+                        proot = true;
+                        prootProcess = process;
+                        prootCount++;
+                    }
                     String detected = distroFromArguments(process.args);
                     if (isProot && detected.isEmpty()) {
                         // New proot-distro execs proot with --rootfs=. after fchdir(rootfs).
@@ -69,15 +76,29 @@ public final class BookmarkEnvironment {
                 final String targetDistro = distro;
                 final int foregroundPid = foreground.pid;
                 final int foregroundGroup = snapshot.foregroundGroup;
-                if ("local".equals(kind)) {
-                    String path = Os.readlink("/proc/" + foregroundPid + "/cwd");
-                    if (!path.startsWith("/") || path.endsWith(" (deleted)"))
+                String hostPath = null;
+                String resolvedPath = null;
+                if (ssh == null) {
+                    hostPath = Os.readlink("/proc/" + foregroundPid + "/cwd");
+                    if (!hostPath.startsWith("/") || hostPath.endsWith(" (deleted)"))
                         throw new IllegalStateException("当前目录不可用，未保存书签");
+                    if ("local".equals(kind)) {
+                        resolvedPath = hostPath;
+                    } else if (prootCount == 1) {
+                        // Reading procfs avoids typing a query into the guest shell and its history.
+                        // Nested or ambiguous bind mappings still need the guest to report its cwd.
+                        resolvedPath = ProotBookmarkLocation.resolve(prootProcess.args,
+                            Os.readlink("/proc/" + prootProcess.pid + "/cwd"), hostPath);
+                    }
+                }
+                if (resolvedPath != null) {
+                    final String path = resolvedPath;
+                    final String originalHostPath = hostPath;
                     main.post(() -> {
                         if (!callback.isActive()) { callback.onError(null); return; }
                         try {
                             if (BookmarkProcessSnapshot.readForegroundGroup(session.getPid()) != foregroundGroup
-                                || !path.equals(Os.readlink("/proc/" + foregroundPid + "/cwd"))) {
+                                || !originalHostPath.equals(Os.readlink("/proc/" + foregroundPid + "/cwd"))) {
                                 callback.onError("终端环境已变化，请重新保存书签");
                                 return;
                             }
@@ -130,6 +151,15 @@ public final class BookmarkEnvironment {
         }, "BookmarkEnvironment").start();
     }
 
+    /** The outer SSH owns the destination; descendants may only connect to a jump host. */
+    static BookmarkProcessSnapshot.Process findSshProcess(BookmarkProcessSnapshot.Process foreground) {
+        BookmarkProcessSnapshot.Process ssh = null;
+        for (BookmarkProcessSnapshot.Process process = foreground; process != null; process = process.parent) {
+            if ("ssh".equals(executable(process.args))) ssh = process;
+        }
+        return ssh;
+    }
+
     private static TerminalBookmark target(String kind, String distro, List<String> sshArgs, String path) {
         String name = new File(path).getName();
         if (name.isEmpty()) name = path;
@@ -154,7 +184,10 @@ public final class BookmarkEnvironment {
             return prootLogin(bookmark.distro, command.toString());
         }
         if ("proot".equals(bookmark.kind)) {
-            return prootLogin(bookmark.distro, enter);
+            // Let proot-distro select the guest account's login shell. Its environment
+            // need not export SHELL, so a sh wrapper can otherwise fall back to /bin/sh.
+            return "exec \"$(command -v pd || command -v proot-distro)\" login --work-dir "
+                + quote(bookmark.path) + " " + quote(bookmark.distro);
         }
         throw new IllegalArgumentException("Unknown bookmark environment");
     }
@@ -331,7 +364,7 @@ public final class BookmarkEnvironment {
     }
 
     /** Read only PRoot options, never a bind source or the guest command's arguments. */
-    private static String prootRootfsArgument(List<String> args) {
+    static String prootRootfsArgument(List<String> args) {
         String rootfs = "";
         for (int i = 1; i < args.size(); i++) {
             String arg = args.get(i);

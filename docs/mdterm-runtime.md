@@ -80,18 +80,22 @@ delete it. Opening a bookmark creates a new session.
 
 Local bookmarks retain the foreground shell's directory. PRoot bookmarks retain
 the proot-distro distribution and its internal directory, then reopen using
-`pd login` (or `proot-distro login` when `pd` is only a shell alias). SSH bookmarks
-retain the SSH destination, connection arguments and remote directory. PRoot and
-SSH sessions print an entering-environment message before connecting, so password
-prompts and connection errors remain visible in the terminal.
+`pd login --work-dir` (or `proot-distro login` when `pd` is only a shell alias),
+which uses the guest account's normal login shell and prompt configuration.
+SSH bookmarks retain the SSH destination, connection arguments and remote
+directory. A toast indicates that the environment is opening; password prompts
+and connection errors remain visible in the terminal.
 
 Distribution detection supports both the legacy `installed-rootfs/<name>` layout
 and `proot-distro/containers/<name>/rootfs`. Relative rootfs arguments such as
 `--rootfs=.` are resolved against the proot process's working directory, as used
 by newer proot-distro versions.
 
-PRoot and SSH directory capture runs a short `pwd -P`/`base64` query in the current
-terminal. Save from a shell prompt: this clears unsubmitted command-line input.
+PRoot directories inside the rootfs are read from the foreground process when
+the guest path can be resolved without ambiguous mounts. This does not type a
+command into the terminal or change the shell's input or history. SSH and PRoot
+paths that cannot be resolved this way use a short `pwd -P`/`base64` query in the
+current terminal. Save from a shell prompt: this fallback clears unsubmitted input.
 An unavailable directory or timed-out query is reported without saving a guessed
 path. Arbitrary SSH remote commands and unidentified PRoot distributions cannot
 be restored as interactive bookmarks.
