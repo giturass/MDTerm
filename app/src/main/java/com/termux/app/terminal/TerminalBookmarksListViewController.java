@@ -1,5 +1,6 @@
 package com.termux.app.terminal;
 
+import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -97,7 +98,16 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
             : convertView;
         TerminalBookmark bookmark = getItem(position);
         if (bookmark == null) return row;
+        if (!bookmark.id.equals(row.getTag())) row.cancelPendingInputEvents();
         row.setTag(bookmark.id);
+        // Handle the card surface directly; the overflow button handles its own touches.
+        View card = row;
+        row.findViewById(R.id.session_card_content).setOnClickListener(view -> {
+            // A delete may arrive between ACTION_DOWN and the next list layout.
+            if (position < getCount() && bookmark.id.equals(getItem(position).id)) {
+                list.performItemClick(card, position, getItemId(position));
+            }
+        });
         row.setActivated(false);
         TextView badge = row.findViewById(R.id.session_number);
         badge.setText("★");
@@ -106,10 +116,19 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         name.setText(bookmark.name);
         name.setVisibility(View.VISIBLE);
         TextView summary = row.findViewById(R.id.session_title);
+        if (convertView == null) {
+            summary.setDuplicateParentStateEnabled(false);
+            summary.setSingleLine(true);
+            summary.setEllipsize(TextUtils.TruncateAt.MARQUEE);
+            summary.setMarqueeRepeatLimit(-1);
+            summary.setSelected(true);
+        }
         String environment = "proot".equals(bookmark.kind) ? bookmark.distro
             : "ssh".equals(bookmark.kind) ? (bookmark.sshArgs.isEmpty() ? "SSH"
                 : bookmark.sshArgs.get(bookmark.sshArgs.size() - 1)) : "";
-        summary.setText(environment.isEmpty() ? bookmark.path : environment + " · " + bookmark.path);
+        String label = environment.isEmpty() ? bookmark.path : environment + " · " + bookmark.path;
+        // Terminal output refreshes the drawer frequently; do not restart the marquee.
+        if (!TextUtils.equals(summary.getText(), label)) summary.setText(label);
         summary.setVisibility(View.VISIBLE);
         View menu = row.findViewById(R.id.session_menu_button);
         menu.setEnabled(true);

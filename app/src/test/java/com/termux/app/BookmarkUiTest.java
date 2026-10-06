@@ -4,6 +4,7 @@ import android.app.Application;
 import android.graphics.Rect;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -85,8 +86,92 @@ public class BookmarkUiTest {
             measure(session, width);
             assertOutsideMenu((ViewGroup) bookmark);
             assertOutsideMenu((ViewGroup) session);
-            assertEquals(session.getHeight(), bookmark.getHeight());
+            TextView path = bookmark.findViewById(R.id.session_title);
+            assertEquals(1, path.getLineCount());
+            assertEquals(TextUtils.TruncateAt.MARQUEE, path.getEllipsize());
+            assertTrue("Long bookmark paths must be selected for marquee scrolling", path.isSelected());
+            assertEquals(2, ((TextView) session.findViewById(R.id.session_title)).getMaxLines());
+            assertTrue(bookmark.getHeight() <= session.getHeight());
         }
+    }
+
+    @Test
+    public void tappingBookmarkPathOpensTheSavedLocation() {
+        verifyBookmarkTouch(false);
+    }
+
+    @Test
+    public void refreshingBookmarkDuringPathTapStillOpensTheSavedLocation() {
+        verifyBookmarkTouch(true);
+    }
+
+    @Test
+    public void deletingBookmarkDuringTapDoesNotOpenItsReplacementBeforeLayout() {
+        verifyBookmarkTouch(false, true);
+    }
+
+    private void verifyBookmarkTouch(boolean refresh) {
+        verifyBookmarkTouch(refresh, false);
+    }
+
+    private void verifyBookmarkTouch(boolean refresh, boolean delete) {
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller);
+        TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
+        store.add(bookmark());
+        if (delete) store.add(new TerminalBookmark("remaining", "Remaining bookmark", "local", "",
+            Collections.emptyList(), "/tmp"));
+        TerminalBookmark[] opened = {null};
+        int[] openCount = {0};
+        TerminalBookmarksListViewController adapter =
+            new TerminalBookmarksListViewController(activity, store, item -> {
+                opened[0] = item;
+                openCount[0]++;
+            });
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measureDrawer(drawer);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        View path = list.getChildAt(0).findViewById(R.id.session_title);
+        Rect bounds = bounds(drawer, path);
+        assertTrue(path.isShown());
+        assertTrue(bounds.width() > 0);
+        long time = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(down);
+        down.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150));
+        if (refresh) {
+            store.rename("location", "Updated bookmark");
+            adapter.refresh();
+            measureDrawer(drawer);
+        }
+        if (delete) {
+            store.delete("location");
+            adapter.refresh();
+            // Deliberately deliver UP before ListView lays out its changed data.
+        }
+        MotionEvent up = MotionEvent.obtain(time, time + 150, MotionEvent.ACTION_UP,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(up);
+        up.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        if (delete) {
+            assertEquals(0, openCount[0]);
+            assertNull(opened[0]);
+            assertEquals("remaining", adapter.getItem(0).id);
+            return;
+        }
+        assertEquals("A card tap must open its bookmark exactly once", 1, openCount[0]);
+        assertEquals("location", opened[0].id);
+        assertEquals("ubuntu", opened[0].distro);
+        assertEquals(bookmark().path, opened[0].path);
+        if (refresh) assertEquals("Updated bookmark", opened[0].name);
+        assertNull(ShadowApplication.getInstance().getLatestPopupWindow());
     }
 
     @Test

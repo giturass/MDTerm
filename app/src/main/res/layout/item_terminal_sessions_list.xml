@@ -4,6 +4,7 @@
     android:minHeight="64dp" android:orientation="horizontal" android:gravity="center_vertical"
     android:screenReaderFocusable="true" android:background="@drawable/session_background_selected">
     <LinearLayout
+        android:id="@+id/session_card_content"
         android:layout_width="0dp" android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="horizontal" android:gravity="center_vertical"

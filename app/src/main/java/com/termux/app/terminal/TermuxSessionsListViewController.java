@@ -75,7 +75,16 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
 
         TerminalSession sessionAtRow = getItem(position).getTerminalSession();
+        if (sessionRowView.getTag() != sessionAtRow) sessionRowView.cancelPendingInputEvents();
         sessionRowView.setTag(sessionAtRow);
+        // Keep card taps independent of ListView's deferred item-click handling.
+        View card = sessionRowView;
+        sessionRowView.findViewById(R.id.session_card_content).setOnClickListener(view -> {
+            if (position < getCount() && sessionAtRow != null
+                && getItem(position).getTerminalSession() == sessionAtRow) {
+                ((ListView) parent).performItemClick(card, position, getItemId(position));
+            }
+        });
         String name = sessionAtRow == null ? null : sessionAtRow.mSessionName;
         String summary = sessionAtRow == null ? null : sessionAtRow.getTitle();
         sessionNameView.setText(name);
