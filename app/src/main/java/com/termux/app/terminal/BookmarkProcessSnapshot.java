@@ -27,8 +27,8 @@ final class BookmarkProcessSnapshot {
         return read(new File("/proc"), rootPid);
     }
 
-    static int readForegroundGroup(int rootPid) throws IOException {
-        return readStat(new File("/proc"), rootPid).foregroundGroup;
+    static int readForegroundGroup(File procDirectory, int rootPid) throws IOException {
+        return readStat(procDirectory, rootPid).foregroundGroup;
     }
 
     static BookmarkProcessSnapshot read(File procDirectory, int rootPid) throws IOException {

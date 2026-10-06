@@ -91,11 +91,12 @@ and `proot-distro/containers/<name>/rootfs`. Relative rootfs arguments such as
 `--rootfs=.` are resolved against the proot process's working directory, as used
 by newer proot-distro versions.
 
-PRoot directories inside the rootfs are read from the foreground process when
-the guest path can be resolved without ambiguous mounts. This does not type a
-command into the terminal or change the shell's input or history. SSH and PRoot
-paths that cannot be resolved this way use a short `pwd -P`/`base64` query in the
-current terminal. Save from a shell prompt: this fallback clears unsubmitted input.
+Local directories are read from the foreground process without typing a command
+into the terminal. SSH and PRoot directories use a short `pwd -P`/`base64` query
+in the current terminal. PRoot emulates directory changes, so the host's
+`/proc/<pid>/cwd` can stay at the rootfs even after `cd` inside the guest; it
+cannot reliably identify the current guest directory.
+Save from a shell prompt: the query clears unsubmitted input.
 An unavailable directory or timed-out query is reported without saving a guessed
 path. Arbitrary SSH remote commands and unidentified PRoot distributions cannot
 be restored as interactive bookmarks.

@@ -32,6 +32,10 @@ public final class BookmarkEnvironment {
     }
 
     public static void capture(TerminalSession session, Callback callback) {
+        capture(session, callback, new File("/proc"));
+    }
+
+    static void capture(TerminalSession session, Callback callback, File procDirectory) {
         Handler main = new Handler(Looper.getMainLooper());
         if (session == null || !session.isRunning()) {
             callback.onError("当前会话未运行，无法保存书签");
@@ -39,28 +43,24 @@ public final class BookmarkEnvironment {
         }
         new Thread(() -> {
             try {
-                BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(session.getPid());
+                BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(procDirectory, session.getPid());
                 BookmarkProcessSnapshot.Process foreground = snapshot.foreground;
                 BookmarkProcessSnapshot.Process ssh = findSshProcess(foreground);
                 String distro = "";
                 boolean proot = false;
-                BookmarkProcessSnapshot.Process prootProcess = null;
-                int prootCount = 0;
                 // A proxy helper's environment does not belong to the selected SSH client.
                 for (BookmarkProcessSnapshot.Process process = ssh != null ? ssh : foreground;
                      process != null; process = process.parent) {
                     boolean isProot = "proot".equals(executable(process.args));
                     if (isProot) {
                         proot = true;
-                        prootProcess = process;
-                        prootCount++;
                     }
                     String detected = distroFromArguments(process.args);
                     if (isProot && detected.isEmpty()) {
                         // New proot-distro execs proot with --rootfs=. after fchdir(rootfs).
                         // Use the tracer's cwd: the guest shell may be in a host bind mount.
                         detected = distroFromArguments(process.args,
-                            Os.readlink("/proc/" + process.pid + "/cwd"));
+                            readCwd(procDirectory, process.pid));
                     }
                     if (distro.isEmpty() && !detected.isEmpty()) distro = detected;
                 }
@@ -72,33 +72,19 @@ public final class BookmarkEnvironment {
                 }
                 String kind = ssh != null ? "ssh" : (proot || !distro.isEmpty() ? "proot" : "local");
                 List<String> sshArgs = ssh == null ? Collections.emptyList()
-                    : normalizeSshPaths(sshArguments(ssh.args), Os.readlink("/proc/" + ssh.pid + "/cwd"), distro);
+                    : normalizeSshPaths(sshArguments(ssh.args), readCwd(procDirectory, ssh.pid), distro);
                 final String targetDistro = distro;
                 final int foregroundPid = foreground.pid;
                 final int foregroundGroup = snapshot.foregroundGroup;
-                String hostPath = null;
-                String resolvedPath = null;
-                if (ssh == null) {
-                    hostPath = Os.readlink("/proc/" + foregroundPid + "/cwd");
-                    if (!hostPath.startsWith("/") || hostPath.endsWith(" (deleted)"))
+                if ("local".equals(kind)) {
+                    final String path = readCwd(procDirectory, foregroundPid);
+                    if (!path.startsWith("/") || path.endsWith(" (deleted)"))
                         throw new IllegalStateException("当前目录不可用，未保存书签");
-                    if ("local".equals(kind)) {
-                        resolvedPath = hostPath;
-                    } else if (prootCount == 1) {
-                        // Reading procfs avoids typing a query into the guest shell and its history.
-                        // Nested or ambiguous bind mappings still need the guest to report its cwd.
-                        resolvedPath = ProotBookmarkLocation.resolve(prootProcess.args,
-                            Os.readlink("/proc/" + prootProcess.pid + "/cwd"), hostPath);
-                    }
-                }
-                if (resolvedPath != null) {
-                    final String path = resolvedPath;
-                    final String originalHostPath = hostPath;
                     main.post(() -> {
                         if (!callback.isActive()) { callback.onError(null); return; }
                         try {
-                            if (BookmarkProcessSnapshot.readForegroundGroup(session.getPid()) != foregroundGroup
-                                || !originalHostPath.equals(Os.readlink("/proc/" + foregroundPid + "/cwd"))) {
+                            if (BookmarkProcessSnapshot.readForegroundGroup(procDirectory, session.getPid()) != foregroundGroup
+                                || !path.equals(readCwd(procDirectory, foregroundPid))) {
                                 callback.onError("终端环境已变化，请重新保存书签");
                                 return;
                             }
@@ -108,11 +94,14 @@ public final class BookmarkEnvironment {
                         }
                     });
                 } else {
+                    // PRoot emulates chdir/getcwd without updating the kernel cwd. Even a
+                    // /proc/PID/cwd inside rootfs can be stale (often rootfs itself), so
+                    // always ask the guest shell, as we do for a remote SSH directory.
                     main.post(() -> {
                         if (!callback.isActive()) { callback.onError(null); return; }
                         try {
-                            if (BookmarkProcessSnapshot.readForegroundGroup(session.getPid()) != foregroundGroup
-                                || !new File("/proc/" + foregroundPid).exists()) {
+                            if (BookmarkProcessSnapshot.readForegroundGroup(procDirectory, session.getPid()) != foregroundGroup
+                                || !new File(procDirectory, Integer.toString(foregroundPid)).exists()) {
                                 callback.onError("终端环境已变化，请重新保存书签");
                                 return;
                             }
@@ -125,8 +114,8 @@ public final class BookmarkEnvironment {
                         @Override public void onLocation(String path) {
                             if (!callback.isActive()) { callback.onError(null); return; }
                             try {
-                                if (BookmarkProcessSnapshot.readForegroundGroup(session.getPid()) != foregroundGroup
-                                    || !new File("/proc/" + foregroundPid).exists()) {
+                                if (BookmarkProcessSnapshot.readForegroundGroup(procDirectory, session.getPid()) != foregroundGroup
+                                    || !new File(procDirectory, Integer.toString(foregroundPid)).exists()) {
                                     callback.onError("终端环境已变化，请重新保存书签");
                                     return;
                                 }
@@ -149,6 +138,10 @@ public final class BookmarkEnvironment {
                 main.post(() -> callback.onError(message));
             }
         }, "BookmarkEnvironment").start();
+    }
+
+    private static String readCwd(File procDirectory, int pid) throws android.system.ErrnoException {
+        return Os.readlink(new File(procDirectory, pid + "/cwd").getPath());
     }
 
     /** The outer SSH owns the destination; descendants may only connect to a jump host. */
