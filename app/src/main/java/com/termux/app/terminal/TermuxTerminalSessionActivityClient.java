@@ -125,6 +125,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     @Override
     public void onTextChanged(@NonNull TerminalSession changedSession) {
+        mActivity.onSessionActivity(changedSession);
         if (!mActivity.isVisible()) return;
 
         if (mActivity.getCurrentSession() == changedSession) mActivity.getTerminalView().onScreenUpdated();
@@ -132,6 +133,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     @Override
     public void onTitleChanged(@NonNull TerminalSession updatedSession) {
+        mActivity.onSessionActivity(updatedSession);
         if (!mActivity.isVisible()) return;
 
         // Keep changing command summaries in the drawer instead of covering terminal output.

@@ -13,9 +13,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Resolves the foreground process, never a title or the session's initial directory. */
 public final class BookmarkEnvironment {
+    private static final Pattern PROOT_ROOTFS = Pattern.compile(
+        "^(.*/(?:installed-rootfs/([A-Za-z0-9][A-Za-z0-9_.-]*)"
+            + "|proot-distro/containers/([A-Za-z0-9][A-Za-z0-9_.-]*)/rootfs))(?=/|$)");
+
     private BookmarkEnvironment() {}
 
     public interface Callback {
@@ -40,8 +46,15 @@ public final class BookmarkEnvironment {
                 boolean proot = false;
                 for (BookmarkProcessSnapshot.Process process = foreground; process != null; process = process.parent) {
                     if (ssh == null && "ssh".equals(executable(process.args))) ssh = process;
-                    if ("proot".equals(executable(process.args))) proot = true;
+                    boolean isProot = "proot".equals(executable(process.args));
+                    if (isProot) proot = true;
                     String detected = distroFromArguments(process.args);
+                    if (isProot && detected.isEmpty()) {
+                        // New proot-distro execs proot with --rootfs=. after fchdir(rootfs).
+                        // Use the tracer's cwd: the guest shell may be in a host bind mount.
+                        detected = distroFromArguments(process.args,
+                            Os.readlink("/proc/" + process.pid + "/cwd"));
+                    }
                     if (distro.isEmpty() && !detected.isEmpty()) distro = detected;
                 }
                 if (proot && distro.isEmpty()) {
@@ -278,12 +291,10 @@ public final class BookmarkEnvironment {
             || path.startsWith("%d/") || "none".equalsIgnoreCase(path)) return path;
         String cwd = clientCwd;
         if (!distro.isEmpty()) {
-            String marker = "/installed-rootfs/" + distro;
-            int index = cwd.indexOf(marker);
-            int end = index + marker.length();
-            if (index < 0 || (end < cwd.length() && cwd.charAt(end) != '/'))
+            Matcher rootfs = PROOT_ROOTFS.matcher(cwd);
+            if (!rootfs.find() || !distro.equals(rootfsDistro(rootfs)))
                 throw new IllegalStateException("无法还原 proot 中 SSH 文件的相对路径，请使用绝对路径后保存");
-            cwd = cwd.substring(end);
+            cwd = cwd.substring(rootfs.end());
             if (cwd.isEmpty()) cwd = "/";
         }
         if (!cwd.startsWith("/") || cwd.endsWith(" (deleted)"))
@@ -292,17 +303,20 @@ public final class BookmarkEnvironment {
     }
 
     static String distroFromArguments(List<String> args) {
-        for (String arg : args) {
-            String marker = "/installed-rootfs/";
-            int index = arg.indexOf(marker);
-            if (index >= 0) {
-                String suffix = arg.substring(index + marker.length());
-                int end = suffix.indexOf('/');
-                if (end >= 0) suffix = suffix.substring(0, end);
-                end = suffix.indexOf(':');
-                if (end >= 0) suffix = suffix.substring(0, end);
-                if (suffix.matches("[A-Za-z0-9][A-Za-z0-9_.-]*")) return suffix;
+        return distroFromArguments(args, "");
+    }
+
+    static String distroFromArguments(List<String> args, String prootCwd) {
+        if ("proot".equals(executable(args))) {
+            String path = prootRootfsArgument(args);
+            if (path.isEmpty()) return "";
+            if (!path.startsWith("/")) {
+                if (!prootCwd.startsWith("/") || prootCwd.endsWith(" (deleted)")) return "";
+                path = new File(prootCwd, path).getPath();
             }
+            path = new File(path).toPath().normalize().toString();
+            Matcher rootfs = PROOT_ROOTFS.matcher(path);
+            return rootfs.find() && rootfs.end() == path.length() ? rootfsDistro(rootfs) : "";
         }
         for (int i = 0; i + 2 < args.size(); i++) {
             String binary = new File(args.get(i)).getName();
@@ -310,6 +324,34 @@ public final class BookmarkEnvironment {
                 && !args.get(i + 2).startsWith("-")) return args.get(i + 2);
         }
         return "";
+    }
+
+    private static String rootfsDistro(Matcher rootfs) {
+        return rootfs.group(2) != null ? rootfs.group(2) : rootfs.group(3);
+    }
+
+    /** Read only PRoot options, never a bind source or the guest command's arguments. */
+    private static String prootRootfsArgument(List<String> args) {
+        String rootfs = "";
+        for (int i = 1; i < args.size(); i++) {
+            String arg = args.get(i);
+            if (!arg.startsWith("-") || "--".equals(arg)) break;
+            if (arg.equals("--rootfs") || arg.equals("-r") || arg.equals("-R") || arg.equals("-S")) {
+                if (++i >= args.size()) return "";
+                rootfs = args.get(i);
+            } else if (arg.startsWith("--rootfs=")) {
+                rootfs = arg.substring("--rootfs=".length());
+            } else if (arg.startsWith("-r") || arg.startsWith("-R") || arg.startsWith("-S")) {
+                rootfs = arg.substring(2);
+            } else if (arg.equals("-b") || arg.equals("--bind") || arg.equals("-m") || arg.equals("--mount")
+                || arg.equals("-q") || arg.equals("--qemu") || arg.equals("-w") || arg.equals("--pwd")
+                || arg.equals("--cwd") || arg.equals("-v") || arg.equals("--verbose")
+                || arg.equals("-k") || arg.equals("--kernel-release")
+                || arg.equals("-i") || arg.equals("--change-id")) {
+                if (++i >= args.size()) return "";
+            }
+        }
+        return rootfs;
     }
 
     private static String executable(List<String> args) {

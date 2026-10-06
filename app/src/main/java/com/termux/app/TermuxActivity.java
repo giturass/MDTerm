@@ -383,6 +383,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState) return;
 
         if (mActionsDialog != null) mActionsDialog.dismiss();
+        if (mTermuxSessionListViewController != null) mTermuxSessionListViewController.dispose();
 
         if (mTermuxService != null) {
             // Do not leave service and session clients with references to activity.
@@ -531,6 +532,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void setTermuxSessionsListView() {
         ListView termuxSessionsListView = findViewById(R.id.terminal_sessions_list);
+        if (mTermuxSessionListViewController != null) mTermuxSessionListViewController.dispose();
         mTermuxSessionListViewController = new TermuxSessionsListViewController(this, mTermuxService.getTermuxSessions());
         termuxSessionsListView.setAdapter(mTermuxSessionListViewController);
         termuxSessionsListView.setOnItemClickListener(mTermuxSessionListViewController);
@@ -1009,6 +1011,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public void termuxSessionListNotifyUpdated() {
         mTermuxSessionListViewController.notifyDataSetChanged();
+    }
+
+    public void onSessionActivity(TerminalSession session) {
+        if (mTermuxSessionListViewController != null) mTermuxSessionListViewController.onSessionActivity(session);
     }
 
     public boolean isVisible() {
