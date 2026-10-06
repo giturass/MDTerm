@@ -17,6 +17,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.AlertDialog;
 
 import com.termux.R;
+import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.shell.TermuxShellManager;
@@ -206,6 +207,115 @@ public class SessionActionsTest {
     @Test
     public void sessionRefreshDuringTapStillOpensTheTargetMenu() {
         verifyOverflowTouch(320, 640, 150, true);
+    }
+
+    @Test
+    public void sessionSummaryScrollsOnlyAfterThatSessionsOutputHasBeenIdle() {
+        TermuxSession active = addSession(true);
+        TermuxSession other = addSession(true);
+        setSummary(active, "A long changing command summary abcdefghijklmnopqrstuvwxyz");
+        setSummary(other, "Another long command summary abcdefghijklmnopqrstuvwxyz");
+        ListView sessions = showSessionDrawer();
+        TextView activeSummary = sessions.getChildAt(0).findViewById(R.id.session_title);
+        TextView otherSummary = sessions.getChildAt(1).findViewById(R.id.session_title);
+        assertSummaryScrolling(activeSummary, true);
+        assertSummaryScrolling(otherSummary, true);
+
+        client.onTextChanged(active.getTerminalSession());
+        assertSummaryScrolling(activeSummary, false);
+        assertSummaryScrolling(otherSummary, true);
+        assertEquals(1, activeSummary.getMaxLines());
+        assertEquals("A long changing command summary abcdefghijklmnopqrstuvwxyz",
+            activeSummary.getText().toString());
+
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1500));
+        client.onTextChanged(active.getTerminalSession());
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1999));
+        assertSummaryScrolling(activeSummary, false);
+        assertSummaryScrolling(otherSummary, true);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1));
+        assertSummaryScrolling(activeSummary, true);
+        assertTrue("A live shell may be idle", active.getTerminalSession().isRunning());
+
+        client.onTextChanged(active.getTerminalSession());
+        assertSummaryScrolling(activeSummary, false);
+        assertSummaryScrolling(otherSummary, true);
+    }
+
+    @Test
+    public void titleOnlyChangesPauseSummaryScrollingUntilIdle() {
+        TermuxSession session = addSession(true);
+        setSummary(session, "Original long command summary abcdefghijklmnopqrstuvwxyz");
+        ListView sessions = showSessionDrawer();
+        TextView summary = sessions.getChildAt(0).findViewById(R.id.session_title);
+        ReflectionHelpers.setField(activity, "mIsVisible", true);
+
+        setSummary(session, "Updated long command summary abcdefghijklmnopqrstuvwxyz");
+        client.onTitleChanged(session.getTerminalSession());
+        assertSummaryScrolling(summary, false);
+        assertEquals("Updated long command summary abcdefghijklmnopqrstuvwxyz",
+            summary.getText().toString());
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1999));
+        assertSummaryScrolling(summary, false);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1));
+        assertSummaryScrolling(summary, true);
+    }
+
+    @Test
+    public void recycledSessionRowsUseTheirOwnOutputActivityForScrolling() {
+        TermuxSession active = addSession(true);
+        TermuxSession idle = addSession(true);
+        setSummary(active, "Active command summary abcdefghijklmnopqrstuvwxyz");
+        setSummary(idle, "Idle command summary abcdefghijklmnopqrstuvwxyz");
+        ListView sessions = showSessionDrawer();
+        client.onTextChanged(active.getTerminalSession());
+        TermuxSessionsListViewController adapter =
+            ReflectionHelpers.getField(activity, "mTermuxSessionListViewController");
+
+        View row = adapter.getView(0, null, sessions);
+        assertSummaryScrolling(row.findViewById(R.id.session_title), false);
+        assertSame(row, adapter.getView(1, row, sessions));
+        assertSummaryScrolling(row.findViewById(R.id.session_title), true);
+        assertSame(row, adapter.getView(0, row, sessions));
+        assertSummaryScrolling(row.findViewById(R.id.session_title), false);
+    }
+
+    @Test
+    public void disposingSessionListCancelsPendingIdleRefresh() {
+        TermuxSession session = addSession(true);
+        setSummary(session, "Long command summary abcdefghijklmnopqrstuvwxyz");
+        ListView sessions = showSessionDrawer();
+        TextView summary = sessions.getChildAt(0).findViewById(R.id.session_title);
+        client.onTextChanged(session.getTerminalSession());
+        assertSummaryScrolling(summary, false);
+
+        TermuxSessionsListViewController adapter =
+            ReflectionHelpers.getField(activity, "mTermuxSessionListViewController");
+        adapter.dispose();
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2500));
+        assertSummaryScrolling(summary, false);
+    }
+
+    private ListView showSessionDrawer() {
+        ReflectionHelpers.callInstanceMethod(activity, "setTermuxSessionsListView");
+        activity.mTerminalView.setVisibility(View.GONE);
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measure(drawer, 320, 640);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measure(drawer, 320, 640);
+        return activity.findViewById(R.id.terminal_sessions_list);
+    }
+
+    private static void assertSummaryScrolling(TextView summary, boolean scrolling) {
+        assertEquals(scrolling ? TextUtils.TruncateAt.MARQUEE : TextUtils.TruncateAt.END,
+            summary.getEllipsize());
+        assertEquals(scrolling, summary.isSelected());
+    }
+
+    private static void setSummary(TermuxSession session, String title) {
+        ShadowTerminalSession shadow = Shadow.extract(session.getTerminalSession());
+        shadow.title = title;
     }
 
     private void verifyOverflowTouch(int widthDp, int heightDp, int holdMillis, boolean refresh) {
@@ -403,6 +513,12 @@ public class SessionActionsTest {
     @Implements(TerminalSession.class)
     public static class ShadowTerminalSession {
         boolean killed;
+        String title;
+
+        @Implementation
+        protected String getTitle() {
+            return title;
+        }
 
         @Implementation
         protected void finishIfRunning() {

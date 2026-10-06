@@ -85,6 +85,11 @@ retain the SSH destination, connection arguments and remote directory. PRoot and
 SSH sessions print an entering-environment message before connecting, so password
 prompts and connection errors remain visible in the terminal.
 
+Distribution detection supports both the legacy `installed-rootfs/<name>` layout
+and `proot-distro/containers/<name>/rootfs`. Relative rootfs arguments such as
+`--rootfs=.` are resolved against the proot process's working directory, as used
+by newer proot-distro versions.
+
 PRoot and SSH directory capture runs a short `pwd -P`/`base64` query in the current
 terminal. Save from a shell prompt: this clears unsubmitted command-line input.
 An unavailable directory or timed-out query is reported without saving a guessed

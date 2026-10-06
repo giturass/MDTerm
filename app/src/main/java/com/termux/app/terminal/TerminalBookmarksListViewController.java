@@ -98,8 +98,10 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         int maxHeight = drawer.getHeight() / 3;
         for (int i = 0; i < getCount() && contentHeight < maxHeight; i++) {
             View row = getView(i, null, list);
+            int rowHeight = row.getLayoutParams().height;
             row.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                View.MeasureSpec.makeMeasureSpec(Math.max(0, rowHeight),
+                    rowHeight >= 0 ? View.MeasureSpec.EXACTLY : View.MeasureSpec.UNSPECIFIED));
             contentHeight += row.getMeasuredHeight() + (i == 0 ? 0 : list.getDividerHeight());
         }
         int height = Math.min(contentHeight, maxHeight);

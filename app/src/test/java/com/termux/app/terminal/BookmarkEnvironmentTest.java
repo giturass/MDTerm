@@ -8,6 +8,9 @@ import java.util.Collections;
 import static org.junit.Assert.*;
 
 public class BookmarkEnvironmentTest {
+    private static final String PROOT_STATE = "/data/data/com.termux/files/usr/var/lib/proot-distro";
+    private static final String DEBIAN_ROOTFS = PROOT_STATE + "/containers/debian/rootfs";
+
     @Test public void sshKeepsPortIdentityJumpHostAndDestination() {
         assertEquals(Arrays.asList("-p", "2222", "-i", "/a key", "-Jjump", "user@host"),
             BookmarkEnvironment.sshArguments(Arrays.asList("/usr/bin/ssh", "-p", "2222",
@@ -33,6 +36,53 @@ public class BookmarkEnvironmentTest {
         assertEquals("ubuntu", BookmarkEnvironment.distroFromArguments(Arrays.asList("bash",
             "/usr/bin/pd", "login", "ubuntu")));
         assertEquals("", BookmarkEnvironment.distroFromArguments(Arrays.asList("bash", "-l")));
+    }
+
+    @Test public void prootRecognizesNewContainerRootfsAndRootfsAliases() {
+        assertEquals("debian", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "/data/data/com.termux/files/usr/bin/proot", "--rootfs=" + DEBIAN_ROOTFS, "/bin/bash", "-l")));
+        for (String option : Arrays.asList("-r", "-R", "-S", "--rootfs")) {
+            assertEquals(option, "debian", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+                "proot", option, DEBIAN_ROOTFS, "/bin/bash")));
+        }
+    }
+
+    @Test public void minimalProotLoginResolvesRootfsDotAgainstProotWorkingDirectory() {
+        assertEquals("debian", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "proot", "--rootfs=.", "--cwd=/root", "--bind=/dev", "--bind=/proc", "/bin/bash", "-l"),
+            DEBIAN_ROOTFS));
+        assertEquals("debian", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "proot", "-r", "containers/debian/rootfs", "/bin/bash"), PROOT_STATE));
+        assertEquals("debian", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "proot", "-r", ".", "/bin/bash"), PROOT_STATE + "/installed-rootfs/debian"));
+    }
+
+    @Test public void rootfsWinsOverBindingsFromOtherContainers() {
+        assertEquals("debian", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "proot", "--bind=" + PROOT_STATE + "/installed-rootfs/ubuntu/root:/mnt/ubuntu",
+            "--bind=" + PROOT_STATE + "/containers/alpine/rootfs:/mnt/alpine",
+            "--rootfs=.", "--cwd=/data/data/com.termux/files/home", "/bin/bash"), DEBIAN_ROOTFS));
+    }
+
+    @Test public void unrelatedArgumentsAndWorkingDirectoriesDoNotIdentifyDistro() {
+        assertEquals("", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "proot", "--bind=" + DEBIAN_ROOTFS + ":/mnt/debian", "/bin/bash"), DEBIAN_ROOTFS));
+        assertEquals("", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "proot", "--rootfs=/", "/bin/echo", "--rootfs=" + DEBIAN_ROOTFS), DEBIAN_ROOTFS));
+        assertEquals("", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "proot", "--rootfs=/", "--", "/bin/echo", "--rootfs=" + DEBIAN_ROOTFS), DEBIAN_ROOTFS));
+        assertEquals("", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "cat", "--rootfs=" + DEBIAN_ROOTFS), DEBIAN_ROOTFS));
+        assertEquals("", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+            "bash", "-l"), DEBIAN_ROOTFS));
+    }
+
+    @Test public void newContainerRootfsRequiresExactLayout() {
+        for (String rootfs : Arrays.asList(DEBIAN_ROOTFS + "-backup",
+                PROOT_STATE + "/containers/debian", "/work/containers/debian/rootfs")) {
+            assertEquals(rootfs, "", BookmarkEnvironment.distroFromArguments(Arrays.asList(
+                "proot", "--rootfs=" + rootfs, "/bin/bash")));
+        }
     }
 
     @Test public void quotesShellMetacharactersAndSingleQuotes() {
@@ -94,5 +144,25 @@ public class BookmarkEnvironmentTest {
             BookmarkEnvironment.normalizeSshPaths(Arrays.asList("-i", "key", "host"), "/storage/shared", "debian");
             fail("An unknown guest bind must not produce a wrong credential path");
         } catch (IllegalStateException expected) { }
+    }
+
+    @Test public void newContainerRelativeSshFilesUseGuestDirectory() {
+        assertEquals(Arrays.asList("-i", "/root/key", "-F/root/config", "host"),
+            BookmarkEnvironment.normalizeSshPaths(Arrays.asList("-i", "key", "-Fconfig", "host"),
+                DEBIAN_ROOTFS + "/root", "debian"));
+        assertEquals(Arrays.asList("-i", "/key", "host"),
+            BookmarkEnvironment.normalizeSshPaths(Arrays.asList("-i", "key", "host"),
+                DEBIAN_ROOTFS, "debian"));
+    }
+
+    @Test public void relativeSshFilesRejectDifferentContainerAndRootfsPrefixes() {
+        for (String cwd : Arrays.asList(PROOT_STATE + "/containers/debian-other/rootfs/root",
+                DEBIAN_ROOTFS + "-backup/root", PROOT_STATE + "/containers/debian/sysdata",
+                PROOT_STATE + "/installed-rootfs/debian-other/root")) {
+            try {
+                BookmarkEnvironment.normalizeSshPaths(Arrays.asList("-i", "key", "host"), cwd, "debian");
+                fail("Unrelated container directory accepted: " + cwd);
+            } catch (IllegalStateException expected) { }
+        }
     }
 }

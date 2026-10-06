@@ -142,7 +142,12 @@ public class BookmarkUiTest {
             TextView summary = session.findViewById(R.id.session_title);
             assertEquals(1, summary.getLineCount());
             assertEquals(TextUtils.TruncateAt.MARQUEE, summary.getEllipsize());
-            assertTrue(bookmark.getHeight() <= session.getHeight());
+            assertEquals(session.getWidth(), bookmark.getWidth());
+            assertEquals(session.getHeight(), bookmark.getHeight());
+            name.setVisibility(View.GONE);
+            measure(session, width);
+            assertEquals("Bookmarks must also match unnamed session cards", session.getHeight(), bookmark.getHeight());
+            name.setVisibility(View.VISIBLE);
         }
     }
 
@@ -345,8 +350,10 @@ public class BookmarkUiTest {
 
     private static void measure(View row, int widthDp) {
         int width = Math.round(widthDp * row.getResources().getDisplayMetrics().density);
+        int rowHeight = row.getLayoutParams().height;
         row.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            View.MeasureSpec.makeMeasureSpec(Math.max(0, rowHeight),
+                rowHeight >= 0 ? View.MeasureSpec.EXACTLY : View.MeasureSpec.UNSPECIFIED));
         row.layout(0, 0, row.getMeasuredWidth(), row.getMeasuredHeight());
     }
 

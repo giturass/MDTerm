@@ -1,6 +1,8 @@
 package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -19,17 +21,67 @@ import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.terminal.TerminalSession;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession> implements AdapterView.OnItemClickListener {
 
+    private static final long SUMMARY_IDLE_DELAY_MS = 2000;
+
     final TermuxActivity mActivity;
     private final List<TermuxSession> mDisplayedSessions;
+    private final Handler mSummaryHandler = new Handler(Looper.getMainLooper());
+    private final Map<TerminalSession, Runnable> mSummaryIdleCallbacks = new HashMap<>();
+    private boolean mDisposed;
 
     public TermuxSessionsListViewController(TermuxActivity activity, List<TermuxSession> sessionList) {
         super(activity.getApplicationContext(), R.layout.item_terminal_sessions_list, sessionList);
         this.mActivity = activity;
         mDisplayedSessions = new ArrayList<>(sessionList);
+    }
+
+    /** Output and title changes pause only this session's summary until it stays quiet. */
+    public void onSessionActivity(TerminalSession session) {
+        if (mDisposed || session == null || !session.isRunning()) return;
+        Runnable idle = mSummaryIdleCallbacks.get(session);
+        if (idle == null) {
+            idle = () -> {
+                mSummaryIdleCallbacks.remove(session);
+                updateSummaryScrolling(session);
+            };
+            mSummaryIdleCallbacks.put(session, idle);
+            updateSummaryScrolling(session);
+        } else {
+            mSummaryHandler.removeCallbacks(idle);
+        }
+        mSummaryHandler.postDelayed(idle, SUMMARY_IDLE_DELAY_MS);
+    }
+
+    public void dispose() {
+        mDisposed = true;
+        mSummaryHandler.removeCallbacksAndMessages(null);
+        mSummaryIdleCallbacks.clear();
+    }
+
+    private void updateSummaryScrolling(TerminalSession session) {
+        ListView list = mActivity.findViewById(R.id.terminal_sessions_list);
+        if (list == null || list.getAdapter() != this) return;
+        for (int i = 0; i < list.getChildCount(); i++) {
+            View row = list.getChildAt(i);
+            if (row.getTag() == session) {
+                bindSummaryScrolling(row.findViewById(R.id.session_title), session);
+            }
+        }
+    }
+
+    private void bindSummaryScrolling(TextView summary, TerminalSession session) {
+        if (mDisposed) return;
+        boolean scroll = session != null && (!session.isRunning() || !mSummaryIdleCallbacks.containsKey(session));
+        TextUtils.TruncateAt ellipsize = scroll ? TextUtils.TruncateAt.MARQUEE : TextUtils.TruncateAt.END;
+        if (!scroll && summary.isSelected()) summary.setSelected(false);
+        if (summary.getEllipsize() != ellipsize) summary.setEllipsize(ellipsize);
+        if (scroll && !summary.isSelected()) summary.setSelected(true);
     }
 
     @Override
@@ -70,7 +122,6 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
 
         TextView sessionNameView = sessionRowView.findViewById(R.id.session_name);
         TextView sessionTitleView = sessionRowView.findViewById(R.id.session_title);
-        if (convertView == null) sessionTitleView.setSelected(true);
         TextView sessionNumberView = sessionRowView.findViewById(R.id.session_number);
         sessionNumberView.setText(String.valueOf(position + 1));
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
@@ -90,7 +141,8 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         String summary = sessionAtRow == null ? null : sessionAtRow.getTitle();
         sessionNameView.setText(name);
         sessionNameView.setVisibility(TextUtils.isEmpty(name) ? View.GONE : View.VISIBLE);
-        // Output refreshes the drawer frequently; keep an unchanged marquee running.
+        bindSummaryScrolling(sessionTitleView, sessionAtRow);
+        // Preserve an idle marquee across unrelated row refreshes.
         if (!TextUtils.equals(sessionTitleView.getText(), summary)) sessionTitleView.setText(summary);
         sessionTitleView.setVisibility(TextUtils.isEmpty(summary) ? View.GONE : View.VISIBLE);
 
