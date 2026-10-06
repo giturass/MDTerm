@@ -406,7 +406,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             + BookmarkEnvironment.quote(mActivity.getString(R.string.bookmark_entering_environment))
             + "; " + BookmarkEnvironment.launchCommand(bookmark)};
         TermuxSession created = service.createTermuxSession(executable, arguments, null,
-            directory, false, bookmark.name);
+            directory, false, null);
         if (created == null) return;
         setCurrentSession(created.getTerminalSession());
         mActivity.getDrawer().closeDrawers();

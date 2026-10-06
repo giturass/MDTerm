@@ -70,6 +70,7 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
 
         TextView sessionNameView = sessionRowView.findViewById(R.id.session_name);
         TextView sessionTitleView = sessionRowView.findViewById(R.id.session_title);
+        if (convertView == null) sessionTitleView.setSelected(true);
         TextView sessionNumberView = sessionRowView.findViewById(R.id.session_number);
         sessionNumberView.setText(String.valueOf(position + 1));
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
@@ -89,7 +90,8 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         String summary = sessionAtRow == null ? null : sessionAtRow.getTitle();
         sessionNameView.setText(name);
         sessionNameView.setVisibility(TextUtils.isEmpty(name) ? View.GONE : View.VISIBLE);
-        sessionTitleView.setText(summary);
+        // Output refreshes the drawer frequently; keep an unchanged marquee running.
+        if (!TextUtils.equals(sessionTitleView.getText(), summary)) sessionTitleView.setText(summary);
         sessionTitleView.setVisibility(TextUtils.isEmpty(summary) ? View.GONE : View.VISIBLE);
 
         boolean current = sessionAtRow != null && sessionAtRow == mActivity.getCurrentSession();
