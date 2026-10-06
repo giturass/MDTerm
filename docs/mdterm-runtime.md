@@ -71,6 +71,26 @@ public test key and are not signature-compatible with MDTerm release APKs.
 Neither building nor installing this APK migrates or deletes the former
 coexistence build's data automatically.
 
+## Terminal bookmarks
+
+Long-press the terminal and choose **Save as bookmark** while at a shell prompt.
+The bookmark captures the current directory before asking for its display name.
+Bookmarks appear above sessions in the drawer; each card's menu can rename or
+delete it. Opening a bookmark creates a new session.
+
+Local bookmarks retain the foreground shell's directory. PRoot bookmarks retain
+the proot-distro distribution and its internal directory, then reopen using
+`pd login` (or `proot-distro login` when `pd` is only a shell alias). SSH bookmarks
+retain the SSH destination, connection arguments and remote directory. PRoot and
+SSH sessions print an entering-environment message before connecting, so password
+prompts and connection errors remain visible in the terminal.
+
+PRoot and SSH directory capture runs a short `pwd -P`/`base64` query in the current
+terminal. Save from a shell prompt: this clears unsubmitted command-line input.
+An unavailable directory or timed-out query is reported without saving a guessed
+path. Arbitrary SSH remote commands and unidentified PRoot distributions cannot
+be restored as interactive bookmarks.
+
 ## Device checks
 
 After installation, check a fresh terminal and a failsafe session, create and

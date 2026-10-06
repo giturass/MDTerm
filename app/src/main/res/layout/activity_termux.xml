@@ -101,6 +101,28 @@
                 </LinearLayout>
 
                 <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/terminal_bookmarks_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="12dp"
+                    android:text="@string/terminal_bookmarks_header"
+                    android:textAppearance="?attr/textAppearanceLabelLarge"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+
+                <ListView
+                    android:id="@+id/terminal_bookmarks_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:divider="@android:color/transparent"
+                    android:dividerHeight="8dp"
+                    android:listSelector="@android:color/transparent"
+                    android:scrollbars="none"
+                    android:longClickable="false" />
+
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/terminal_sessions_header"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

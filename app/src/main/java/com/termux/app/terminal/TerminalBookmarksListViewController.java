@@ -1,0 +1,125 @@
+package com.termux.app.terminal;
+
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.widget.PopupMenu;
+
+import com.termux.R;
+import com.termux.app.TermuxActivity;
+import com.termux.shared.termux.interact.TextInputDialogUtils;
+
+/** The bookmark section shares session card layout, spacing and theme. */
+public final class TerminalBookmarksListViewController extends ArrayAdapter<TerminalBookmark> {
+    public interface OnBookmarkClickListener {
+        void onBookmarkClick(TerminalBookmark bookmark);
+    }
+
+    private final TermuxActivity activity;
+    private final TerminalBookmarkStore store;
+    private final ListView list;
+    private final View drawer;
+
+    public TerminalBookmarksListViewController(TermuxActivity activity, TerminalBookmarkStore store,
+                                                OnBookmarkClickListener listener) {
+        super(activity, R.layout.item_terminal_sessions_list, store.getAll());
+        this.activity = activity;
+        this.store = store;
+        list = activity.findViewById(R.id.terminal_bookmarks_list);
+        drawer = activity.findViewById(R.id.left_drawer);
+        list.setAdapter(this);
+        list.setOnItemClickListener((parent, view, position, id) -> {
+            TerminalBookmark bookmark = getItem(position);
+            if (bookmark != null) listener.onBookmarkClick(bookmark);
+        });
+        drawer.addOnLayoutChangeListener((view, left, top, right, bottom,
+                                          oldLeft, oldTop, oldRight, oldBottom) -> resizeList());
+        list.post(this::resizeList);
+    }
+
+    public void refresh() {
+        setNotifyOnChange(false);
+        clear();
+        addAll(store.getAll());
+        notifyDataSetChanged();
+        list.post(this::resizeList);
+    }
+
+    private void resizeList() {
+        // Let long collections scroll while reserving most drawer space for sessions.
+        int width = list.getWidth();
+        if (width <= 0 || drawer.getHeight() <= 0) return;
+        int contentHeight = 0;
+        int maxHeight = drawer.getHeight() / 3;
+        for (int i = 0; i < getCount() && contentHeight < maxHeight; i++) {
+            View row = getView(i, null, list);
+            row.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            contentHeight += row.getMeasuredHeight() + (i == 0 ? 0 : list.getDividerHeight());
+        }
+        int height = Math.min(contentHeight, maxHeight);
+        ViewGroup.LayoutParams params = list.getLayoutParams();
+        if (params.height != height) {
+            params.height = height;
+            list.setLayoutParams(params);
+        }
+    }
+
+    @NonNull
+    @Override
+    public View getView(int position, View convertView, @NonNull ViewGroup parent) {
+        View row = convertView == null
+            ? activity.getLayoutInflater().inflate(R.layout.item_terminal_sessions_list, parent, false)
+            : convertView;
+        TerminalBookmark bookmark = getItem(position);
+        if (bookmark == null) return row;
+        row.setActivated(false);
+        TextView badge = row.findViewById(R.id.session_number);
+        badge.setText("★");
+        badge.setContentDescription(activity.getString(R.string.terminal_bookmark_description));
+        TextView name = row.findViewById(R.id.session_name);
+        name.setText(bookmark.name);
+        name.setVisibility(View.VISIBLE);
+        TextView summary = row.findViewById(R.id.session_title);
+        String environment = "proot".equals(bookmark.kind) ? bookmark.distro
+            : "ssh".equals(bookmark.kind) ? (bookmark.sshArgs.isEmpty() ? "SSH"
+                : bookmark.sshArgs.get(bookmark.sshArgs.size() - 1)) : "";
+        summary.setText(environment.isEmpty() ? bookmark.path : environment + " · " + bookmark.path);
+        summary.setVisibility(View.VISIBLE);
+        View menu = row.findViewById(R.id.session_menu_button);
+        menu.setEnabled(true);
+        menu.setContentDescription(activity.getString(R.string.bookmark_menu_description, bookmark.name));
+        menu.setOnClickListener(view -> showMenu(view, bookmark));
+        return row;
+    }
+
+    private void showMenu(View anchor, TerminalBookmark bookmark) {
+        PopupMenu menu = new PopupMenu(activity, anchor);
+        menu.getMenu().add(0, 1, 0, R.string.action_rename_bookmark);
+        menu.getMenu().add(0, 2, 1, R.string.action_delete_bookmark);
+        menu.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 1) {
+                TextInputDialogUtils.textInput(activity, R.string.action_rename_bookmark,
+                    bookmark.name, R.string.action_rename_session_confirm, text -> {
+                        String name = text == null ? "" : text.trim();
+                        if (!name.isEmpty()) {
+                            store.rename(bookmark.id, name);
+                            refresh();
+                        }
+                    }, -1, null, -1, null, null);
+                return true;
+            }
+            if (item.getItemId() == 2) {
+                store.delete(bookmark.id);
+                refresh();
+                return true;
+            }
+            return false;
+        });
+        menu.show();
+    }
+}

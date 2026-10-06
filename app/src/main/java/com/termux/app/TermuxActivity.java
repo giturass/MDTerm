@@ -54,6 +54,10 @@ import com.termux.app.activities.SettingsActivity;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
+import com.termux.app.terminal.BookmarkEnvironment;
+import com.termux.app.terminal.TerminalBookmark;
+import com.termux.app.terminal.TerminalBookmarkStore;
+import com.termux.app.terminal.TerminalBookmarksListViewController;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
@@ -191,10 +195,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean mIsDrawerCompact;
     private boolean mIsDrawerInputCollapsed;
     private AlertDialog mActionsDialog;
+    private TerminalBookmarkStore mBookmarkStore;
+    private TerminalBookmarksListViewController mBookmarksController;
+    private boolean mSavingBookmark;
 
 
     private static final int CONTEXT_MENU_SELECT_TEXT_ID = 100;
     private static final int CONTEXT_MENU_PASTE_ID = 101;
+    private static final int CONTEXT_MENU_SAVE_BOOKMARK_ID = 102;
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
     private static final int CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1;
     private static final int CONTEXT_MENU_SHARE_SELECTED_TEXT = 10;
@@ -263,6 +271,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setNewSessionButtonView();
 
         setFileSystemView();
+
+        mBookmarkStore = new TerminalBookmarkStore(this);
+        mBookmarksController = new TerminalBookmarksListViewController(this, mBookmarkStore,
+            bookmark -> mTermuxTerminalSessionActivityClient.openBookmark(bookmark));
 
         setAdaptiveDrawerLayout();
 
@@ -740,6 +752,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         boolean autoFillEnabled = mTerminalView.isAutoFillEnabled();
 
+        menu.add(Menu.NONE, CONTEXT_MENU_SAVE_BOOKMARK_ID, Menu.NONE, R.string.action_save_bookmark)
+            .setIcon(R.drawable.ic_folder).setEnabled(currentSession.isRunning() && !mSavingBookmark);
+
         menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url);
         if (!DataUtils.isNullOrEmpty(mTerminalView.getStoredSelectedText()))
             menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text);
@@ -773,6 +788,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         TerminalSession session = getCurrentSession();
 
         switch (item.getItemId()) {
+            case CONTEXT_MENU_SAVE_BOOKMARK_ID:
+                saveCurrentBookmark(session);
+                return true;
             case CONTEXT_MENU_SELECT_URL_ID:
                 mTermuxTerminalViewClient.showUrlSelection();
                 return true;
@@ -813,6 +831,39 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         super.onContextMenuClosed(menu);
         // onContextMenuClosed() is triggered twice if back button is pressed to dismiss instead of tap for some reason
         mTerminalView.onContextMenuClosed(menu);
+    }
+
+    private void saveCurrentBookmark(TerminalSession session) {
+        if (mSavingBookmark || session == null || !session.isRunning()) return;
+        mSavingBookmark = true;
+        showToast(getString(R.string.bookmark_saving), false);
+        BookmarkEnvironment.capture(session, new BookmarkEnvironment.Callback() {
+            @Override public boolean isActive() {
+                return !isFinishing() && !isDestroyed() && getCurrentSession() == session;
+            }
+
+            @Override public void onQueryStarted() {
+                showToast(getString(R.string.bookmark_query_prompt), true);
+            }
+
+            @Override public void onCaptured(TerminalBookmark bookmark) {
+                mSavingBookmark = false;
+                if (isFinishing() || isDestroyed()) return;
+                TextInputDialogUtils.textInput(TermuxActivity.this, R.string.action_save_bookmark,
+                    bookmark.name, android.R.string.ok, text -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        String name = text == null ? "" : text.trim();
+                        mBookmarkStore.add(name.isEmpty() ? bookmark : bookmark.withName(name));
+                        mBookmarksController.refresh();
+                        showToast(getString(R.string.bookmark_saved), false);
+                    }, -1, null, -1, null, null);
+            }
+
+            @Override public void onError(String message) {
+                mSavingBookmark = false;
+                if (message != null && !isFinishing() && !isDestroyed()) showToast(message, true);
+            }
+        });
     }
 
     public void showCloseSessionDialog(TerminalSession session) {

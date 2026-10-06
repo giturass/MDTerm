@@ -79,6 +79,58 @@ public final class TerminalSession extends TerminalOutput {
 
     private static final String LOG_TAG = "TerminalSession";
 
+    public interface BookmarkLocationCallback {
+        void onLocation(String path);
+        void onFailure();
+    }
+
+    private String mBookmarkLocationNonce;
+    private BookmarkLocationCallback mBookmarkLocationCallback;
+
+    /** Query the foreground shell. Call only following the user's explicit save action at a prompt. */
+    public void requestBookmarkLocation(BookmarkLocationCallback callback) {
+        if (mBookmarkLocationCallback != null || !isRunning()) {
+            callback.onFailure();
+            return;
+        }
+        final String nonce = UUID.randomUUID().toString();
+        mBookmarkLocationNonce = nonce;
+        mBookmarkLocationCallback = callback;
+        // Move to the end before clearing, including any text after the editing cursor.
+        // Base64 prevents control characters in directory names from becoming terminal commands.
+        write("\005\025 printf '\\033]777;mdterm;" + nonce
+            + ";'; pwd -P | base64 | tr -d '\\r\\n'; printf '\\007'\r");
+        mMainThreadHandler.postDelayed(() -> {
+            if (nonce.equals(mBookmarkLocationNonce)) {
+                BookmarkLocationCallback pending = mBookmarkLocationCallback;
+                mBookmarkLocationCallback = null;
+                mBookmarkLocationNonce = null;
+                pending.onFailure();
+            }
+        }, 5000);
+    }
+
+    @Override
+    public void onBookmarkLocation(String payload) {
+        if (mBookmarkLocationCallback == null || mBookmarkLocationNonce == null) return;
+        String prefix = "mdterm;" + mBookmarkLocationNonce + ";";
+        if (!payload.startsWith(prefix)) return;
+        try {
+            String path = new String(android.util.Base64.decode(payload.substring(prefix.length()),
+                android.util.Base64.DEFAULT), StandardCharsets.UTF_8);
+            // pwd emits one newline. Remove only that newline, preserving newline characters in names.
+            if (!path.endsWith("\n")) return;
+            path = path.substring(0, path.length() - 1);
+            if (!path.startsWith("/") || path.indexOf('\0') >= 0) return;
+            BookmarkLocationCallback callback = mBookmarkLocationCallback;
+            mBookmarkLocationCallback = null;
+            mBookmarkLocationNonce = null;
+            callback.onLocation(path);
+        } catch (IllegalArgumentException ignored) {
+            // Malformed or unsolicited replies must not overwrite a bookmark.
+        }
+    }
+
     public TerminalSession(String shellPath, String cwd, String[] args, String[] env, Integer transcriptRows, TerminalSessionClient client) {
         this.mShellPath = shellPath;
         this.mCwd = cwd;
