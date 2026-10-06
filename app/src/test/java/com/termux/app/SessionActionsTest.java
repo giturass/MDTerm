@@ -140,6 +140,56 @@ public class SessionActionsTest {
     }
 
     @Test
+    public void tappingSessionNameSwitchesToThatSession() {
+        verifySessionTouch(false);
+    }
+
+    @Test
+    public void refreshingSessionDuringNameTapStillSwitchesToThatSession() {
+        verifySessionTouch(true);
+    }
+
+    private void verifySessionTouch(boolean refresh) {
+        TermuxSession target = addSession(true);
+        target.getTerminalSession().mSessionName = "Background session";
+        TermuxSession current = addSession(true);
+        client.setCurrentSession(current.getTerminalSession());
+        ReflectionHelpers.callInstanceMethod(activity, "setTermuxSessionsListView");
+        activity.mTerminalView.setVisibility(View.GONE);
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measure(drawer, 320, 640);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measure(drawer, 320, 640);
+        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
+        View name = sessions.getChildAt(0).findViewById(R.id.session_name);
+        Rect bounds = new Rect(0, 0, name.getWidth(), name.getHeight());
+        drawer.offsetDescendantRectToMyCoords(name, bounds);
+        assertTrue(name.isShown());
+        assertTrue(bounds.width() > 0);
+        long time = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(down);
+        down.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150));
+        if (refresh) {
+            target.getTerminalSession().mSessionName = "Updated session";
+            activity.termuxSessionListNotifyUpdated();
+            measure(drawer, 320, 640);
+        }
+        MotionEvent up = MotionEvent.obtain(time, time + 150, MotionEvent.ACTION_UP,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(up);
+        up.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertSame(target.getTerminalSession(), activity.getCurrentSession());
+        assertNull(ShadowApplication.getInstance().getLatestPopupWindow());
+        assertFalse(wasKilled(target));
+        assertFalse(wasKilled(current));
+    }
+
+    @Test
     @Config(qualifiers = "w288dp-h320dp")
     public void quickTapOnSessionOverflowWorksInCompactDrawer() {
         verifyOverflowTouch(288, 320, 0, false);
@@ -232,17 +282,29 @@ public class SessionActionsTest {
 
     @Test
     public void scrollingFromSessionMenuCancelsTheClick() {
+        verifySessionSwipe(R.id.session_menu_button);
+    }
+
+    @Test
+    public void scrollingFromSessionContentDoesNotSwitchSessions() {
+        verifySessionSwipe(R.id.session_card_content);
+    }
+
+    private void verifySessionSwipe(int touchTargetId) {
         for (int i = 0; i < 12; i++) addSession(true);
+        TerminalSession current = service.getTermuxSession(11).getTerminalSession();
+        client.setCurrentSession(current);
         ReflectionHelpers.callInstanceMethod(activity, "setTermuxSessionsListView");
+        activity.mTerminalView.setVisibility(View.GONE);
         controller.visible();
         ViewGroup drawer = activity.getDrawer();
         measure(drawer, 320, 640);
         activity.getDrawer().openDrawer(Gravity.START, false);
         measure(drawer, 320, 640);
         ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
-        View menu = sessions.getChildAt(0).findViewById(R.id.session_menu_button);
-        Rect bounds = new Rect(0, 0, menu.getWidth(), menu.getHeight());
-        drawer.offsetDescendantRectToMyCoords(menu, bounds);
+        View target = sessions.getChildAt(0).findViewById(touchTargetId);
+        Rect bounds = new Rect(0, 0, target.getWidth(), target.getHeight());
+        drawer.offsetDescendantRectToMyCoords(target, bounds);
         long time = SystemClock.uptimeMillis();
         float step = 40 * activity.getResources().getDisplayMetrics().density;
         int[] actions = {MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
@@ -257,6 +319,7 @@ public class SessionActionsTest {
         assertNull(ShadowApplication.getInstance().getLatestPopupWindow());
         assertTrue(sessions.getFirstVisiblePosition() > 0 || sessions.getChildAt(0).getTop() < 0);
         assertEquals(12, service.getTermuxSessionsSize());
+        assertSame(current, activity.getCurrentSession());
     }
 
     @Test
