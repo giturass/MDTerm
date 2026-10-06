@@ -11,6 +11,36 @@ public class BookmarkEnvironmentTest {
     private static final String PROOT_STATE = "/data/data/com.termux/files/usr/var/lib/proot-distro";
     private static final String DEBIAN_ROOTFS = PROOT_STATE + "/containers/debian/rootfs";
 
+    @Test public void sshDestinationComesFromOuterClientInsteadOfJumpHostHelper() {
+        BookmarkProcessSnapshot.Process shell = new BookmarkProcessSnapshot.Process(100,
+            Arrays.asList("bash", "-l"), null);
+        BookmarkProcessSnapshot.Process script = new BookmarkProcessSnapshot.Process(110,
+            Arrays.asList("bash", "/usr/bin/proot-distro", "login", "debian"), shell);
+        BookmarkProcessSnapshot.Process proot = new BookmarkProcessSnapshot.Process(120,
+            Arrays.asList("proot", "--rootfs=" + DEBIAN_ROOTFS, "/bin/bash"), script);
+        BookmarkProcessSnapshot.Process ssh = new BookmarkProcessSnapshot.Process(130,
+            Arrays.asList("/usr/bin/ssh", "-J", "jump", "user@target"), proot);
+        BookmarkProcessSnapshot.Process proxyShell = new BookmarkProcessSnapshot.Process(140,
+            Arrays.asList("sh", "-c", "ssh -W target:22 jump"), ssh);
+        BookmarkProcessSnapshot.Process jump = new BookmarkProcessSnapshot.Process(150,
+            Arrays.asList("ssh", "-W", "target:22", "jump"), proxyShell);
+
+        assertSame(ssh, BookmarkEnvironment.findSshProcess(jump));
+        assertSame(ssh, BookmarkEnvironment.findSshProcess(ssh));
+        assertEquals(Arrays.asList("-J", "jump", "user@target"),
+            BookmarkEnvironment.sshArguments(BookmarkEnvironment.findSshProcess(jump).args));
+    }
+
+    @Test public void nonSshAncestorsAndArgumentsDoNotIdentifyAnSshClient() {
+        BookmarkProcessSnapshot.Process shell = new BookmarkProcessSnapshot.Process(100,
+            Arrays.asList("bash", "-l"), null);
+        BookmarkProcessSnapshot.Process script = new BookmarkProcessSnapshot.Process(110,
+            Arrays.asList("bash", "ssh", "user@host"), shell);
+
+        assertNull(BookmarkEnvironment.findSshProcess(script));
+        assertNull(BookmarkEnvironment.findSshProcess(null));
+    }
+
     @Test public void sshKeepsPortIdentityJumpHostAndDestination() {
         assertEquals(Arrays.asList("-p", "2222", "-i", "/a key", "-Jjump", "user@host"),
             BookmarkEnvironment.sshArguments(Arrays.asList("/usr/bin/ssh", "-p", "2222",
@@ -89,12 +119,10 @@ public class BookmarkEnvironmentTest {
         assertEquals("'/tmp/a'\\''b;$(touch bad)'", BookmarkEnvironment.quote("/tmp/a'b;$(touch bad)"));
     }
 
-    @Test public void prootLaunchUsesPdAndQuotesPathAtBothShellLayers() {
+    @Test public void prootLaunchKeepsTheDefaultLoginShellAndQuotesTheWorkingDirectory() {
         TerminalBookmark bookmark = new TerminalBookmark("id", "name", "proot", "debian",
             Collections.emptyList(), "/root/a'b");
-        String inner = "cd -- " + BookmarkEnvironment.quote(bookmark.path)
-            + " && exec \"${SHELL:-/bin/sh}\" -l";
-        assertEquals("exec \"$(command -v pd || command -v proot-distro)\" login 'debian' -- sh -lc " + BookmarkEnvironment.quote(inner),
+        assertEquals("exec \"$(command -v pd || command -v proot-distro)\" login --work-dir '/root/a'\\''b' 'debian'",
             BookmarkEnvironment.launchCommand(bookmark));
     }
 

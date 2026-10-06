@@ -74,6 +74,84 @@ public class BookmarkProcessSnapshotTest {
         assertProcess(snapshot.foreground.parent, 120, "wrapper-child");
     }
 
+    @Test public void sshpassPrivateTerminalRetainsClientArgumentsAndOriginalForegroundGroup() throws IOException {
+        process(100, 1, 100, 110, "bash", "bash", "-l");
+        process(110, 100, 110, 110, "bash", "bash", "./connect.sh");
+        process(120, 110, 110, 110, "sshpass", "/usr/bin/sshpass", "-e", "ssh",
+            "-p", "2222", "user@host");
+        process(130, 120, 130, 130, "ssh", "/usr/bin/ssh", "-p", "2222", "user@host");
+        process(200, 100, 200, 200, "background ssh", "ssh", "other-host");
+
+        BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(proc.getRoot(), 100);
+
+        assertEquals(110, snapshot.foregroundGroup);
+        assertProcess(snapshot.foreground, 130, "/usr/bin/ssh", "-p", "2222", "user@host");
+        assertProcess(snapshot.foreground.parent, 120, "/usr/bin/sshpass", "-e", "ssh",
+            "-p", "2222", "user@host");
+        assertProcess(snapshot.foreground.parent.parent, 110, "bash", "./connect.sh");
+        assertProcess(snapshot.foreground.parent.parent.parent, 100, "bash", "-l");
+    }
+
+    @Test public void sshpassDoesNotDescendIntoJumpHostHelpers() throws IOException {
+        process(100, 1, 100, 110, "bash", "bash");
+        process(110, 100, 110, 110, "sshpass", "sshpass", "-e", "ssh", "-Jjump", "host");
+        process(120, 110, 120, 120, "ssh", "ssh", "-Jjump", "host");
+        process(130, 120, 120, 120, "ssh", "ssh", "-W", "host:22", "jump");
+
+        BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(proc.getRoot(), 100);
+
+        assertProcess(snapshot.foreground, 120, "ssh", "-Jjump", "host");
+    }
+
+    @Test public void ordinaryForegroundProgramDoesNotFollowSshDescendants() throws IOException {
+        process(100, 1, 100, 110, "bash", "bash");
+        process(110, 100, 110, 110, "vim", "vim");
+        process(120, 110, 120, 120, "ssh", "ssh", "host");
+
+        BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(proc.getRoot(), 100);
+
+        assertProcess(snapshot.foreground, 110, "vim");
+    }
+
+    @Test public void backgroundSshpassDoesNotReplaceLocalShell() throws IOException {
+        process(100, 1, 100, 100, "bash", "bash");
+        process(110, 100, 110, 100, "sshpass", "sshpass", "-e", "ssh", "host");
+        process(120, 110, 120, 120, "ssh", "ssh", "host");
+
+        BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(proc.getRoot(), 100);
+
+        assertProcess(snapshot.foreground, 100, "bash");
+    }
+
+    @Test public void sshpassIgnoresChildWithoutForegroundTerminal() throws IOException {
+        process(100, 1, 100, 110, "bash", "bash");
+        process(110, 100, 110, 110, "sshpass", "sshpass", "-e", "ssh", "host");
+        stat(120, 110, 120, -1, "ssh without terminal or readable cmdline");
+
+        BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(proc.getRoot(), 100);
+
+        assertProcess(snapshot.foreground, 110, "sshpass", "-e", "ssh", "host");
+    }
+
+    @Test(expected = IOException.class)
+    public void unreadableSshpassClientDoesNotFallBackToLocalDirectory() throws IOException {
+        process(100, 1, 100, 110, "bash", "bash");
+        process(110, 100, 110, 110, "sshpass", "sshpass", "-e", "ssh", "host");
+        stat(120, 110, 120, 120, "ssh");
+
+        BookmarkProcessSnapshot.read(proc.getRoot(), 100);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void ambiguousSshpassClientsAreRejected() throws IOException {
+        process(100, 1, 100, 110, "bash", "bash");
+        process(110, 100, 110, 110, "sshpass", "sshpass", "-e", "ssh", "host");
+        process(120, 110, 120, 120, "ssh", "ssh", "host");
+        process(130, 110, 130, 130, "ssh", "ssh", "other-host");
+
+        BookmarkProcessSnapshot.read(proc.getRoot(), 100);
+    }
+
     @Test public void sameGroupProgramIsNotMistakenForTheRootShell() throws IOException {
         process(100, 1, 100, 100, "sh", "sh", "-l");
         process(110, 100, 100, 100, "vim", "vim", "notes.md");
