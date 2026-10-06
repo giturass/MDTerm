@@ -1,7 +1,16 @@
 package com.termux.app;
 
 import android.app.Application;
+import android.graphics.Rect;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ListView;
+import android.widget.PopupWindow;
+import android.widget.EditText;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -20,18 +29,23 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
+import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
+import org.robolectric.shadows.ShadowApplication;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
+
+import java.time.Duration;
 
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = 31, application = Application.class, shadows = SessionActionsTest.ShadowTerminalSession.class)
+@Config(sdk = 31, application = Application.class, qualifiers = "w320dp-h640dp", shadows = SessionActionsTest.ShadowTerminalSession.class)
 public class SessionActionsTest {
+    private ActivityController<TermuxActivity> controller;
     private TermuxActivity activity;
     private TermuxService service;
     private TermuxShellManager manager;
@@ -40,7 +54,8 @@ public class SessionActionsTest {
     @Before
     public void setUp() {
         // Attach hosts without starting a native shell or the foreground service.
-        activity = Robolectric.buildActivity(TermuxActivity.class).get();
+        controller = Robolectric.buildActivity(TermuxActivity.class);
+        activity = controller.get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         activity.setContentView(R.layout.activity_termux);
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
@@ -117,6 +132,183 @@ public class SessionActionsTest {
         client.closeSession(first.getTerminalSession());
         assertEquals(1, service.getTermuxSessionsSize());
         assertSame(second.getTerminalSession(), activity.getCurrentSession());
+    }
+
+    @Test
+    public void tappingSessionOverflowOpensMenuWithoutSelectingOrClosingDrawer() {
+        verifyOverflowTouch(320, 640, 150, false);
+    }
+
+    @Test
+    @Config(qualifiers = "w288dp-h320dp")
+    public void quickTapOnSessionOverflowWorksInCompactDrawer() {
+        verifyOverflowTouch(288, 320, 0, false);
+    }
+
+    @Test
+    @Config(qualifiers = "w288dp-h320dp")
+    public void heldTapOnSessionOverflowWorksInCompactDrawer() {
+        verifyOverflowTouch(288, 320, 400, false);
+    }
+
+    @Test
+    public void sessionRefreshDuringTapStillOpensTheTargetMenu() {
+        verifyOverflowTouch(320, 640, 150, true);
+    }
+
+    private void verifyOverflowTouch(int widthDp, int heightDp, int holdMillis, boolean refresh) {
+        TermuxSession first = addSession(true);
+        first.getTerminalSession().mSessionName = "Session with a long name abcdefghijklmnopqrstuvwxyz";
+        TermuxSession current = addSession(true);
+        client.setCurrentSession(current.getTerminalSession());
+        ReflectionHelpers.callInstanceMethod(activity, "setTermuxSessionsListView");
+        activity.mTerminalView.setVisibility(View.GONE);
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measure(drawer, widthDp, heightDp);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measure(drawer, widthDp, heightDp);
+        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
+        View menuButton = sessions.getChildAt(0).findViewById(R.id.session_menu_button);
+        Rect bounds = new Rect(0, 0, menuButton.getWidth(), menuButton.getHeight());
+        drawer.offsetDescendantRectToMyCoords(menuButton, bounds);
+        assertTrue(menuButton.isShown());
+        assertTrue(bounds.width() > 0);
+        Rect visible = new Rect();
+        assertTrue(menuButton.getGlobalVisibleRect(visible));
+        int[] drawerLocation = new int[2];
+        drawer.getLocationOnScreen(drawerLocation);
+        visible.offset(-drawerLocation[0], -drawerLocation[1]);
+        bounds.intersect(visible);
+        long time = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(down);
+        down.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(holdMillis));
+        if (refresh) {
+            first.getTerminalSession().mSessionName = "Updated session";
+            activity.termuxSessionListNotifyUpdated();
+            measure(drawer, widthDp, heightDp);
+        }
+        MotionEvent up = MotionEvent.obtain(time, time + holdMillis, MotionEvent.ACTION_UP,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(up);
+        up.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+        PopupWindow popup = ShadowApplication.getInstance().getLatestPopupWindow();
+        assertNotNull("Tapping the three-dot button must display the session actions", popup);
+        assertTrue(popup.isShowing());
+        assertSame(current.getTerminalSession(), activity.getCurrentSession());
+        assertTrue(activity.getDrawer().isDrawerOpen(Gravity.START));
+        assertFalse(wasKilled(first));
+        if (refresh) {
+            ListView actions = popupList(popup.getContentView());
+            actions.performItemClick(actions.getAdapter().getView(0, null, actions), 0, 0);
+            AlertDialog rename = (AlertDialog) ShadowDialog.getLatestDialog();
+            EditText input = rename.findViewById(com.termux.shared.R.id.dialog_text_input);
+            assertEquals("Updated session", input.getText().toString());
+            input.setText("Renamed target");
+            rename.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertEquals("Renamed target", first.getTerminalSession().mSessionName);
+            assertNull(current.getTerminalSession().mSessionName);
+
+            menuButton.performClick();
+            popup = ShadowApplication.getInstance().getLatestPopupWindow();
+            actions = popupList(popup.getContentView());
+            actions.performItemClick(actions.getAdapter().getView(1, null, actions), 1, 1);
+            AlertDialog close = (AlertDialog) ShadowDialog.getLatestDialog();
+            close.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertTrue(wasKilled(first));
+            assertFalse(wasKilled(current));
+            assertSame(current.getTerminalSession(), activity.getCurrentSession());
+        } else {
+            popup.dismiss();
+        }
+    }
+
+    @Test
+    public void scrollingFromSessionMenuCancelsTheClick() {
+        for (int i = 0; i < 12; i++) addSession(true);
+        ReflectionHelpers.callInstanceMethod(activity, "setTermuxSessionsListView");
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measure(drawer, 320, 640);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measure(drawer, 320, 640);
+        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
+        View menu = sessions.getChildAt(0).findViewById(R.id.session_menu_button);
+        Rect bounds = new Rect(0, 0, menu.getWidth(), menu.getHeight());
+        drawer.offsetDescendantRectToMyCoords(menu, bounds);
+        long time = SystemClock.uptimeMillis();
+        float step = 40 * activity.getResources().getDisplayMetrics().density;
+        int[] actions = {MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP};
+        for (int i = 0; i < actions.length; i++) {
+            MotionEvent event = MotionEvent.obtain(time, time + i * 30, actions[i],
+                bounds.exactCenterX(), bounds.exactCenterY() - i * step, 0);
+            drawer.dispatchTouchEvent(event);
+            event.recycle();
+        }
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertNull(ShadowApplication.getInstance().getLatestPopupWindow());
+        assertTrue(sessions.getFirstVisiblePosition() > 0 || sessions.getChildAt(0).getTop() < 0);
+        assertEquals(12, service.getTermuxSessionsSize());
+    }
+
+    @Test
+    public void removalFollowedByTitleRefreshRebindsTheRemainingSession() {
+        TermuxSession removed = addSession(true);
+        TermuxSession remaining = addSession(true);
+        ReflectionHelpers.callInstanceMethod(activity, "setTermuxSessionsListView");
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measure(drawer, 320, 640);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measure(drawer, 320, 640);
+        manager.mTermuxSessions.remove(removed);
+        activity.termuxSessionListNotifyUpdated();
+        remaining.getTerminalSession().mSessionName = "Remaining session";
+        // Both callbacks can arrive before ListView lays out the structural update.
+        activity.termuxSessionListNotifyUpdated();
+        measure(drawer, 320, 640);
+        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
+        assertEquals(1, sessions.getChildCount());
+        sessions.getChildAt(0).findViewById(R.id.session_menu_button).performClick();
+        PopupWindow popup = ShadowApplication.getInstance().getLatestPopupWindow();
+        ListView actions = popupList(popup.getContentView());
+        actions.performItemClick(actions.getAdapter().getView(0, null, actions), 0, 0);
+        AlertDialog rename = (AlertDialog) ShadowDialog.getLatestDialog();
+        EditText input = rename.findViewById(com.termux.shared.R.id.dialog_text_input);
+        assertEquals("Remaining session", input.getText().toString());
+        input.setText("Renamed survivor");
+        rename.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals("Renamed survivor", remaining.getTerminalSession().mSessionName);
+        assertNull(removed.getTerminalSession().mSessionName);
+    }
+
+    private static ListView popupList(View view) {
+        if (view instanceof ListView) return (ListView) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                ListView list = popupList(group.getChildAt(i));
+                if (list != null) return list;
+            }
+        }
+        return null;
+    }
+
+    private static void measure(View view, int widthDp, int heightDp) {
+        float density = view.getResources().getDisplayMetrics().density;
+        int width = Math.round(widthDp * density), height = Math.round(heightDp * density);
+        view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        view.layout(0, 0, width, height);
     }
 
     private TermuxSession addSession(boolean running) {

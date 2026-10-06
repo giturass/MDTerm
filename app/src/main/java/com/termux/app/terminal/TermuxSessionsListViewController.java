@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.ListView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -17,15 +18,44 @@ import com.termux.app.TermuxActivity;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.terminal.TerminalSession;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession> implements AdapterView.OnItemClickListener {
 
     final TermuxActivity mActivity;
+    private final List<TermuxSession> mDisplayedSessions;
 
     public TermuxSessionsListViewController(TermuxActivity activity, List<TermuxSession> sessionList) {
         super(activity.getApplicationContext(), R.layout.item_terminal_sessions_list, sessionList);
         this.mActivity = activity;
+        mDisplayedSessions = new ArrayList<>(sessionList);
+    }
+
+    @Override
+    public void notifyDataSetChanged() {
+        ListView list = mActivity.findViewById(R.id.terminal_sessions_list);
+        boolean sameSessions = mDisplayedSessions.size() == getCount();
+        for (int i = 0; sameSessions && i < getCount(); i++) {
+            sameSessions = mDisplayedSessions.get(i) == getItem(i);
+        }
+        // A structural notification may still be waiting for ListView to lay out its rows.
+        for (int i = 0; sameSessions && i < list.getChildCount(); i++) {
+            int position = list.getFirstVisiblePosition() + i;
+            sameSessions = position >= 0 && position < getCount()
+                && list.getChildAt(i).getTag() == getItem(position).getTerminalSession();
+        }
+        if (sameSessions && list.getAdapter() == this) {
+            // A full ListView rebind temporarily detaches each row and turns an in-flight
+            // button ACTION_UP into ACTION_CANCEL. Titles and selection only need rebinding.
+            for (int i = 0; i < list.getChildCount(); i++) {
+                getView(list.getFirstVisiblePosition() + i, list.getChildAt(i), list);
+            }
+            return;
+        }
+        mDisplayedSessions.clear();
+        for (int i = 0; i < getCount(); i++) mDisplayedSessions.add(getItem(i));
+        super.notifyDataSetChanged();
     }
 
     @SuppressLint("SetTextI18n")
@@ -45,6 +75,7 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         sessionNumberView.setContentDescription(mActivity.getString(R.string.session_number_description, position + 1));
 
         TerminalSession sessionAtRow = getItem(position).getTerminalSession();
+        sessionRowView.setTag(sessionAtRow);
         String name = sessionAtRow == null ? null : sessionAtRow.mSessionName;
         String summary = sessionAtRow == null ? null : sessionAtRow.getTitle();
         sessionNameView.setText(name);

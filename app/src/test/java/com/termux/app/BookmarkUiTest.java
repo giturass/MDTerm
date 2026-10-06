@@ -2,12 +2,17 @@ package com.termux.app;
 
 import android.app.Application;
 import android.graphics.Rect;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.ListView;
 import android.widget.PopupMenu;
+import android.widget.PopupWindow;
 import android.widget.TextView;
 
 import com.termux.R;
@@ -22,10 +27,14 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Shadows;
+import org.robolectric.android.controller.ActivityController;
+import org.robolectric.shadows.ShadowApplication;
 import org.robolectric.annotation.Config;
 import org.robolectric.util.ReflectionHelpers;
 
 import java.util.Collections;
+import java.time.Duration;
 
 import static org.junit.Assert.*;
 
@@ -104,13 +113,94 @@ public class BookmarkUiTest {
         assertEquals(0, adapter.getCount());
     }
 
+    @Test
+    public void refreshingBookmarkNameDuringMenuTapKeepsTheMenuUsable() {
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller);
+        TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
+        store.add(bookmark());
+        TerminalBookmark[] opened = {null};
+        TerminalBookmarksListViewController adapter =
+            new TerminalBookmarksListViewController(activity, store, item -> opened[0] = item);
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measureDrawer(drawer);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        View menu = list.getChildAt(0).findViewById(R.id.session_menu_button);
+        Rect bounds = bounds(drawer, menu);
+        long time = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(down);
+        down.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150));
+        store.rename("location", "Updated bookmark");
+        adapter.refresh();
+        measureDrawer(drawer);
+        MotionEvent up = MotionEvent.obtain(time, time + 150, MotionEvent.ACTION_UP,
+            bounds.exactCenterX(), bounds.exactCenterY(), 0);
+        drawer.dispatchTouchEvent(up);
+        up.recycle();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        PopupWindow popup = ShadowApplication.getInstance().getLatestPopupWindow();
+        assertNotNull(popup);
+        assertTrue(popup.isShowing());
+        assertNull(opened[0]);
+        assertEquals("Updated bookmark", ((TextView) list.getChildAt(0)
+            .findViewById(R.id.session_name)).getText().toString());
+        popup.dismiss();
+    }
+
+    @Test
+    public void deleteThenRenameBeforeLayoutUpdatesTheRemainingBookmark() {
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller);
+        TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
+        store.add(bookmark());
+        store.add(new TerminalBookmark("remaining", "Second", "local", "",
+            Collections.emptyList(), "/tmp"));
+        TerminalBookmarksListViewController adapter =
+            new TerminalBookmarksListViewController(activity, store, item -> {});
+        controller.visible();
+        ViewGroup drawer = activity.getDrawer();
+        measureDrawer(drawer);
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        store.delete("location");
+        adapter.refresh();
+        store.rename("remaining", "Updated survivor");
+        adapter.refresh();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        assertEquals(1, list.getChildCount());
+        assertEquals("Updated survivor", ((TextView) list.getChildAt(0)
+            .findViewById(R.id.session_name)).getText().toString());
+    }
+
+    private static void measureDrawer(View drawer) {
+        float density = drawer.getResources().getDisplayMetrics().density;
+        int width = Math.round(320 * density), height = Math.round(640 * density);
+        drawer.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        drawer.layout(0, 0, width, height);
+    }
+
     private static TerminalBookmark bookmark() {
         return new TerminalBookmark("location", "非常长的书签名称 abcdefghijklmnopqrstuvwxyz", "proot",
             "ubuntu", Collections.emptyList(), "/very/long/目录/with spaces/projects/abcdefghijklmnopqrstuvwxyz/subdirectory");
     }
 
     private static TermuxActivity host() {
-        TermuxActivity activity = Robolectric.buildActivity(TermuxActivity.class).get();
+        return host(Robolectric.buildActivity(TermuxActivity.class));
+    }
+
+    private static TermuxActivity host(ActivityController<TermuxActivity> controller) {
+        TermuxActivity activity = controller.get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         activity.setContentView(R.layout.activity_termux);
         activity.getSharedPreferences("terminal_bookmarks", 0).edit().clear().commit();

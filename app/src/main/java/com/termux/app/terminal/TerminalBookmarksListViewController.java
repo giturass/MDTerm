@@ -13,6 +13,8 @@ import com.termux.R;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
 
+import java.util.List;
+
 /** The bookmark section shares session card layout, spacing and theme. */
 public final class TerminalBookmarksListViewController extends ArrayAdapter<TerminalBookmark> {
     public interface OnBookmarkClickListener {
@@ -42,10 +44,28 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
     }
 
     public void refresh() {
+        List<TerminalBookmark> bookmarks = store.getAll();
+        boolean sameBookmarks = bookmarks.size() == getCount();
+        for (int i = 0; sameBookmarks && i < getCount(); i++) {
+            sameBookmarks = getItem(i).id.equals(bookmarks.get(i).id);
+        }
+        // A preceding delete may have notified the list without laying out its rows yet.
+        for (int i = 0; sameBookmarks && i < list.getChildCount(); i++) {
+            int position = list.getFirstVisiblePosition() + i;
+            sameBookmarks = position >= 0 && position < bookmarks.size()
+                && bookmarks.get(position).id.equals(list.getChildAt(i).getTag());
+        }
         setNotifyOnChange(false);
         clear();
-        addAll(store.getAll());
-        notifyDataSetChanged();
+        addAll(bookmarks);
+        if (sameBookmarks) {
+            // Updating labels in place preserves a menu button's current touch gesture.
+            for (int i = 0; i < list.getChildCount(); i++) {
+                getView(list.getFirstVisiblePosition() + i, list.getChildAt(i), list);
+            }
+        } else {
+            notifyDataSetChanged();
+        }
         list.post(this::resizeList);
     }
 
@@ -77,6 +97,7 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
             : convertView;
         TerminalBookmark bookmark = getItem(position);
         if (bookmark == null) return row;
+        row.setTag(bookmark.id);
         row.setActivated(false);
         TextView badge = row.findViewById(R.id.session_number);
         badge.setText("★");

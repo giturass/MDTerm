@@ -4,13 +4,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.system.Os;
 
+import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.terminal.TerminalSession;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,19 +33,12 @@ public final class BookmarkEnvironment {
         }
         new Thread(() -> {
             try {
-                ProcessInfo root = readProcess(session.getPid(), null);
-                List<ProcessInfo> processes = new ArrayList<>();
-                collect(root, processes, 0);
-                ProcessInfo foreground = null;
-                for (ProcessInfo process : processes) {
-                    if (process.group == root.foregroundGroup
-                        && (foreground == null || process.depth >= foreground.depth)) foreground = process;
-                }
-                if (foreground == null) throw new IllegalStateException("无法确认前台终端环境，请返回 Shell 提示符后重试");
-                ProcessInfo ssh = null;
+                BookmarkProcessSnapshot snapshot = BookmarkProcessSnapshot.read(session.getPid());
+                BookmarkProcessSnapshot.Process foreground = snapshot.foreground;
+                BookmarkProcessSnapshot.Process ssh = null;
                 String distro = "";
                 boolean proot = false;
-                for (ProcessInfo process = foreground; process != null; process = process.parent) {
+                for (BookmarkProcessSnapshot.Process process = foreground; process != null; process = process.parent) {
                     if (ssh == null && "ssh".equals(executable(process.args))) ssh = process;
                     if ("proot".equals(executable(process.args))) proot = true;
                     String detected = distroFromArguments(process.args);
@@ -64,7 +55,7 @@ public final class BookmarkEnvironment {
                     : normalizeSshPaths(sshArguments(ssh.args), Os.readlink("/proc/" + ssh.pid + "/cwd"), distro);
                 final String targetDistro = distro;
                 final int foregroundPid = foreground.pid;
-                final int foregroundGroup = root.foregroundGroup;
+                final int foregroundGroup = snapshot.foregroundGroup;
                 if ("local".equals(kind)) {
                     String path = Os.readlink("/proc/" + foregroundPid + "/cwd");
                     if (!path.startsWith("/") || path.endsWith(" (deleted)"))
@@ -72,7 +63,7 @@ public final class BookmarkEnvironment {
                     main.post(() -> {
                         if (!callback.isActive()) { callback.onError(null); return; }
                         try {
-                            if (readProcess(session.getPid(), null).foregroundGroup != foregroundGroup
+                            if (BookmarkProcessSnapshot.readForegroundGroup(session.getPid()) != foregroundGroup
                                 || !path.equals(Os.readlink("/proc/" + foregroundPid + "/cwd"))) {
                                 callback.onError("终端环境已变化，请重新保存书签");
                                 return;
@@ -86,7 +77,7 @@ public final class BookmarkEnvironment {
                     main.post(() -> {
                         if (!callback.isActive()) { callback.onError(null); return; }
                         try {
-                            if (readProcess(session.getPid(), null).foregroundGroup != foregroundGroup
+                            if (BookmarkProcessSnapshot.readForegroundGroup(session.getPid()) != foregroundGroup
                                 || !new File("/proc/" + foregroundPid).exists()) {
                                 callback.onError("终端环境已变化，请重新保存书签");
                                 return;
@@ -100,7 +91,7 @@ public final class BookmarkEnvironment {
                         @Override public void onLocation(String path) {
                             if (!callback.isActive()) { callback.onError(null); return; }
                             try {
-                                if (readProcess(session.getPid(), null).foregroundGroup != foregroundGroup
+                                if (BookmarkProcessSnapshot.readForegroundGroup(session.getPid()) != foregroundGroup
                                     || !new File("/proc/" + foregroundPid).exists()) {
                                     callback.onError("终端环境已变化，请重新保存书签");
                                     return;
@@ -118,6 +109,7 @@ public final class BookmarkEnvironment {
                     });
                 }
             } catch (Exception e) {
+                Logger.logStackTraceWithMessage("BookmarkEnvironment", "Failed to capture terminal bookmark", e);
                 String message = e instanceof IllegalStateException ? e.getMessage()
                     : "无法读取当前终端环境，未保存书签";
                 main.post(() -> callback.onError(message));
@@ -331,55 +323,4 @@ public final class BookmarkEnvironment {
             || name.equals("dash") || name.equals("ksh") || name.equals("ash") || name.equals("nu");
     }
 
-    private static byte[] readBytes(String path) throws Exception {
-        try (FileInputStream input = new FileInputStream(path);
-             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[4096];
-            int count;
-            while ((count = input.read(buffer)) != -1) {
-                if (output.size() + count > 131072) throw new IllegalStateException("进程信息过长");
-                output.write(buffer, 0, count);
-            }
-            return output.toByteArray();
-        }
-    }
-
-    private static ProcessInfo readProcess(int pid, ProcessInfo parent) throws Exception {
-        String stat = new String(readBytes("/proc/" + pid + "/stat"), StandardCharsets.UTF_8);
-        String[] fields = stat.substring(stat.lastIndexOf(')') + 2).split(" ");
-        String command = new String(readBytes("/proc/" + pid + "/cmdline"), StandardCharsets.UTF_8);
-        List<String> args = new ArrayList<>();
-        Collections.addAll(args, command.split("\u0000"));
-        return new ProcessInfo(pid, Integer.parseInt(fields[2]), Integer.parseInt(fields[5]), args, parent);
-    }
-
-    private static void collect(ProcessInfo process, List<ProcessInfo> output, int depth) throws Exception {
-        output.add(process);
-        if (depth >= 32 || output.size() > 256) return;
-        String children = new String(readBytes("/proc/" + process.pid + "/task/" + process.pid
-            + "/children"), StandardCharsets.UTF_8).trim();
-        if (children.isEmpty()) return;
-        for (String child : children.split("\\s+")) {
-            try {
-                collect(readProcess(Integer.parseInt(child), process), output, depth + 1);
-            } catch (Exception e) {
-                // Children may exit between reading the process tree and their metadata.
-                if (new File("/proc/" + child).exists()) throw e;
-            }
-        }
-    }
-
-    private static final class ProcessInfo {
-        final int pid, group, foregroundGroup, depth;
-        final List<String> args;
-        final ProcessInfo parent;
-        ProcessInfo(int pid, int group, int foregroundGroup, List<String> args, ProcessInfo parent) {
-            this.pid = pid;
-            this.group = group;
-            this.foregroundGroup = foregroundGroup;
-            this.args = args;
-            this.parent = parent;
-            this.depth = parent == null ? 0 : parent.depth + 1;
-        }
-    }
 }
