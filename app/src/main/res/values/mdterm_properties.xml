@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="mdterm_prop_file_title">Terminal configuration</string>
-    <string name="mdterm_prop_file_summary">Terminal options are saved to %1$s and applied when you return to the terminal. Options that need a new session or an app restart are marked below. You can also edit this file directly.</string>
     <string name="mdterm_prop_haptic_title">Haptic feedback</string>
     <string name="mdterm_prop_haptic_summary">Vibrate for toolbar keys and terminal gestures</string>
     <string name="mdterm_prop_night_mode">App theme</string>
@@ -29,7 +27,9 @@
     <string name="mdterm_prop_disable_session_toast_summary">Do not show a toast when switching terminal sessions</string>
     <string name="mdterm_prop_toolbar">Terminal toolbar</string>
     <string name="mdterm_prop_toolbar_keys">Toolbar keys</string>
-    <string name="mdterm_prop_toolbar_keys_summary">Keeps the current ESC, Ctrl, Alt, Tab, cursor and navigation keys</string>
+    <string name="mdterm_prop_toolbar_keys_summary">Customize keys, their order and rows</string>
+    <string name="mdterm_prop_toolbar_keys_help">Edit the list of key rows. Each inner pair of brackets defines one row, with key names separated by commas. Changes apply when you return to the terminal.</string>
+    <string name="mdterm_prop_toolbar_keys_invalid">Enter a valid list of key rows, with each key specified as a name or a key configuration object.</string>
     <string name="mdterm_prop_extra_keys_style">Key label symbols</string>
     <string name="mdterm_prop_extra_keys_caps">Uppercase key labels</string>
     <string name="mdterm_prop_extra_keys_caps_summary">Capitalize text on toolbar keys</string>

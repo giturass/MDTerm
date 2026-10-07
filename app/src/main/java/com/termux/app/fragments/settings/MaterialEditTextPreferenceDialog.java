@@ -3,6 +3,7 @@ package com.termux.app.fragments.settings;
 import android.app.Dialog;
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
@@ -55,8 +56,16 @@ public class MaterialEditTextPreferenceDialog extends DialogFragment {
         inputLayout.setHint(preference.getExtras().getString(INPUT_HINT));
         input = new TextInputEditText(inputLayout.getContext());
         input.setId(android.R.id.edit);
-        input.setSingleLine(true);
-        input.setInputType(preference.getExtras().getInt(INPUT_TYPE, InputType.TYPE_CLASS_TEXT));
+        int inputType = preference.getExtras().getInt(INPUT_TYPE, InputType.TYPE_CLASS_TEXT);
+        boolean multiline = (inputType & InputType.TYPE_CLASS_TEXT) != 0
+            && (inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+        input.setInputType(inputType);
+        input.setSingleLine(!multiline);
+        if (multiline) {
+            input.setMinLines(3);
+            input.setMaxLines(8);
+            input.setGravity(Gravity.TOP | Gravity.START);
+        }
         inputLayout.addView(input, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         container.addView(inputLayout, new LinearLayout.LayoutParams(

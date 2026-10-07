@@ -5,8 +5,12 @@ import android.content.SharedPreferences;
 
 import com.termux.R;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
+
+import org.json.JSONException;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,7 +34,7 @@ public final class TermuxPropertiesSettings {
         KEY_DISABLE_TERMINAL_SESSION_CHANGE_TOAST, KEY_HIDE_SOFT_KEYBOARD_ON_STARTUP,
         KEY_SOFT_KEYBOARD_TOGGLE_BEHAVIOUR, KEY_TERMINAL_TRANSCRIPT_ROWS,
         KEY_VOLUME_KEYS_BEHAVIOUR, KEY_USE_FULLSCREEN, KEY_USE_FULLSCREEN_WORKAROUND,
-        KEY_TERMINAL_CURSOR_BLINK_RATE, KEY_TERMINAL_CURSOR_STYLE, KEY_EXTRA_KEYS_STYLE,
+        KEY_TERMINAL_CURSOR_BLINK_RATE, KEY_TERMINAL_CURSOR_STYLE, KEY_EXTRA_KEYS, KEY_EXTRA_KEYS_STYLE,
         KEY_EXTRA_KEYS_TEXT_ALL_CAPS, KEY_NIGHT_MODE, KEY_DISABLE_HARDWARE_KEYBOARD_SHORTCUTS,
         KEY_SHORTCUT_CREATE_SESSION, KEY_SHORTCUT_NEXT_SESSION, KEY_SHORTCUT_PREVIOUS_SESSION,
         KEY_SHORTCUT_RENAME_SESSION, KEY_BELL_BEHAVIOUR, KEY_BACK_KEY_BEHAVIOUR,
@@ -138,6 +142,13 @@ public final class TermuxPropertiesSettings {
                 File directory = new File(value);
                 if (!directory.isAbsolute() || !directory.isDirectory() || !directory.canRead())
                     throw new IllegalArgumentException(context.getString(R.string.properties_error_directory));
+                return value;
+            case KEY_EXTRA_KEYS:
+                try {
+                    new ExtraKeysInfo(value, DEFAULT_IVALUE_EXTRA_KEYS_STYLE, ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+                } catch (JSONException error) {
+                    throw new IllegalArgumentException(context.getString(R.string.mdterm_prop_toolbar_keys_invalid), error);
+                }
                 return value;
             case KEY_EXTRA_KEYS_STYLE:
                 if (!isExtraKeysStyle(value)) invalid();

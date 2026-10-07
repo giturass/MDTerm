@@ -1,6 +1,7 @@
 package com.termux.app.settings.properties;
 
 import android.app.Application;
+import android.text.InputType;
 import android.view.ViewParent;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -9,6 +10,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
+import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceGroupAdapter;
 import androidx.preference.PreferenceViewHolder;
 
@@ -19,6 +21,7 @@ import com.termux.app.fragments.settings.MaterialEditTextPreferenceDialog;
 import com.termux.app.fragments.settings.MaterialListPreferenceDialog;
 import com.termux.app.fragments.settings.MaterialSwitchPreference;
 import com.termux.app.fragments.settings.TermuxPropertiesPreferences;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -55,7 +58,7 @@ public class TermuxPropertiesUiTest {
         "allow-external-apps", "default-working-directory", "disable-terminal-session-change-toast",
         "hide-soft-keyboard-on-startup", "soft-keyboard-toggle-behaviour", "terminal-transcript-rows",
         "volume-keys", "fullscreen", "use-fullscreen-workaround", "terminal-cursor-blink-rate",
-        "terminal-cursor-style", "extra-keys-style", "extra-keys-text-all-caps", "night-mode",
+        "terminal-cursor-style", "extra-keys", "extra-keys-style", "extra-keys-text-all-caps", "night-mode",
         "disable-hardware-keyboard-shortcuts", "shortcut.create-session", "shortcut.next-session",
         "shortcut.previous-session", "shortcut.rename-session", "bell-character", "back-key",
         "enforce-char-based-input", "ctrl-space-workaround", "terminal-margin-horizontal",
@@ -78,14 +81,66 @@ public class TermuxPropertiesUiTest {
                 assertTrue(key, preference.isEnabled());
                 assertSame(key, screen.fragment.getPreferenceScreen(), preference.getParent().getParent());
             }
-            assertEquals(26, PROPERTY_KEYS.length);
-            assertNull(screen.fragment.findPreference("extra-keys"));
+            assertEquals(27, PROPERTY_KEYS.length);
+            assertNull(screen.fragment.findPreference("termux_properties_information"));
+            assertSame(screen.fragment.findPreference("property_integration"),
+                screen.fragment.getPreferenceScreen().getPreference(0));
+            assertTrue(screen.fragment.findPreference("property_integration").getOrder()
+                < screen.fragment.findPreference("appearance").getOrder());
+            assertSame(screen.fragment.findPreference("property_compatibility"),
+                screen.fragment.findPreference("terminal_margin_adjustment").getParent());
+            PreferenceCategory appearance = screen.fragment.findPreference("appearance");
+            assertEquals("terminal-margin-vertical",
+                appearance.getPreference(appearance.getPreferenceCount() - 2).getKey());
+            assertEquals("fullscreen", appearance.getPreference(appearance.getPreferenceCount() - 1).getKey());
             assertNull(screen.fragment.findPreference("terminal_fullscreen"));
             assertNotNull(screen.fragment.findPreference("terminal_vibration"));
             assertNotNull(screen.fragment.findPreference("terminal_margin_adjustment"));
             assertNotNull(screen.fragment.findPreference("log_level"));
             assertTrue(new TermuxPropertiesFile(screen.primary).read().getProperty("extra-keys")
                 .contains("'ESC','CTRL','ALT'"));
+        }
+    }
+
+    @Test
+    public void toolbarEditorOpensDefaultLayoutValidatesAndRestoresSavedKeys() throws Exception {
+        try (Screen screen = new Screen("# Existing options\nfullscreen = false\n")) {
+            EditTextPreference toolbar = screen.fragment.findPreference("extra-keys");
+            assertNotNull(toolbar);
+            assertTrue(toolbar.isSelectable());
+            assertEquals(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, toolbar.getText());
+            click(screen.fragment, toolbar);
+            screen.fragment.getChildFragmentManager().executePendingTransactions();
+            MaterialEditTextPreferenceDialog dialogFragment = (MaterialEditTextPreferenceDialog)
+                screen.fragment.getChildFragmentManager().findFragmentByTag("mdterm.preference.dialog");
+            assertNotNull(dialogFragment);
+            AlertDialog dialog = (AlertDialog) dialogFragment.requireDialog();
+            EditText input = dialog.findViewById(android.R.id.edit);
+            assertNotNull(input);
+            assertEquals(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, input.getText().toString());
+            assertTrue((input.getInputType() & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0);
+            assertTrue(input.getMaxLines() > 1);
+
+            input.setText("['ESC']");
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            screen.fragment.getChildFragmentManager().executePendingTransactions();
+            assertTrue(dialog.isShowing());
+            assertFalse(new TermuxPropertiesFile(screen.primary).read().containsKey("extra-keys"));
+
+            String layout = "[\n['ESC','TAB'],\n['CTRL','KEYBOARD']\n]";
+            input.setText(layout);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            screen.fragment.getChildFragmentManager().executePendingTransactions();
+            assertFalse(dialog.isShowing());
+            assertEquals(layout, new TermuxPropertiesFile(screen.primary).read().getProperty("extra-keys"));
+            screen.activity.recreate();
+            screen.bindTemporarySettings();
+            toolbar = screen.fragment.findPreference("extra-keys");
+            assertEquals(layout, toolbar.getText());
+            assertTrue(toolbar.callChangeListener(""));
+            screen.properties.reload();
+            assertEquals(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, toolbar.getText());
+            assertFalse(new TermuxPropertiesFile(screen.primary).read().containsKey("extra-keys"));
         }
     }
 

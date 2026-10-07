@@ -4,6 +4,10 @@ import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -46,6 +50,7 @@ public class TermuxPropertiesSettingsTest {
         assertEquals(2000, settings.get("terminal-transcript-rows"));
         assertEquals("vibrate", settings.get("bell-character"));
         assertEquals(true, settings.get("extra-keys-text-all-caps"));
+        assertEquals(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, settings.get("extra-keys"));
         assertEquals("", settings.get("shortcut.create-session"));
         assertFalse(primary.exists());
         assertFalse(secondary.exists());
@@ -134,7 +139,8 @@ public class TermuxPropertiesSettingsTest {
             {"shortcut.create-session", "ctrl +"}, {"default-working-directory", "relative"},
             {"default-working-directory", new File(temporary.getRoot(), "absent").getAbsolutePath()},
             {"bell-character", "silent"}, {"extra-keys-style", "invalid"}, {"fullscreen", "yes"},
-            {"extra-keys", "[[ESC]]"}};
+            {"extra-keys", "[['ESC']"}, {"extra-keys", "['ESC']"}, {"extra-keys", "[[42]]"},
+            {"extra-keys", "[[{'display':'missing key'}]]"}};
         long revision = TermuxPropertiesSettings.getRevision();
         for (String[] entry : invalid) {
             try {
@@ -144,6 +150,27 @@ public class TermuxPropertiesSettingsTest {
             assertEquals(original, read(primary));
             assertEquals(revision, TermuxPropertiesSettings.getRevision());
         }
+    }
+
+    @Test public void customToolbarRoundTripsRowsPopupsAndMacrosAndCanResetToDefault() throws Exception {
+        write(primary, "# Keep the template\ncustom-option = untouched\n");
+        String layout = "[\n['ESC', {'key':'TAB','popup':'HOME'}],\n"
+            + "[{'macro':'CTRL c','display':'Stop'}, 'KEYBOARD']\n]";
+        settings.set("extra-keys", layout);
+        settings.reload();
+        assertEquals(layout, settings.get("extra-keys"));
+        assertEquals(layout, new TermuxPropertiesFile(primary).read().getProperty("extra-keys"));
+        assertEquals("untouched", new TermuxPropertiesFile(primary).read().getProperty("custom-option"));
+        assertTrue(read(primary).startsWith("# Keep the template\n"));
+        ExtraKeysInfo keys = new ExtraKeysInfo((String) settings.get("extra-keys"), "default",
+            ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+        assertEquals(2, keys.getMatrix().length);
+        assertEquals("HOME", keys.getMatrix()[0][1].getPopup().getKey());
+        assertEquals("Stop", keys.getMatrix()[1][0].getDisplay());
+
+        settings.set("extra-keys", " ");
+        assertEquals(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, settings.get("extra-keys"));
+        assertFalse(new TermuxPropertiesFile(primary).read().containsKey("extra-keys"));
     }
 
     @Test public void directoryAndShortcutRoundTrip() throws Exception {

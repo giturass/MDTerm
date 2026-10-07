@@ -75,7 +75,7 @@
     <string name="msg_terminal_reset">终端已重置</string>
 
 
-    <string name="action_style_terminal">外观</string>
+    <string name="action_style_terminal">终端字体与颜色</string>
     <string name="action_toggle_keep_screen_on">保持屏幕常亮</string>
     <string name="action_open_help">帮助</string>
     <string name="action_open_settings">设置</string>

@@ -58,8 +58,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         mExtraKeysInfo = null;
 
         try {
-            // Keep MDTerm's single scrolling row even when an older properties file is present.
-            String extrakeys = TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS;
+            String extrakeys = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS, true);
             String extraKeysStyle = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, true);
 
             ExtraKeysConstants.ExtraKeyDisplayMap extraKeyDisplayMap = ExtraKeysInfo.getCharDisplayMapForStyle(extraKeysStyle);
