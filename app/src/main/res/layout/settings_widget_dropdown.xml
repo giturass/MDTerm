@@ -2,7 +2,7 @@
 <ImageView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="24dp"
     android:layout_height="24dp"
-    android:layout_marginStart="16dp"
+    android:layout_marginStart="12dp"
     android:src="@drawable/settings_dropdown"
     android:tint="?attr/colorOnSurfaceVariant"
     android:importantForAccessibility="no" />

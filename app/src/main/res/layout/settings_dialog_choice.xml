@@ -1,17 +1,16 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:paddingHorizontal="24dp" android:paddingVertical="4dp">
+    android:paddingHorizontal="24dp" android:paddingVertical="3dp">
     <LinearLayout android:id="@+id/choice_surface"
         android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:minHeight="56dp" android:paddingHorizontal="16dp" android:paddingVertical="8dp"
+        android:minHeight="48dp" android:paddingHorizontal="16dp" android:paddingVertical="8dp"
         android:orientation="horizontal" android:gravity="center_vertical"
         android:background="@drawable/settings_choice_surface">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_weight="1" android:orientation="vertical">
             <com.google.android.material.textview.MaterialTextView android:id="@android:id/title"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                android:textColor="?attr/colorOnSurface" />
+                style="@style/MDTerm.Settings.RowTitle"
+                android:layout_width="match_parent" android:layout_height="wrap_content" />
         </LinearLayout>
         <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/choice_radio"
             style="@style/Widget.Material3.CompoundButton.RadioButton"
