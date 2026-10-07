@@ -43,6 +43,64 @@ import static org.junit.Assert.*;
 @Config(sdk = 31, application = Application.class, qualifiers = "zh-rCN-w320dp-h640dp")
 public class BookmarkUiTest {
     @Test
+    public void savingBookmarkBeyondVisibleCardsRevealsItWithoutPinningLaterRefreshes() {
+        verifyNewBookmarkIsRevealed(false);
+    }
+
+    @Test
+    public void savingBookmarkExpandsCollapsedCollectionAndRevealsTheNewCard() {
+        verifyNewBookmarkIsRevealed(true);
+    }
+
+    private void verifyNewBookmarkIsRevealed(boolean initiallyCollapsed) {
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller);
+        TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
+        for (int i = 0; i < 8; i++) {
+            store.add(new TerminalBookmark("saved-" + i, "Bookmark " + i, "local", "",
+                Collections.emptyList(), "/tmp/" + i));
+        }
+        store.setCollapsed(initiallyCollapsed);
+        TerminalBookmarksListViewController adapter =
+            new TerminalBookmarksListViewController(activity, store, item -> {});
+        controller.visible();
+        View drawer = activity.getDrawer();
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measureDrawer(drawer);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        if (!initiallyCollapsed) assertTrue(list.getLastVisiblePosition() < adapter.getCount() - 1);
+
+        store.add(bookmark());
+        adapter.refreshAndReveal("location");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        assertEquals(View.VISIBLE, list.getVisibility());
+        assertFalse(store.isCollapsed());
+        int newPosition = adapter.getCount() - 1;
+        assertTrue(list.getFirstVisiblePosition() <= newPosition);
+        assertEquals(newPosition, list.getLastVisiblePosition());
+        View newCard = list.getChildAt(newPosition - list.getFirstVisiblePosition());
+        assertEquals("location", newCard.getTag());
+        assertTrue("The new card must be fully visible", newCard.getTop() >= list.getPaddingTop());
+        assertTrue("The new card must be fully visible",
+            newCard.getBottom() <= list.getHeight() - list.getPaddingBottom());
+
+        // Once the user scrolls elsewhere, terminal refreshes must not pull them back to the new item.
+        list.setSelectionFromTop(1, -10);
+        measureDrawer(drawer);
+        int firstPosition = list.getFirstVisiblePosition();
+        int firstTop = list.getChildAt(0).getTop();
+        store.rename("saved-1", "Renamed while browsing");
+        adapter.refresh();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        assertEquals(firstPosition, list.getFirstVisiblePosition());
+        assertEquals(firstTop, list.getChildAt(0).getTop());
+    }
+
+    @Test
     public void collapsingBookmarksReclaimsSpaceAndSurvivesRefreshAndRecreation() {
         ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
         TermuxActivity activity = host(controller);

@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
@@ -204,6 +205,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private TerminalBookmarkStore mBookmarkStore;
     private TerminalBookmarksListViewController mBookmarksController;
     private boolean mSavingBookmark;
+    private boolean mSessionsCollapsed;
 
 
     private static final int CONTEXT_MENU_SELECT_TEXT_ID = 100;
@@ -292,6 +294,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mBookmarksController = new TerminalBookmarksListViewController(this, mBookmarkStore,
             bookmark -> mTermuxTerminalSessionActivityClient.openBookmark(bookmark));
 
+        setSessionsCollapseToggle();
         setAdaptiveDrawerLayout();
 
         mTerminalView.setContextMenuAction(() ->
@@ -645,6 +648,28 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             this, com.google.android.material.R.attr.colorSurface, 0));
     }
 
+    private void setSessionsCollapseToggle() {
+        SharedPreferences preferences = getSharedPreferences("terminal_sessions", Context.MODE_PRIVATE);
+        mSessionsCollapsed = preferences.getBoolean("collapsed", false);
+        findViewById(R.id.terminal_sessions_toggle).setOnClickListener(view -> {
+            mSessionsCollapsed = !mSessionsCollapsed;
+            preferences.edit().putBoolean("collapsed", mSessionsCollapsed).apply();
+            updateSessionsExpandedState();
+        });
+        updateSessionsExpandedState();
+    }
+
+    private void updateSessionsExpandedState() {
+        // Preserve the flexible list space so the new-session action stays at the bottom.
+        findViewById(R.id.terminal_sessions_list).setVisibility(
+            mSessionsCollapsed ? View.INVISIBLE : View.VISIBLE);
+        ImageButton toggle = findViewById(R.id.terminal_sessions_toggle);
+        toggle.setImageResource(mSessionsCollapsed
+            ? R.drawable.ic_bookmarks_expand : R.drawable.ic_bookmarks_collapse);
+        toggle.setContentDescription(getString(mSessionsCollapsed
+            ? R.string.action_expand_sessions : R.string.action_collapse_sessions));
+    }
+
     /** Keep session navigation usable when the keyboard or split screen reduces the height. */
     private void setAdaptiveDrawerLayout() {
         getDrawer().addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
@@ -666,7 +691,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         View drawer = findViewById(R.id.left_drawer);
         View header = findViewById(R.id.terminal_drawer_header);
-        View sessionsHeader = findViewById(R.id.terminal_sessions_header);
         LinearLayout actions = findViewById(R.id.terminal_drawer_actions);
         MaterialButton newSessionButton = findViewById(R.id.new_session_button);
         int headerPaddingTop = header.getPaddingTop();
@@ -682,7 +706,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (compact == mIsDrawerCompact) return;
             mIsDrawerCompact = compact;
 
-            sessionsHeader.setVisibility(compact ? View.GONE : View.VISIBLE);
             header.setPaddingRelative(header.getPaddingStart(), compact ? 0 : headerPaddingTop,
                 header.getPaddingEnd(), compact ? 0 : headerPaddingBottom);
             actions.setPaddingRelative(actions.getPaddingStart(), compact ? 0 : actionsPaddingTop,
@@ -883,7 +906,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         if (isFinishing() || isDestroyed()) return;
                         String name = text == null ? "" : text.trim();
                         mBookmarkStore.add(name.isEmpty() ? bookmark : bookmark.withName(name));
-                        mBookmarksController.refresh();
+                        mBookmarksController.refreshAndReveal(bookmark.id);
                         showToast(getString(R.string.bookmark_saved), false);
                     }, -1, null, -1, null, null);
             }

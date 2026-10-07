@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_expand_sessions">展开会话列表</string>
+    <string name="action_collapse_sessions">折叠会话列表</string>
+</resources>

@@ -29,6 +29,7 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
     private final View drawer;
     private final ImageButton toggle;
     private boolean collapsed;
+    private String bookmarkToReveal;
 
     public TerminalBookmarksListViewController(TermuxActivity activity, TerminalBookmarkStore store,
                                                 OnBookmarkClickListener listener) {
@@ -41,6 +42,7 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         collapsed = store.isCollapsed();
         toggle.setOnClickListener(view -> {
             collapsed = !collapsed;
+            if (collapsed) bookmarkToReveal = null;
             store.setCollapsed(collapsed);
             updateExpandedState();
         });
@@ -81,6 +83,22 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         list.post(this::resizeList);
     }
 
+    /** Show a newly saved bookmark, including when the collection was collapsed or scrolled. */
+    public void refreshAndReveal(String bookmarkId) {
+        refresh();
+        for (int i = 0; i < getCount(); i++) {
+            if (!getItem(i).id.equals(bookmarkId)) continue;
+            bookmarkToReveal = bookmarkId;
+            if (collapsed) {
+                collapsed = false;
+                store.setCollapsed(false);
+                updateExpandedState();
+            }
+            list.post(this::resizeList);
+            break;
+        }
+    }
+
     private void updateExpandedState() {
         list.setVisibility(collapsed ? View.GONE : View.VISIBLE);
         toggle.setImageResource(collapsed ? R.drawable.ic_bookmarks_expand : R.drawable.ic_bookmarks_collapse);
@@ -109,6 +127,16 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
         if (params.height != height) {
             params.height = height;
             list.setLayoutParams(params);
+        }
+        if (bookmarkToReveal != null) {
+            // Wait for usable drawer dimensions; selection is applied by ListView's next layout.
+            for (int i = 0; i < getCount(); i++) {
+                if (getItem(i).id.equals(bookmarkToReveal)) {
+                    list.setSelection(i);
+                    break;
+                }
+            }
+            bookmarkToReveal = null;
         }
     }
 
