@@ -12,6 +12,8 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.widget.ListView;
 import android.widget.Toast;
 
@@ -66,6 +68,8 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     private Runnable mShowSoftKeyboardRunnable;
     private boolean mShowSoftKeyboardPending;
+    private int mShowSoftKeyboardAttempts;
+    private static final int MAX_SOFT_KEYBOARD_SHOW_ATTEMPTS = 5;
 
     private boolean mShowSoftKeyboardIgnoreOnce;
     private boolean mShowSoftKeyboardWithDelayOnce;
@@ -140,9 +144,10 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     public void onWindowFocusChanged(boolean hasFocus) {
         // onResume can run before the window is ready to accept an IME request.
         // Keep that request until window focus arrives, including after activity recreation.
-        if (hasFocus && mShowSoftKeyboardPending)
-            requestShowSoftKeyboard(0);
-        else if (!hasFocus)
+        if (hasFocus && mShowSoftKeyboardPending) {
+            mActivity.getTerminalView().removeCallbacks(getShowSoftKeyboardRunnable());
+            mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), 100);
+        } else if (!hasFocus)
             mActivity.getTerminalView().removeCallbacks(getShowSoftKeyboardRunnable());
     }
 
@@ -688,6 +693,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     private void requestShowSoftKeyboard(long delayMillis) {
         mShowSoftKeyboardPending = true;
+        mShowSoftKeyboardAttempts = 0;
         mActivity.getTerminalView().removeCallbacks(getShowSoftKeyboardRunnable());
         mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), delayMillis);
     }
@@ -709,8 +715,22 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 }
                 View terminalView = mActivity.getTerminalView();
                 if (!terminalView.hasFocus() || !terminalView.hasWindowFocus()) return;
-                mShowSoftKeyboardPending = false;
+                // A focused window does not guarantee the IME connection is ready. Keep the
+                // request until insets confirm visibility, with a bounded retry for slow IMEs.
+                if (KeyboardUtils.isSoftKeyboardVisible(mActivity)) {
+                    cancelPendingSoftKeyboardShow();
+                    return;
+                }
                 KeyboardUtils.showSoftKeyboard(mActivity, terminalView);
+                WindowInsetsController controller = terminalView.getWindowInsetsController();
+                if (controller != null)
+                    controller.show(WindowInsets.Type.ime());
+                if (++mShowSoftKeyboardAttempts < MAX_SOFT_KEYBOARD_SHOW_ATTEMPTS) {
+                    terminalView.removeCallbacks(mShowSoftKeyboardRunnable);
+                    terminalView.postDelayed(mShowSoftKeyboardRunnable, 150);
+                } else {
+                    cancelPendingSoftKeyboardShow();
+                }
             };
         }
         return mShowSoftKeyboardRunnable;
