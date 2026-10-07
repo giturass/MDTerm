@@ -35,7 +35,7 @@ public abstract class MaterialPreferenceFragment extends PreferenceFragmentCompa
         setDivider(null);
         RecyclerView list = getListView();
         list.setClipToPadding(false);
-        list.setPadding(0, dp(4), 0, dp(28));
+        list.setPadding(0, dp(4), 0, dp(16));
         list.setItemAnimator(null);
         list.addItemDecoration(new RecyclerView.ItemDecoration() {
             @Override
@@ -46,7 +46,7 @@ public abstract class MaterialPreferenceFragment extends PreferenceFragmentCompa
                 if (!(adapter instanceof PreferenceGroupAdapter) || position == RecyclerView.NO_POSITION) return;
                 Preference item = ((PreferenceGroupAdapter) adapter).getItem(position);
                 boolean category = item instanceof PreferenceCategory;
-                outRect.set(dp(20), category ? dp(18) : dp(1), dp(20), category ? dp(8) : dp(1));
+                outRect.set(dp(12), category ? dp(14) : dp(1), dp(12), category ? dp(6) : dp(1));
             }
         });
     }
@@ -73,8 +73,8 @@ public abstract class MaterialPreferenceFragment extends PreferenceFragmentCompa
                 if (item instanceof PreferenceCategory) return;
                 boolean first = position == 0 || !sameGroup(item, getItem(position - 1));
                 boolean last = position == getItemCount() - 1 || !sameGroup(item, getItem(position + 1));
-                float top = dp(first ? 24 : 4);
-                float bottom = dp(last ? 24 : 4);
+                float top = dp(first ? 20 : 4);
+                float bottom = dp(last ? 20 : 4);
                 float[] corners = {top, top, top, top, bottom, bottom, bottom, bottom};
                 GradientDrawable surface = new GradientDrawable();
                 surface.setColor(MaterialColors.getColor(holder.itemView,

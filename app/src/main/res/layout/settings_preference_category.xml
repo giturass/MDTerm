@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:paddingHorizontal="16dp"
+    android:includeFontPadding="false"
     android:accessibilityHeading="true"
     android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
     android:textColor="?attr/colorPrimary" />
