@@ -11,6 +11,7 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.PreferenceScreen;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.termux.R;
@@ -27,7 +28,8 @@ import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.theme.NightMode;
 
 public class SettingsActivity extends AppCompatActivity
-    implements PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
+    implements PreferenceFragmentCompat.OnPreferenceStartFragmentCallback,
+    PreferenceFragmentCompat.OnPreferenceStartScreenCallback {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,6 +62,17 @@ public class SettingsActivity extends AppCompatActivity
         return true;
     }
 
+    @Override
+    public boolean onPreferenceStartScreen(@NonNull PreferenceFragmentCompat caller, @NonNull PreferenceScreen screen) {
+        RootPreferencesFragment fragment = new RootPreferencesFragment();
+        Bundle arguments = new Bundle();
+        arguments.putString(PreferenceFragmentCompat.ARG_PREFERENCE_ROOT, screen.getKey());
+        fragment.setArguments(arguments);
+        getSupportFragmentManager().beginTransaction()
+            .replace(R.id.settings, fragment).addToBackStack(screen.getKey()).commit();
+        return true;
+    }
+
     public static class RootPreferencesFragment extends MaterialPreferenceFragment {
         private TermuxPropertiesPreferences propertyPreferences;
 
@@ -67,7 +80,9 @@ public class SettingsActivity extends AppCompatActivity
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             Context context = requireContext();
             getPreferenceManager().setPreferenceDataStore(new TermuxSettingsDataStore(context));
-            setPreferencesFromResource(R.xml.root_preferences, rootKey);
+            // Build the complete tree before selecting a page so file-backed controls are
+            // available on every page, including after the activity is recreated.
+            setPreferencesFromResource(R.xml.root_preferences, null);
             ListPreference logLevel = findPreference("log_level");
             TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, true);
             if (preferences != null)
@@ -82,6 +97,11 @@ public class SettingsActivity extends AppCompatActivity
             if (extensions != null) extensions.setVisible(extensionsVisible);
 
             propertyPreferences = TermuxPropertiesPreferences.attach(this);
+            if (rootKey != null) {
+                PreferenceScreen screen = findPreference(rootKey);
+                if (screen == null) throw new IllegalArgumentException("Unknown settings page: " + rootKey);
+                setPreferenceScreen(screen);
+            }
         }
 
         @Override

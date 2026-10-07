@@ -10,8 +10,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
-import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceGroupAdapter;
+import androidx.preference.PreferenceScreen;
 import androidx.preference.PreferenceViewHolder;
 
 import com.google.android.material.textfield.TextInputLayout;
@@ -89,7 +89,7 @@ public class TermuxPropertiesUiTest {
                 < screen.fragment.findPreference("appearance").getOrder());
             assertSame(screen.fragment.findPreference("property_compatibility"),
                 screen.fragment.findPreference("terminal_margin_adjustment").getParent());
-            PreferenceCategory appearance = screen.fragment.findPreference("appearance");
+            PreferenceScreen appearance = screen.fragment.findPreference("appearance");
             assertEquals("terminal-margin-vertical",
                 appearance.getPreference(appearance.getPreferenceCount() - 2).getKey());
             assertEquals("fullscreen", appearance.getPreference(appearance.getPreferenceCount() - 1).getKey());
@@ -105,6 +105,7 @@ public class TermuxPropertiesUiTest {
     @Test
     public void toolbarEditorOpensDefaultLayoutValidatesAndRestoresSavedKeys() throws Exception {
         try (Screen screen = new Screen("# Existing options\nfullscreen = false\n")) {
+            screen.open("property_toolbar");
             EditTextPreference toolbar = screen.fragment.findPreference("extra-keys");
             assertNotNull(toolbar);
             assertTrue(toolbar.isSelectable());
@@ -135,6 +136,7 @@ public class TermuxPropertiesUiTest {
             assertEquals(layout, new TermuxPropertiesFile(screen.primary).read().getProperty("extra-keys"));
             screen.activity.recreate();
             screen.bindTemporarySettings();
+            assertEquals("property_toolbar", screen.fragment.getPreferenceScreen().getKey());
             toolbar = screen.fragment.findPreference("extra-keys");
             assertEquals(layout, toolbar.getText());
             assertTrue(toolbar.callChangeListener(""));
@@ -147,6 +149,7 @@ public class TermuxPropertiesUiTest {
     @Test
     public void switchAndListWritePropertiesAndRestoreAfterActivityRecreation() throws Exception {
         try (Screen screen = new Screen(ORIGINAL)) {
+            screen.open("appearance");
             MaterialSwitchPreference fullscreen = screen.fragment.findPreference("fullscreen");
             assertFalse(fullscreen.isChecked());
             click(screen.fragment, fullscreen);
@@ -164,6 +167,7 @@ public class TermuxPropertiesUiTest {
             byte[] saved = Files.readAllBytes(screen.primary.toPath());
             screen.activity.recreate();
             screen.bindTemporarySettings();
+            assertEquals("appearance", screen.fragment.getPreferenceScreen().getKey());
             fullscreen = screen.fragment.findPreference("fullscreen");
             cursor = screen.fragment.findPreference("terminal-cursor-style");
             assertTrue(fullscreen.isChecked());
@@ -175,6 +179,7 @@ public class TermuxPropertiesUiTest {
     @Test
     public void invalidNumberStaysInTheDialogWithoutSavingAndCanBeCorrected() throws Exception {
         try (Screen screen = new Screen(ORIGINAL)) {
+            screen.open("property_sessions");
             EditTextPreference transcript = screen.fragment.findPreference("terminal-transcript-rows");
             screen.fragment.onDisplayPreferenceDialog(transcript);
             screen.fragment.getChildFragmentManager().executePendingTransactions();
@@ -210,6 +215,7 @@ public class TermuxPropertiesUiTest {
     @Test
     public void failedSaveRejectsTheChangeAndKeepsTheDisplayedValue() throws Exception {
         try (Screen screen = new Screen(ORIGINAL)) {
+            screen.open("appearance");
             MaterialSwitchPreference fullscreen = screen.fragment.findPreference("fullscreen");
             ListPreference cursor = screen.fragment.findPreference("terminal-cursor-style");
             long revision = TermuxPropertiesSettings.getRevision();
@@ -277,6 +283,14 @@ public class TermuxPropertiesUiTest {
             Files.write(primary.toPath(), source.getBytes(StandardCharsets.UTF_8));
             activity = Robolectric.buildActivity(SettingsActivity.class).setup();
             bindTemporarySettings();
+        }
+
+        void open(String key) {
+            PreferenceScreen category = fragment.findPreference(key);
+            assertNotNull(key, category);
+            click(fragment, category);
+            bindTemporarySettings();
+            assertEquals(key, fragment.getPreferenceScreen().getKey());
         }
 
         void bindTemporarySettings() {

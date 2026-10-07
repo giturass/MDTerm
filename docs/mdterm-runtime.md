@@ -73,6 +73,12 @@ coexistence build's data automatically.
 
 ## Terminal settings
 
+Settings opens a list of categories: external applications, notifications,
+appearance, sessions, keyboard and input, hardware keyboard shortcuts, terminal
+toolbar, compatibility, and diagnostics. Tap a category to open its settings.
+Keyboard toggle behavior and haptic feedback are under terminal toolbar;
+terminal bell behavior is under notifications.
+
 The Material settings screen edits the existing `~/.termux/termux.properties`
 file. Like upstream Termux, it uses `~/.config/termux/termux.properties` when the
 primary path has no readable regular file; a symlink at the properties file
