@@ -1,7 +1,10 @@
 package com.termux.app;
 
 import android.app.Application;
+import android.content.ComponentName;
+import android.content.Intent;
 import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
@@ -17,15 +20,20 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
 import com.termux.app.ui.MaterialMenuDialog;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.TerminalSession;
 import com.termux.view.TerminalView;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Shadows;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowDialog;
+import org.robolectric.util.ReflectionHelpers;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -78,6 +86,42 @@ public class MaterialMenuDialogTest {
             assertTrue(terminal.showContextMenu(10, 20));
             assertEquals(2, requests.get());
         }
+    }
+
+    @Test
+    @Config(shadows = SessionActionsTest.ShadowTerminalSession.class)
+    public void terminalActionsPlaceStylingAboveTranscriptAndLaunchPlugin() {
+        TermuxActivity activity = Robolectric.buildActivity(TermuxActivity.class).get();
+        activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
+        activity.setContentView(R.layout.activity_termux);
+        activity.mTerminalView = activity.findViewById(R.id.terminal_view);
+        ReflectionHelpers.setField(activity, "mPreferences", TermuxAppSharedPreferences.build(activity));
+        activity.mTerminalView.mTermSession = new TerminalSession("", "", new String[0], new String[0],
+            100, new TermuxTerminalSessionClientBase());
+        Menu menu = new PopupMenu(activity, activity.mTerminalView).getMenu();
+        ReflectionHelpers.callInstanceMethod(activity, "populateTerminalActions",
+            ReflectionHelpers.ClassParameter.from(Menu.class, menu));
+
+        int stylingIndex = -1;
+        for (int i = 0; i < menu.size(); i++) {
+            if (activity.getString(R.string.action_style_terminal).contentEquals(menu.getItem(i).getTitle())) {
+                assertEquals("Styling must appear only once", -1, stylingIndex);
+                stylingIndex = i;
+            }
+        }
+        assertTrue("Styling must precede Share transcript", stylingIndex >= 0 && stylingIndex + 1 < menu.size());
+        assertEquals(activity.getString(R.string.action_share_transcript),
+            menu.getItem(stylingIndex + 1).getTitle().toString());
+        MenuItem styling = menu.getItem(stylingIndex);
+        assertTrue(styling.isVisible());
+        assertTrue(styling.isEnabled());
+        assertNotNull(styling.getIcon());
+
+        assertTrue(activity.onContextItemSelected(styling));
+        Intent launched = Shadows.shadowOf(activity).getNextStartedActivity();
+        assertNotNull(launched);
+        assertEquals(new ComponentName("com.termux.styling", "com.termux.styling.TermuxStyleActivity"),
+            launched.getComponent());
     }
 
     @Test

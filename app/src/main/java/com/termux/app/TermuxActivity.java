@@ -2,6 +2,7 @@ package com.termux.app;
 
 import android.annotation.SuppressLint;
 
+import android.content.ActivityNotFoundException;
 import android.content.ClipboardManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -11,6 +12,7 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.provider.DocumentsContract;
@@ -209,6 +211,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_AUTOFILL_USERNAME = 11;
     private static final int CONTEXT_MENU_AUTOFILL_PASSWORD = 2;
     private static final int CONTEXT_MENU_RESET_TERMINAL_ID = 3;
+    private static final int CONTEXT_MENU_STYLING_ID = 5;
     private static final int CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 6;
     private static final int CONTEXT_MENU_HELP_ID = 7;
     private static final int CONTEXT_MENU_SETTINGS_ID = 8;
@@ -765,12 +768,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (autoFillEnabled)
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password);
         menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn());
+        menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal);
         menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
         int[][] icons = {{CONTEXT_MENU_SELECT_URL_ID, R.drawable.ic_action_link},
             {CONTEXT_MENU_SHARE_TRANSCRIPT_ID, R.drawable.ic_action_share},
             {CONTEXT_MENU_SHARE_SELECTED_TEXT, R.drawable.ic_action_share},
             {CONTEXT_MENU_AUTOFILL_USERNAME, R.drawable.ic_action_paste},
             {CONTEXT_MENU_AUTOFILL_PASSWORD, R.drawable.ic_action_paste},
+            {CONTEXT_MENU_STYLING_ID, R.drawable.settings_tune},
             {CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, R.drawable.ic_action_screen}};
         for (int[] icon : icons) {
             MenuItem item = menu.findItem(icon[0]);
@@ -810,6 +815,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return true;
             case CONTEXT_MENU_RESET_TERMINAL_ID:
                 onResetTerminalSession(session);
+                return true;
+            case CONTEXT_MENU_STYLING_ID:
+                showStylingDialog();
                 return true;
             case CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON:
                 setKeepScreenOn(item.isChecked());
@@ -894,6 +902,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
             if (mTermuxTerminalSessionActivityClient != null)
                 mTermuxTerminalSessionActivityClient.onResetTerminalSession();
+        }
+    }
+
+    private void showStylingDialog() {
+        Intent stylingIntent = new Intent();
+        stylingIntent.setClassName(TermuxConstants.TERMUX_STYLING_PACKAGE_NAME, TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME);
+        try {
+            startActivity(stylingIntent);
+        } catch (ActivityNotFoundException | IllegalArgumentException e) {
+            // The startActivity() call is not documented to throw IllegalArgumentException.
+            // However, crash reporting shows that it sometimes does, so catch it here.
+            new MaterialAlertDialogBuilder(this).setMessage(getString(R.string.error_styling_not_installed))
+                .setPositiveButton(R.string.action_styling_install,
+                    (dialog, which) -> ActivityUtils.startActivity(this, new Intent(Intent.ACTION_VIEW, Uri.parse(TermuxConstants.TERMUX_STYLING_FDROID_PACKAGE_URL))))
+                .setNegativeButton(android.R.string.cancel, null).show();
         }
     }
 

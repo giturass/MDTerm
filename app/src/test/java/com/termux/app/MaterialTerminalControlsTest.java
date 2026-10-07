@@ -242,7 +242,7 @@ public class MaterialTerminalControlsTest {
     }
 
     @Test
-    public void toolbarScrollsOneRowWithCursorAfterEndAndNoTextInput() throws Exception {
+    public void toolbarScrollsOneRowWithHomeAndEndBeforePageKeysAndNoTextInput() throws Exception {
         Context context = themedContext();
         View root = LayoutInflater.from(context).inflate(R.layout.activity_termux, null);
         HorizontalScrollView toolbar = root.findViewById(R.id.terminal_toolbar);
@@ -251,7 +251,7 @@ public class MaterialTerminalControlsTest {
         keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
             "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
         measure(toolbar, context, 304, 52);
-        String[] labels = {"ESC", "CTRL", "ALT", "HOME", "END", "", "", "PGUP", "PGDN"};
+        String[] labels = {"ESC", "CTRL", "ALT", "/", "TAB", "", "", "HOME", "END", "PGUP", "PGDN"};
         assertEquals(labels.length, keys.getChildCount());
         assertEquals(1, toolbar.getChildCount());
         assertEquals(1, keys.getRowCount());
