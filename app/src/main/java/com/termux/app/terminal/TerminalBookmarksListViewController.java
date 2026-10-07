@@ -11,6 +11,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.widget.PopupMenu;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
@@ -200,8 +201,14 @@ public final class TerminalBookmarksListViewController extends ArrayAdapter<Term
                 return true;
             }
             if (item.getItemId() == 2) {
-                store.delete(bookmark.id);
-                refresh();
+                new MaterialAlertDialogBuilder(activity)
+                    .setMessage(activity.getString(R.string.message_confirm_delete_bookmark, bookmark.name))
+                    .setPositiveButton(R.string.action_delete_bookmark, (dialog, which) -> {
+                        store.delete(bookmark.id);
+                        refresh();
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
                 return true;
             }
             return false;

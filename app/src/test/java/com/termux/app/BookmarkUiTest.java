@@ -6,6 +6,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +16,8 @@ import android.widget.ListView;
 import android.widget.PopupMenu;
 import android.widget.PopupWindow;
 import android.widget.TextView;
+
+import androidx.appcompat.app.AlertDialog;
 
 import com.termux.R;
 import com.termux.app.terminal.TerminalBookmark;
@@ -31,6 +34,7 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.shadows.ShadowApplication;
+import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.annotation.Config;
 import org.robolectric.util.ReflectionHelpers;
 
@@ -313,6 +317,73 @@ public class BookmarkUiTest {
     }
 
     @Test
+    public void cancellingBookmarkDeletionKeepsTheBookmark() {
+        verifyBookmarkDeletion(AlertDialog.BUTTON_NEGATIVE);
+    }
+
+    @Test
+    public void pressingBackDuringBookmarkDeletionKeepsTheBookmark() {
+        verifyBookmarkDeletion(KeyEvent.KEYCODE_BACK);
+    }
+
+    @Test
+    public void confirmingBookmarkDeletionRemovesOnlyItsTargetAndRefreshesTheList() {
+        verifyBookmarkDeletion(AlertDialog.BUTTON_POSITIVE);
+    }
+
+    private void verifyBookmarkDeletion(int action) {
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller);
+        TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
+        store.add(bookmark());
+        store.add(new TerminalBookmark("remaining", "Remaining bookmark", "local", "",
+            Collections.emptyList(), "/tmp"));
+        TerminalBookmark[] opened = {null};
+        TerminalBookmarksListViewController adapter =
+            new TerminalBookmarksListViewController(activity, store, item -> opened[0] = item);
+        controller.visible();
+        View drawer = activity.getDrawer();
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measureDrawer(drawer);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        list.getChildAt(0).findViewById(R.id.session_menu_button).performClick();
+        PopupWindow popup = ShadowApplication.getInstance().getLatestPopupWindow();
+        assertNotNull(popup);
+        ListView actions = popupList(popup.getContentView());
+        assertNotNull(actions);
+        actions.performItemClick(actions.getAdapter().getView(1, null, actions), 1, 1);
+
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull("Deleting a bookmark must first ask for confirmation", dialog);
+        assertTrue(dialog.isShowing());
+        TextView message = dialog.findViewById(android.R.id.message);
+        assertEquals(activity.getString(R.string.message_confirm_delete_bookmark, bookmark().name),
+            message.getText().toString());
+        assertEquals(2, adapter.getCount());
+        assertEquals(2, new TerminalBookmarkStore(activity).getAll().size());
+        assertNull(opened[0]);
+
+        if (action == KeyEvent.KEYCODE_BACK) {
+            dialog.onBackPressed();
+        } else {
+            dialog.getButton(action).performClick();
+        }
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer(drawer);
+        assertFalse(dialog.isShowing());
+        boolean deleted = action == AlertDialog.BUTTON_POSITIVE;
+        assertEquals(deleted ? 1 : 2, adapter.getCount());
+        assertEquals(deleted ? 1 : 2, new TerminalBookmarkStore(activity).getAll().size());
+        String firstId = deleted ? "remaining" : "location";
+        assertEquals(firstId, adapter.getItem(0).id);
+        assertEquals(firstId, list.getChildAt(0).getTag());
+        assertEquals(firstId, new TerminalBookmarkStore(activity).getAll().get(0).id);
+        assertNull(opened[0]);
+    }
+
+    @Test
     public void refreshingBookmarkNameDuringMenuTapKeepsTheMenuUsable() {
         ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
         TermuxActivity activity = host(controller);
@@ -387,6 +458,18 @@ public class BookmarkUiTest {
         drawer.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
         drawer.layout(0, 0, width, height);
+    }
+
+    private static ListView popupList(View view) {
+        if (view instanceof ListView) return (ListView) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                ListView list = popupList(group.getChildAt(i));
+                if (list != null) return list;
+            }
+        }
+        return null;
     }
 
     private static TerminalBookmark bookmark() {

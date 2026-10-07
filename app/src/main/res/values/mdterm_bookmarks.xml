@@ -7,6 +7,7 @@
     <string name="action_save_bookmark">Save as bookmark</string>
     <string name="action_rename_bookmark">Rename bookmark</string>
     <string name="action_delete_bookmark">Delete bookmark</string>
+    <string name="message_confirm_delete_bookmark">Delete bookmark “%1$s”?</string>
     <string name="bookmark_menu_description">Manage bookmark %1$s</string>
     <string name="bookmark_saving">Reading current directory…</string>
     <string name="bookmark_query_prompt">Read the path at the shell prompt. Unsubmitted input is cleared.</string>
