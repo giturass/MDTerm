@@ -3,14 +3,14 @@
     <style name="MDTerm.Settings.RowTitle" parent="TextAppearance.Material3.BodyLarge">
         <item name="android:textColor">?attr/colorOnSurface</item>
         <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:textSize">18sp</item>
+        <item name="android:textSize">17sp</item>
         <item name="lineHeight">24sp</item>
         <item name="android:singleLine">false</item>
         <item name="android:includeFontPadding">false</item>
     </style>
     <style name="MDTerm.Settings.RowSummary" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
-        <item name="android:textSize">15sp</item>
+        <item name="android:textSize">14sp</item>
         <item name="lineHeight">22sp</item>
         <item name="android:includeFontPadding">false</item>
     </style>
