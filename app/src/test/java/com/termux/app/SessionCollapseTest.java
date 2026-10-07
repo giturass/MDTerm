@@ -2,6 +2,8 @@ package com.termux.app;
 
 import android.app.Application;
 import android.graphics.Rect;
+import android.os.Looper;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -16,6 +18,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Shadows;
+import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.util.ReflectionHelpers;
 
@@ -72,14 +76,17 @@ public class SessionCollapseTest {
 
     @Test
     public void sessionTitleHasSameGapToFirstCardAsBookmarks() {
-        TermuxActivity activity = host(true);
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller, true);
         TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
         store.add(new TerminalBookmark("first", "First", "local", "", Collections.emptyList(), "/tmp"));
         TerminalBookmarksListViewController bookmarks =
             new TerminalBookmarksListViewController(activity, store, item -> {});
-        ViewGroup drawer = activity.findViewById(R.id.left_drawer);
+        controller.visible();
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        ViewGroup drawer = activity.getDrawer();
         measure(drawer, 640);
-        ReflectionHelpers.callInstanceMethod(bookmarks, "resizeList");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
         measure(drawer, 640);
         ListView bookmarkList = activity.findViewById(R.id.terminal_bookmarks_list);
         ListView sessionList = activity.findViewById(R.id.terminal_sessions_list);
@@ -93,7 +100,11 @@ public class SessionCollapseTest {
     }
 
     private static TermuxActivity host(boolean clearPreferences) {
-        TermuxActivity activity = Robolectric.buildActivity(TermuxActivity.class).get();
+        return host(Robolectric.buildActivity(TermuxActivity.class), clearPreferences);
+    }
+
+    private static TermuxActivity host(ActivityController<TermuxActivity> controller, boolean clearPreferences) {
+        TermuxActivity activity = controller.get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         activity.setContentView(R.layout.activity_termux);
         if (clearPreferences) {
