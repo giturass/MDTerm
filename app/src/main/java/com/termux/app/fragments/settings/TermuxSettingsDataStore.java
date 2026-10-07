@@ -19,7 +19,6 @@ public final class TermuxSettingsDataStore extends PreferenceDataStore {
     public boolean getBoolean(String key, boolean defaultValue) {
         if (preferences == null || key == null) return defaultValue;
         switch (key) {
-            case "terminal_fullscreen": return preferences.isTerminalFullscreenEnabled();
             case "terminal_vibration": return preferences.isTerminalVibrationEnabled();
             case "terminal_margin_adjustment": return preferences.isTerminalMarginAdjustmentEnabled();
             case "soft_keyboard_enabled": return preferences.isSoftKeyboardEnabled();
@@ -36,7 +35,6 @@ public final class TermuxSettingsDataStore extends PreferenceDataStore {
     public void putBoolean(String key, boolean value) {
         if (preferences == null || key == null) return;
         switch (key) {
-            case "terminal_fullscreen": preferences.setTerminalFullscreenEnabled(value); break;
             case "terminal_vibration": preferences.setTerminalVibrationEnabled(value); break;
             case "terminal_margin_adjustment": preferences.setTerminalMarginAdjustment(value); break;
             case "soft_keyboard_enabled": preferences.setSoftKeyboardEnabled(value); break;

@@ -16,6 +16,7 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.termux.R;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.TermuxSettingsDataStore;
+import com.termux.app.fragments.settings.TermuxPropertiesPreferences;
 import com.termux.app.fragments.settings.termux.DebuggingPreferencesFragment;
 import com.termux.shared.termux.settings.preferences.TermuxAPIAppSharedPreferences;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -60,6 +61,8 @@ public class SettingsActivity extends AppCompatActivity
     }
 
     public static class RootPreferencesFragment extends MaterialPreferenceFragment {
+        private TermuxPropertiesPreferences propertyPreferences;
+
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             Context context = requireContext();
@@ -77,6 +80,14 @@ public class SettingsActivity extends AppCompatActivity
             extensionsVisible |= setExtensionVisible("termux_widget", TermuxWidgetAppSharedPreferences.build(context, false) != null);
             Preference extensions = findPreference("extensions");
             if (extensions != null) extensions.setVisible(extensionsVisible);
+
+            propertyPreferences = TermuxPropertiesPreferences.attach(this);
+        }
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            if (propertyPreferences != null) propertyPreferences.reload();
         }
 
         private boolean setExtensionVisible(String key, boolean visible) {

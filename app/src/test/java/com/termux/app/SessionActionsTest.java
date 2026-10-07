@@ -23,6 +23,8 @@ import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.shell.TermuxShellManager;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Before;
@@ -38,6 +40,7 @@ import org.robolectric.annotation.Implements;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.shadows.ShadowApplication;
+import org.robolectric.shadows.ShadowToast;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
@@ -73,6 +76,27 @@ public class SessionActionsTest {
             }
         };
         ReflectionHelpers.setField(activity, "mTermuxTerminalSessionActivityClient", client);
+    }
+
+    @Test
+    public void sessionChangeToastRespectsPropertiesSetting() {
+        TermuxSession session = addSession(true);
+        client.setCurrentSession(session.getTerminalSession());
+        ReflectionHelpers.setField(activity, "mIsVisible", true);
+        TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
+        properties.loadTermuxPropertiesFromDisk();
+        ReflectionHelpers.setField(activity, "mProperties", properties);
+        Object shared = ReflectionHelpers.getField(properties, "mSharedProperties");
+        java.util.Map<String, Object> values = ReflectionHelpers.getField(shared, "mMap");
+        values.put(TermuxPropertyConstants.KEY_DISABLE_TERMINAL_SESSION_CHANGE_TOAST, true);
+        ShadowToast.reset();
+
+        ReflectionHelpers.callInstanceMethod(client, "notifyOfSessionChange");
+        assertNull(ShadowToast.getTextOfLatestToast());
+
+        values.put(TermuxPropertyConstants.KEY_DISABLE_TERMINAL_SESSION_CHANGE_TOAST, false);
+        ReflectionHelpers.callInstanceMethod(client, "notifyOfSessionChange");
+        assertEquals("[1]", ShadowToast.getTextOfLatestToast());
     }
 
     @Test

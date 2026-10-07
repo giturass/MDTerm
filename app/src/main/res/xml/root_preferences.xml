@@ -1,10 +1,10 @@
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto" app:title="@string/mdterm_settings_title">
     <PreferenceCategory app:key="appearance" app:title="@string/mdterm_settings_appearance">
-        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="terminal_fullscreen" app:title="@string/terminal_fullscreen_title" app:summary="@string/terminal_fullscreen_summary" />
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="fullscreen" app:persistent="false" app:title="@string/terminal_fullscreen_title" app:summary="@string/terminal_fullscreen_summary" />
         <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="terminal_margin_adjustment" app:summaryOff="@string/termux_terminal_view_terminal_margin_adjustment_off" app:summaryOn="@string/termux_terminal_view_terminal_margin_adjustment_on" app:title="@string/termux_terminal_view_terminal_margin_adjustment_title" />
     </PreferenceCategory>
     <PreferenceCategory app:key="input" app:title="@string/mdterm_settings_input">
-        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="terminal_vibration" app:title="@string/terminal_vibration_title" app:summary="@string/terminal_vibration_summary" />
+        <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="terminal_vibration" app:title="@string/mdterm_prop_haptic_title" app:summary="@string/mdterm_prop_haptic_summary" />
         <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="soft_keyboard_enabled" app:summaryOff="@string/termux_soft_keyboard_enabled_off" app:summaryOn="@string/termux_soft_keyboard_enabled_on" app:title="@string/termux_soft_keyboard_enabled_title" />
         <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="soft_keyboard_enabled_only_if_no_hardware" app:summaryOff="@string/termux_soft_keyboard_enabled_only_if_no_hardware_off" app:summaryOn="@string/termux_soft_keyboard_enabled_only_if_no_hardware_on" app:title="@string/termux_soft_keyboard_enabled_only_if_no_hardware_title" />
         <com.termux.app.fragments.settings.MaterialSwitchPreference app:key="ime_composing_enabled" app:summaryOff="@string/termux_ime_composing_enabled_off" app:summaryOn="@string/termux_ime_composing_enabled_on" app:title="@string/termux_ime_composing_enabled_title" />

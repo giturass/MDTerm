@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.app.Application;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -18,7 +19,11 @@ import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.os.SystemClock;
+import android.text.InputType;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
+
+import androidx.fragment.app.FragmentController;
 
 import com.google.android.material.button.MaterialButton;
 import com.termux.R;
@@ -26,7 +31,10 @@ import com.termux.filepicker.TermuxDocumentsProvider;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
+import com.termux.app.settings.properties.TermuxPropertiesSettings;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
 import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
@@ -35,19 +43,135 @@ import com.termux.shared.termux.extrakeys.SpecialButton;
 import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
 
 import org.junit.Test;
+import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Robolectric;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
+import org.robolectric.shadow.api.Shadow;
+import org.robolectric.shadows.ShadowActivity;
 import org.robolectric.util.ReflectionHelpers;
+import org.robolectric.util.ReflectionHelpers.ClassParameter;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 31, application = Application.class, qualifiers = "zh-rCN-w320dp-h640dp")
 public class MaterialTerminalControlsTest {
+    @Rule public TemporaryFolder temporary = new TemporaryFolder();
+
+    @Test
+    @Config(shadows = RecordingRecreationActivity.class)
+    public void returningFromSettingsReloadsSavedValuesAndRecreatesOnlyOnce() throws Exception {
+        TermuxActivity activity = drawerActivity(true);
+        TermuxAppSharedProperties runtime = activity.getProperties();
+        List<String> originalPaths = ReflectionHelpers.getField(runtime, "mPropertiesFilePaths");
+        File primary = temporary.newFile("termux.properties");
+        File secondary = new File(temporary.getRoot(), "secondary.properties");
+        Files.write(primary.toPath(), "terminal-margin-horizontal=3\n".getBytes(StandardCharsets.UTF_8));
+        try {
+            ReflectionHelpers.setField(runtime, "mPropertiesFilePaths", Collections.singletonList(primary.getAbsolutePath()));
+            ReflectionHelpers.callInstanceMethod(activity, "reloadProperties");
+            ReflectionHelpers.callInstanceMethod(activity, "setTerminalToolbarView");
+            // This test needs the real activity reload path, but no native session or keyboard work.
+            activity.mTermuxTerminalViewClient = null;
+            // drawerActivity skips onCreate to avoid starting TermuxService. Attach its fragment
+            // host explicitly so the real FragmentActivity.onResume can run normally.
+            FragmentController fragments = ReflectionHelpers.getField(activity, "mFragments");
+            fragments.attachHost(null);
+            RecordingRecreationActivity shadow = Shadow.extract(activity);
+            activity.onResume();
+            assertEquals(0, shadow.recreations);
+
+            TermuxPropertiesSettings settings = ReflectionHelpers.callConstructor(TermuxPropertiesSettings.class,
+                ClassParameter.from(Context.class, activity), ClassParameter.from(File.class, primary),
+                ClassParameter.from(File.class, secondary));
+            settings.set(TermuxPropertyConstants.KEY_TERMINAL_MARGIN_HORIZONTAL, 22);
+            activity.onResume();
+
+            assertEquals(1, shadow.recreations);
+            assertEquals(22, activity.getProperties().getTerminalMarginHorizontal());
+            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams)
+                activity.findViewById(R.id.activity_termux_root_relative_layout).getLayoutParams();
+            assertEquals(Math.round(22 * activity.getResources().getDisplayMetrics().density), margins.leftMargin);
+            activity.onResume();
+            assertEquals(1, shadow.recreations);
+        } finally {
+            ReflectionHelpers.setField(runtime, "mPropertiesFilePaths", originalPaths);
+            runtime.loadTermuxPropertiesFromDisk();
+        }
+    }
+
+    @Implements(Activity.class)
+    public static class RecordingRecreationActivity extends ShadowActivity {
+        int recreations;
+
+        @Implementation
+        protected void recreate() {
+            recreations++;
+        }
+    }
+
+    @Test
+    public void characterInputPropertyOverridesComposingWithoutLosingItsPreference() {
+        TermuxActivity activity = drawerActivity(true);
+        activity.getPreferences().setImeComposingEnabled(true);
+        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
+        EditorInfo composing = new EditorInfo();
+        assertNotNull(activity.getTerminalView().onCreateInputConnection(composing));
+        assertEquals(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL
+            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, composing.inputType);
+        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
+
+        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "true");
+        EditorInfo characterInput = new EditorInfo();
+        assertNotNull(activity.getTerminalView().onCreateInputConnection(characterInput));
+        assertEquals(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, characterInput.inputType);
+        assertFalse(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
+        assertTrue(activity.getPreferences().isImeComposingEnabled());
+
+        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
+        EditorInfo restored = new EditorInfo();
+        activity.getTerminalView().onCreateInputConnection(restored);
+        assertEquals(composing.inputType, restored.inputType);
+        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
+    }
+
+    @Test
+    public void toolbarStyleReloadPreservesEveryExistingKeyAndItsPosition() {
+        TermuxActivity activity = drawerActivity(true);
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, "default");
+        TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
+            activity.mTermuxTerminalViewClient, null);
+        ExtraKeysInfo before = extraKeys.getExtraKeysInfo();
+        assertEquals("ESC", before.getMatrix()[0][0].getDisplay());
+
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, "all");
+        // An existing custom layout must not replace the toolbar the user asked to retain.
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, "[['A','B']]");
+        extraKeys.reload();
+
+        ExtraKeysInfo after = extraKeys.getExtraKeysInfo();
+        assertEquals(1, after.getMatrix().length);
+        assertEquals(11, after.getMatrix()[0].length);
+        assertNotEquals(before.getMatrix()[0][0].getDisplay(), after.getMatrix()[0][0].getDisplay());
+        for (int i = 0; i < before.getMatrix()[0].length; i++)
+            assertEquals(before.getMatrix()[0][i].getKey(), after.getMatrix()[0][i].getKey());
+        assertEquals("TAB", after.getMatrix()[0][4].getDisplay());
+    }
+
     @Test
     public void vibrationPreferenceUpdatesTerminalAndDrawerFeedbackWithoutRecreation() {
         TermuxActivity activity = drawerActivity(true);
@@ -211,6 +335,9 @@ public class MaterialTerminalControlsTest {
         assertNotNull(preferences);
         preferences.setShowTerminalToolbar(showToolbar);
         ReflectionHelpers.setField(activity, "mPreferences", preferences);
+        TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
+        properties.loadTermuxPropertiesFromDisk();
+        ReflectionHelpers.setField(activity, "mProperties", properties);
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, null);
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
@@ -218,6 +345,12 @@ public class MaterialTerminalControlsTest {
         ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
         measure(activity.getDrawer(), activity, 320, 640);
         return activity;
+    }
+
+    private static void setProperty(TermuxActivity activity, String key, String value) {
+        Object shared = ReflectionHelpers.getField(activity.getProperties(), "mSharedProperties");
+        java.util.Map<String, Object> values = ReflectionHelpers.getField(shared, "mMap");
+        values.put(key, TermuxSharedProperties.getInternalTermuxPropertyValueFromValue(activity, key, value));
     }
 
     @Test
