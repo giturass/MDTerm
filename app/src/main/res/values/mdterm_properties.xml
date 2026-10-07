@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mdterm_prop_file_title">Terminal configuration</string>
+    <string name="mdterm_prop_file_summary">Terminal options are saved to %1$s and applied when you return to the terminal. Options that need a new session or an app restart are marked below. You can also edit this file directly.</string>
+    <string name="mdterm_prop_haptic_title">Haptic feedback</string>
+    <string name="mdterm_prop_haptic_summary">Vibrate for toolbar keys and terminal gestures</string>
+    <string name="mdterm_prop_night_mode">App theme</string>
+    <string name="mdterm_prop_night_mode_summary">Saved as night-mode; also reads the deprecated use-black-ui setting</string>
+    <string name="mdterm_prop_cursor_style">Cursor shape</string>
+    <string name="mdterm_prop_cursor_blink">Cursor blink interval</string>
+    <string name="mdterm_prop_cursor_blink_summary">0 disables blinking; otherwise 100–2000 milliseconds</string>
+    <string name="mdterm_prop_margin_horizontal">Horizontal terminal margin</string>
+    <string name="mdterm_prop_margin_vertical">Vertical terminal margin</string>
+    <string name="mdterm_prop_margin_summary">Space around the terminal text, from 0 to 100 dp</string>
+    <string name="mdterm_prop_bell">Terminal bell</string>
+    <string name="mdterm_prop_bell_summary">Response to the terminal bell character</string>
+    <string name="mdterm_prop_back_key">Back button</string>
+    <string name="mdterm_prop_volume_keys">Volume buttons</string>
+    <string name="mdterm_prop_keyboard_toggle">Keyboard toggle button</string>
+    <string name="mdterm_prop_hide_keyboard">Hide keyboard on startup</string>
+    <string name="mdterm_prop_hide_keyboard_summary">Start with the software keyboard hidden; applies next time the app starts</string>
+    <string name="mdterm_prop_sessions">Sessions</string>
+    <string name="mdterm_prop_working_directory">Default working directory</string>
+    <string name="mdterm_prop_working_directory_summary">Used when no session exists; other new sessions inherit the current directory</string>
+    <string name="mdterm_prop_directory_hint">Absolute directory path</string>
+    <string name="mdterm_prop_transcript">Scrollback lines</string>
+    <string name="mdterm_prop_transcript_summary">100–50000 lines; applies to new sessions. Larger buffers use more memory.</string>
+    <string name="mdterm_prop_disable_session_toast">Hide session change messages</string>
+    <string name="mdterm_prop_disable_session_toast_summary">Do not show a toast when switching terminal sessions</string>
+    <string name="mdterm_prop_toolbar">Terminal toolbar</string>
+    <string name="mdterm_prop_toolbar_keys">Toolbar keys</string>
+    <string name="mdterm_prop_toolbar_keys_summary">Keeps the current ESC, Ctrl, Alt, Tab, cursor and navigation keys</string>
+    <string name="mdterm_prop_extra_keys_style">Key label symbols</string>
+    <string name="mdterm_prop_extra_keys_caps">Uppercase key labels</string>
+    <string name="mdterm_prop_extra_keys_caps_summary">Capitalize text on toolbar keys</string>
+    <string name="mdterm_prop_toolbar_height">Toolbar height</string>
+    <string name="mdterm_prop_toolbar_height_summary">Height multiplier from 0.4 to 3.0; 1 uses the normal height</string>
+    <string name="mdterm_prop_shortcuts">Hardware keyboard shortcuts</string>
+    <string name="mdterm_prop_disable_shortcuts">Disable built-in keyboard shortcuts</string>
+    <string name="mdterm_prop_disable_shortcuts_summary">Disable Ctrl+Alt app shortcuts. Custom Ctrl shortcuts below remain available.</string>
+    <string name="mdterm_prop_shortcut_create">Create a session</string>
+    <string name="mdterm_prop_shortcut_next">Next session</string>
+    <string name="mdterm_prop_shortcut_previous">Previous session</string>
+    <string name="mdterm_prop_shortcut_rename">Rename session</string>
+    <string name="mdterm_prop_shortcut_summary">Enter ctrl + one character, for example ctrl + t. Leave empty to remove the custom shortcut.</string>
+    <string name="mdterm_prop_compatibility">Compatibility</string>
+    <string name="mdterm_prop_character_input">Character-based input</string>
+    <string name="mdterm_prop_character_input_summary">Fix letters only appearing after Enter with some keyboards; takes priority over the composing preview</string>
+    <string name="mdterm_prop_ctrl_space">Ctrl+Space workaround</string>
+    <string name="mdterm_prop_ctrl_space_summary">Fix keyboards that do not send Ctrl+Space correctly</string>
+    <string name="mdterm_prop_fullscreen_workaround">Fullscreen layout workaround</string>
+    <string name="mdterm_prop_fullscreen_workaround_summary">Work around keyboard layout issues in fullscreen mode; applies when returning to the terminal</string>
+    <string name="mdterm_prop_integration">External applications</string>
+    <string name="mdterm_prop_external_apps">Allow external commands</string>
+    <string name="mdterm_prop_external_apps_summary">Allow authorized external apps to execute commands in the terminal</string>
+    <string name="mdterm_prop_empty_default">Leave empty to restore the default value.</string>
+    <string name="mdterm_prop_not_set">Not set</string>
+    <string name="mdterm_prop_value_with_help">%1$s\n%2$s</string>
+    <string name="mdterm_prop_read_failed">Could not read terminal configuration: %1$s</string>
+    <string name="mdterm_prop_save_failed">Could not save terminal configuration: %1$s</string>
+    <string name="mdterm_prop_validation_failed">Invalid value: %1$s</string>
+    <string name="mdterm_prop_invalid_value">Check the value and try again.</string>
+    <string-array name="mdterm_prop_night_entries">
+        <item>Follow system</item><item>Dark</item><item>Light</item>
+    </string-array>
+    <string-array name="mdterm_prop_cursor_entries">
+        <item>Block</item><item>Bar</item><item>Underline</item>
+    </string-array>
+    <string-array name="mdterm_prop_bell_entries">
+        <item>Vibrate</item><item>Beep</item><item>Ignore</item>
+    </string-array>
+    <string-array name="mdterm_prop_back_entries">
+        <item>Hide keyboard or leave app</item><item>Send Escape</item>
+    </string-array>
+    <string-array name="mdterm_prop_volume_entries">
+        <item>Terminal modifiers (Ctrl / Fn)</item><item>Adjust device volume</item>
+    </string-array>
+    <string-array name="mdterm_prop_keyboard_toggle_entries">
+        <item>Show or hide keyboard</item><item>Enable or disable keyboard</item>
+    </string-array>
+    <string-array name="mdterm_prop_extra_keys_entries">
+        <item>Default symbols</item><item>Basic arrows only</item><item>All arrows</item><item>All symbols</item><item>Text labels only</item>
+    </string-array>
+</resources>

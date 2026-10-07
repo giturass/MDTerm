@@ -11,6 +11,7 @@ import android.widget.ImageView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
+import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
@@ -106,8 +107,9 @@ public abstract class MaterialPreferenceFragment extends PreferenceFragmentCompa
                 preference.setLayoutResource(R.layout.settings_preference_row);
                 preference.setSingleLineTitle(false);
                 if (!(preference instanceof MaterialSwitchPreference)) {
-                    preference.setWidgetLayoutResource(preference instanceof ListPreference ?
-                        R.layout.settings_widget_dropdown : R.layout.settings_widget_chevron);
+                    preference.setWidgetLayoutResource(!preference.isSelectable() ? 0 :
+                        preference instanceof ListPreference ? R.layout.settings_widget_dropdown :
+                        R.layout.settings_widget_chevron);
                 }
             }
             if (preference instanceof PreferenceGroup) stylePreferences((PreferenceGroup) preference);
@@ -116,10 +118,14 @@ public abstract class MaterialPreferenceFragment extends PreferenceFragmentCompa
 
     @Override
     public void onDisplayPreferenceDialog(@NonNull Preference preference) {
-        if (preference instanceof ListPreference) {
+        if (preference instanceof ListPreference || preference instanceof EditTextPreference) {
             String tag = "mdterm.preference.dialog";
             if (getChildFragmentManager().findFragmentByTag(tag) == null) {
-                MaterialListPreferenceDialog.newInstance(preference.getKey()).show(getChildFragmentManager(), tag);
+                if (preference instanceof EditTextPreference) {
+                    MaterialEditTextPreferenceDialog.newInstance(preference.getKey()).show(getChildFragmentManager(), tag);
+                } else {
+                    MaterialListPreferenceDialog.newInstance(preference.getKey()).show(getChildFragmentManager(), tag);
+                }
             }
         } else {
             super.onDisplayPreferenceDialog(preference);

@@ -35,7 +35,7 @@ public class MaterialSettingsTest {
             assertNull(fragment.findPreference("about"));
             assertNull(fragment.findPreference("donate"));
             assertNull(fragment.findPreference("termux"));
-            String[] keys = {"terminal_fullscreen", "terminal_vibration", "terminal_margin_adjustment", "soft_keyboard_enabled",
+            String[] keys = {"terminal_vibration", "terminal_margin_adjustment", "soft_keyboard_enabled",
                 "soft_keyboard_enabled_only_if_no_hardware", "ime_composing_enabled",
                 "terminal_view_key_logging_enabled", "plugin_error_notifications_enabled",
                 "crash_report_notifications_enabled"};

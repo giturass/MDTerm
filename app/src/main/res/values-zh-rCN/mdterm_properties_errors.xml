@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="properties_error_value">请输入有效值，并确保在所示范围内。</string>
+    <string name="properties_error_integer">请输入 %1$d 至 %2$d 之间的整数。</string>
+    <string name="properties_error_integer_or_zero">请输入 0，或 %1$d 至 %2$d 之间的整数。</string>
+    <string name="properties_error_directory">请输入已存在且可读取的目录绝对路径。</string>
+    <string name="properties_error_shortcut">格式为 Ctrl + 单个字符，例如 ctrl + t。留空可禁用。</string>
+</resources>

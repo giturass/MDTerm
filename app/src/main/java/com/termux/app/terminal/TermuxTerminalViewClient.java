@@ -220,7 +220,8 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     @Override
     public boolean shouldEnableImeComposing() {
-        return mActivity.getPreferences().isImeComposingEnabled();
+        // The explicit keyboard workaround must take priority over the optional IME preview.
+        return !shouldEnforceCharBasedInput() && mActivity.getPreferences().isImeComposingEnabled();
     }
 
     @Override

@@ -40,9 +40,11 @@ import com.termux.R;
 import com.termux.filepicker.TermuxDocumentsProvider;
 import com.termux.app.ui.MaterialMenuDialog;
 import com.termux.app.api.file.FileReceiverActivity;
+import com.termux.app.settings.properties.TermuxPropertiesSettings;
 import com.termux.app.terminal.TermuxActivityRootView;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
+import com.termux.app.terminal.io.FullScreenWorkAround;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.activity.ActivityUtils;
 import com.termux.shared.activity.media.AppCompatActivityUtils;
@@ -85,6 +87,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 
 import java.util.Arrays;
 import java.util.List;
+import java.io.IOException;
 
 /**
  * A terminal emulator activity.
@@ -193,6 +196,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int mNavBarHeight;
 
     private float mTerminalToolbarDefaultHeight;
+    private long mPropertiesRevision;
 
     private boolean mIsDrawerCompact;
     private boolean mIsDrawerInputCollapsed;
@@ -232,6 +236,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Delete ReportInfo serialized object files from cache older than 14 days
         ReportActivity.deleteReportInfoFilesOlderThanXDays(this, 14, false);
 
+        try {
+            TermuxPropertiesSettings.migrateLegacyFullscreen(this);
+        } catch (IOException e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Could not migrate the fullscreen preference", e);
+        }
+
         // Load Termux app SharedProperties from disk
         mProperties = TermuxAppSharedProperties.getProperties();
         reloadProperties();
@@ -263,6 +273,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mNavBarHeight = insets.getSystemWindowInsetBottom();
             return insets;
         });
+
+        if (mProperties.isUsingFullScreen() && mProperties.isUsingFullScreenWorkAround())
+            FullScreenWorkAround.apply(this);
 
         setTermuxTerminalViewAndClients();
 
@@ -339,6 +352,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Logger.logVerbose(LOG_TAG, "onResume");
 
         if (mIsInvalidState) return;
+
+        if (mPropertiesRevision != TermuxPropertiesSettings.getRevision()) {
+            reloadActivityStyling(true);
+            return;
+        }
 
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onResume();
@@ -480,6 +498,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void reloadProperties() {
         mProperties.loadTermuxPropertiesFromDisk();
+        mPropertiesRevision = TermuxPropertiesSettings.getRevision();
 
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onReloadProperties();
@@ -931,7 +950,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.setSystemBarsBehavior(
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-        if (mPreferences.isTerminalFullscreenEnabled()) {
+        if (mProperties.isUsingFullScreen()) {
             controller.hide(WindowInsetsCompat.Type.systemBars());
         } else {
             controller.show(WindowInsetsCompat.Type.systemBars());
@@ -1151,6 +1170,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             reloadProperties();
 
             if (mExtraKeysView != null) {
+                mTermuxTerminalExtraKeys.reload();
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
                 mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
             }
@@ -1161,6 +1181,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setMargins();
         setTerminalToolbarHeight();
+        applyTerminalDisplayPreferences();
 
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);
 

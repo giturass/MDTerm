@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mdterm_prop_file_title">终端配置</string>
+    <string name="mdterm_prop_file_summary">终端选项保存到 %1$s，返回终端后生效。需要新建会话或重启应用的选项会单独注明，也可以直接编辑此文件。</string>
+    <string name="mdterm_prop_haptic_title">触觉反馈</string>
+    <string name="mdterm_prop_haptic_summary">工具栏按键与终端手势的振动反馈</string>
+    <string name="mdterm_prop_night_mode">应用主题</string>
+    <string name="mdterm_prop_night_mode_summary">保存为 night-mode；兼容读取已弃用的 use-black-ui 选项</string>
+    <string name="mdterm_prop_cursor_style">光标形状</string>
+    <string name="mdterm_prop_cursor_blink">光标闪烁间隔</string>
+    <string name="mdterm_prop_cursor_blink_summary">0 表示不闪烁；其他值为 100–2000 毫秒</string>
+    <string name="mdterm_prop_margin_horizontal">终端左右边距</string>
+    <string name="mdterm_prop_margin_vertical">终端上下边距</string>
+    <string name="mdterm_prop_margin_summary">终端文字周围的留白，范围为 0–100 dp</string>
+    <string name="mdterm_prop_bell">终端响铃</string>
+    <string name="mdterm_prop_bell_summary">终端收到响铃字符时的反馈方式</string>
+    <string name="mdterm_prop_back_key">返回键</string>
+    <string name="mdterm_prop_volume_keys">音量键</string>
+    <string name="mdterm_prop_keyboard_toggle">键盘切换按钮</string>
+    <string name="mdterm_prop_hide_keyboard">启动时隐藏键盘</string>
+    <string name="mdterm_prop_hide_keyboard_summary">下次启动应用时不自动显示软键盘</string>
+    <string name="mdterm_prop_sessions">会话</string>
+    <string name="mdterm_prop_working_directory">默认工作目录</string>
+    <string name="mdterm_prop_working_directory_summary">没有现有会话时使用此目录；其他新会话继承当前目录</string>
+    <string name="mdterm_prop_directory_hint">目录的绝对路径</string>
+    <string name="mdterm_prop_transcript">终端回滚行数</string>
+    <string name="mdterm_prop_transcript_summary">100–50000 行；新建会话时生效，行数越多占用内存越大</string>
+    <string name="mdterm_prop_disable_session_toast">隐藏会话切换提示</string>
+    <string name="mdterm_prop_disable_session_toast_summary">切换终端会话时不显示短暂提示</string>
+    <string name="mdterm_prop_toolbar">终端工具栏</string>
+    <string name="mdterm_prop_toolbar_keys">工具栏键位</string>
+    <string name="mdterm_prop_toolbar_keys_summary">保留当前 ESC、Ctrl、Alt、Tab、方向键及导航键布局</string>
+    <string name="mdterm_prop_extra_keys_style">按键符号样式</string>
+    <string name="mdterm_prop_extra_keys_caps">按键标签大写</string>
+    <string name="mdterm_prop_extra_keys_caps_summary">将工具栏按键上的文字转为大写</string>
+    <string name="mdterm_prop_toolbar_height">工具栏高度</string>
+    <string name="mdterm_prop_toolbar_height_summary">高度倍数为 0.4–3.0；1 表示正常高度</string>
+    <string name="mdterm_prop_shortcuts">实体键盘快捷键</string>
+    <string name="mdterm_prop_disable_shortcuts">禁用内置键盘快捷键</string>
+    <string name="mdterm_prop_disable_shortcuts_summary">禁用 Ctrl+Alt 组合的应用快捷键；下方自定义 Ctrl 快捷键仍然可用</string>
+    <string name="mdterm_prop_shortcut_create">新建会话</string>
+    <string name="mdterm_prop_shortcut_next">下一个会话</string>
+    <string name="mdterm_prop_shortcut_previous">上一个会话</string>
+    <string name="mdterm_prop_shortcut_rename">重命名会话</string>
+    <string name="mdterm_prop_shortcut_summary">填写 ctrl + 单个字符，例如 ctrl + t；留空可移除自定义快捷键</string>
+    <string name="mdterm_prop_compatibility">兼容性</string>
+    <string name="mdterm_prop_character_input">按字符输入</string>
+    <string name="mdterm_prop_character_input_summary">修复部分键盘需要按回车才显示文字的问题；启用后优先于预编辑显示</string>
+    <string name="mdterm_prop_ctrl_space">Ctrl+空格兼容处理</string>
+    <string name="mdterm_prop_ctrl_space_summary">修复部分键盘无法正确发送 Ctrl+空格的问题</string>
+    <string name="mdterm_prop_fullscreen_workaround">全屏布局兼容处理</string>
+    <string name="mdterm_prop_fullscreen_workaround_summary">修复全屏模式下的键盘布局问题；返回终端后应用</string>
+    <string name="mdterm_prop_integration">外部应用</string>
+    <string name="mdterm_prop_external_apps">允许外部执行命令</string>
+    <string name="mdterm_prop_external_apps_summary">允许获得授权的外部应用在终端中执行命令</string>
+    <string name="mdterm_prop_empty_default">留空可恢复默认值。</string>
+    <string name="mdterm_prop_not_set">未设置</string>
+    <string name="mdterm_prop_value_with_help">%1$s\n%2$s</string>
+    <string name="mdterm_prop_read_failed">无法读取终端配置：%1$s</string>
+    <string name="mdterm_prop_save_failed">无法保存终端配置：%1$s</string>
+    <string name="mdterm_prop_validation_failed">输入值无效：%1$s</string>
+    <string name="mdterm_prop_invalid_value">请检查输入值后重试。</string>
+    <string-array name="mdterm_prop_night_entries">
+        <item>跟随系统</item><item>深色</item><item>浅色</item>
+    </string-array>
+    <string-array name="mdterm_prop_cursor_entries">
+        <item>方块</item><item>竖线</item><item>下划线</item>
+    </string-array>
+    <string-array name="mdterm_prop_bell_entries">
+        <item>振动</item><item>声音</item><item>忽略</item>
+    </string-array>
+    <string-array name="mdterm_prop_back_entries">
+        <item>隐藏键盘或退出应用</item><item>发送 Escape</item>
+    </string-array>
+    <string-array name="mdterm_prop_volume_entries">
+        <item>终端组合键（Ctrl / Fn）</item><item>调整设备音量</item>
+    </string-array>
+    <string-array name="mdterm_prop_keyboard_toggle_entries">
+        <item>显示或隐藏键盘</item><item>启用或禁用键盘</item>
+    </string-array>
+    <string-array name="mdterm_prop_extra_keys_entries">
+        <item>默认符号</item><item>仅基本箭头</item><item>所有箭头</item><item>所有符号</item><item>仅文字标签</item>
+    </string-array>
+</resources>

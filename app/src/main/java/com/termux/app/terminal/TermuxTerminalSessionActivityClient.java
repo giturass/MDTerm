@@ -119,6 +119,13 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         mPendingColorReload = true;
         // Set terminal fonts and colors
         checkForFontAndColors();
+        TermuxService service = mActivity.getTermuxService();
+        if (service != null) {
+            for (TermuxSession session : service.getTermuxSessions()) {
+                if (session.getTerminalSession().getEmulator() != null)
+                    session.getTerminalSession().getEmulator().setCursorStyle();
+            }
+        }
     }
 
 
@@ -209,8 +216,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
         switch (mActivity.getProperties().getBellBehaviour()) {
             case TermuxPropertyConstants.IVALUE_BELL_BEHAVIOUR_VIBRATE:
-                if (mActivity.getPreferences().isTerminalVibrationEnabled())
-                    BellHandler.getInstance(mActivity).doBell();
+                BellHandler.getInstance(mActivity).doBell();
                 break;
             case TermuxPropertyConstants.IVALUE_BELL_BEHAVIOUR_BEEP:
                 loadBellSoundPool();
@@ -302,7 +308,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         if (session == null) return;
 
         if (mActivity.getTerminalView().attachSession(session)) {
-            // The drawer indicates the active session without a toast over terminal output.
+            notifyOfSessionChange();
             termuxSessionListNotifyUpdated();
         }
 
@@ -310,6 +316,12 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // be stale, like current session not selected or scrolled to.
         checkAndScrollToSession(session);
         updateBackgroundColor();
+    }
+
+    void notifyOfSessionChange() {
+        if (!mActivity.isVisible()) return;
+        if (!mActivity.getProperties().areTerminalSessionChangeToastsDisabled())
+            mActivity.showToast(toToastTitle(mActivity.getCurrentSession()), false);
     }
 
     public void switchToSession(boolean forward) {

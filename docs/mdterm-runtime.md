@@ -71,6 +71,40 @@ public test key and are not signature-compatible with MDTerm release APKs.
 Neither building nor installing this APK migrates or deletes the former
 coexistence build's data automatically.
 
+## Terminal settings
+
+The Material settings screen edits the existing `~/.termux/termux.properties`
+file. Like upstream Termux, it uses `~/.config/termux/termux.properties` when the
+primary path has no readable regular file; a symlink at the properties file
+itself is ignored. Opening settings does not create or rewrite a configuration.
+Saving edits only the selected property, preserving comments, unknown options,
+and multiline values. Empty text removes that override and restores the
+upstream default. Invalid input or a failed save leaves the previous value in
+place and displays an error.
+
+The screen exposes fullscreen, theme, cursor, terminal margins, scrollback,
+keyboard behavior, session shortcuts, bell behavior, and the other options in
+the standard properties template. The obsolete `use-black-ui` setting is read
+through the upstream compatibility mapping; theme changes write `night-mode`.
+The existing scrolling toolbar keeps its ESC, Ctrl, Alt, /, Tab, cursor pad,
+keyboard, Home, End, PgUp, and PgDn keys. Its symbol style, label capitalization,
+and height remain configurable; `extra-keys` is preserved in the file without
+replacing this toolbar layout.
+
+After a successful edit, returning to the terminal reloads its properties and
+recreates the activity while preserving sessions. Scrollback size applies to
+new sessions. The default directory applies when no current session exists;
+otherwise new sessions inherit the current directory. Startup keyboard hiding
+applies at the next app start. Character-based input takes priority over the
+composing preview without changing the saved preview preference.
+
+Fullscreen uses the upstream `fullscreen` property. An explicit old
+`terminal_fullscreen` app preference migrates once when there is no explicit
+file value; the file wins if both exist. Terminal bells follow `bell-character`.
+The separate haptic-feedback setting controls toolbar and gesture feedback.
+Android-only preferences such as soft-keyboard enablement, composing preview,
+notifications, and diagnostics retain their existing preference storage.
+
 ## Terminal bookmarks
 
 Long-press the terminal and choose **Save as bookmark** while at a shell prompt.
