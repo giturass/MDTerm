@@ -10,7 +10,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
@@ -205,7 +204,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private TerminalBookmarkStore mBookmarkStore;
     private TerminalBookmarksListViewController mBookmarksController;
     private boolean mSavingBookmark;
-    private boolean mSessionsCollapsed;
 
 
     private static final int CONTEXT_MENU_SELECT_TEXT_ID = 100;
@@ -294,7 +292,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mBookmarksController = new TerminalBookmarksListViewController(this, mBookmarkStore,
             bookmark -> mTermuxTerminalSessionActivityClient.openBookmark(bookmark));
 
-        setSessionsCollapseToggle();
         setAdaptiveDrawerLayout();
 
         mTerminalView.setContextMenuAction(() ->
@@ -646,28 +643,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (surface != null) surface.setBackgroundColor(color);
         getWindow().getDecorView().setBackgroundColor(MaterialColors.getColor(
             this, com.google.android.material.R.attr.colorSurface, 0));
-    }
-
-    private void setSessionsCollapseToggle() {
-        SharedPreferences preferences = getSharedPreferences("terminal_sessions", Context.MODE_PRIVATE);
-        mSessionsCollapsed = preferences.getBoolean("collapsed", false);
-        findViewById(R.id.terminal_sessions_toggle).setOnClickListener(view -> {
-            mSessionsCollapsed = !mSessionsCollapsed;
-            preferences.edit().putBoolean("collapsed", mSessionsCollapsed).apply();
-            updateSessionsExpandedState();
-        });
-        updateSessionsExpandedState();
-    }
-
-    private void updateSessionsExpandedState() {
-        // Preserve the flexible list space so the new-session action stays at the bottom.
-        findViewById(R.id.terminal_sessions_list).setVisibility(
-            mSessionsCollapsed ? View.INVISIBLE : View.VISIBLE);
-        ImageButton toggle = findViewById(R.id.terminal_sessions_toggle);
-        toggle.setImageResource(mSessionsCollapsed
-            ? R.drawable.ic_bookmarks_expand : R.drawable.ic_bookmarks_collapse);
-        toggle.setContentDescription(getString(mSessionsCollapsed
-            ? R.string.action_expand_sessions : R.string.action_collapse_sessions));
     }
 
     /** Keep session navigation usable when the keyboard or split screen reduces the height. */

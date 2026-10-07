@@ -29,49 +29,45 @@ import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 31, application = Application.class, qualifiers = "zh-rCN-w320dp-h640dp")
-public class SessionCollapseTest {
+public class SessionDrawerTest {
     @Test
-    public void collapsePreservesBottomActionAndRestoresAcrossActivityInstances() {
+    public void sessionsStayVisibleWhenRefreshingAndRestoringOldPreferences() {
         TermuxActivity activity = host(true);
         View drawer = activity.findViewById(R.id.left_drawer);
         ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
-        View toggle = activity.findViewById(R.id.terminal_sessions_toggle);
         measure(drawer, 640);
         int actionTop = activity.findViewById(R.id.terminal_drawer_actions).getTop();
-        toggle.performClick();
-        measure(drawer, 640);
-        assertEquals(View.INVISIBLE, sessions.getVisibility());
-        assertEquals(actionTop, activity.findViewById(R.id.terminal_drawer_actions).getTop());
-        assertEquals(activity.getString(R.string.action_expand_sessions), toggle.getContentDescription());
+        assertFalse(activity.findViewById(R.id.terminal_sessions_header).performClick());
         ((ArrayAdapter<?>) sessions.getAdapter()).notifyDataSetChanged();
-        assertEquals(View.INVISIBLE, sessions.getVisibility());
+        measure(drawer, 640);
+        assertEquals(View.VISIBLE, sessions.getVisibility());
+        assertTrue(sessions.getChildCount() > 0);
+        assertEquals(actionTop, activity.findViewById(R.id.terminal_drawer_actions).getTop());
 
+        activity.getSharedPreferences("terminal_sessions", 0).edit().putBoolean("collapsed", true).commit();
         TermuxActivity restored = host(false);
         ListView restoredSessions = restored.findViewById(R.id.terminal_sessions_list);
-        assertEquals(View.INVISIBLE, restoredSessions.getVisibility());
-        restored.findViewById(R.id.terminal_sessions_toggle).performClick();
         measure(restored.findViewById(R.id.left_drawer), 640);
         assertEquals(View.VISIBLE, restoredSessions.getVisibility());
         assertTrue(restoredSessions.getChildCount() > 0);
-        assertFalse(restored.getSharedPreferences("terminal_sessions", 0).getBoolean("collapsed", true));
     }
 
     @Test
-    public void compactDrawerKeepsTitleAndExpandControlAvailable() {
+    public void compactDrawerKeepsTitleSessionsAndNewSessionActionAvailable() {
         TermuxActivity activity = host(true);
         ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
         View drawer = activity.findViewById(R.id.left_drawer);
-        View toggle = activity.findViewById(R.id.terminal_sessions_toggle);
-        toggle.performClick();
+        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
+        View action = activity.findViewById(R.id.terminal_drawer_actions);
         for (int height : new int[]{320, 640, 320}) {
             measure(drawer, height);
             measure(drawer, height);
             assertEquals(View.VISIBLE, activity.findViewById(R.id.terminal_sessions_header).getVisibility());
-            assertEquals(View.VISIBLE, toggle.getVisibility());
-            assertTrue(toggle.getHeight() > 0);
+            assertEquals(View.VISIBLE, sessions.getVisibility());
+            assertTrue(sessions.getChildCount() > 0);
+            assertTrue(sessions.getBottom() <= action.getTop());
+            assertTrue(action.getBottom() <= drawer.getHeight());
         }
-        toggle.performClick();
-        assertEquals(View.VISIBLE, activity.findViewById(R.id.terminal_sessions_list).getVisibility());
     }
 
     @Test
@@ -119,7 +115,6 @@ public class SessionCollapseTest {
                 return activity.getLayoutInflater().inflate(R.layout.item_terminal_sessions_list, parent, false);
             }
         });
-        ReflectionHelpers.callInstanceMethod(activity, "setSessionsCollapseToggle");
         return activity;
     }
 

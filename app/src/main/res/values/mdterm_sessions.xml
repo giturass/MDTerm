@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="action_expand_sessions">Expand session list</string>
-    <string name="action_collapse_sessions">Collapse session list</string>
-</resources>
