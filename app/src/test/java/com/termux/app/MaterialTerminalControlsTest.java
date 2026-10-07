@@ -36,6 +36,7 @@ import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
 import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
 import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
@@ -350,9 +351,16 @@ public class MaterialTerminalControlsTest {
         TermuxActivity activity = Robolectric.buildActivity(TermuxActivity.class).get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         activity.setContentView(R.layout.activity_termux);
+        // Seed the file before build() opens both private and multi-process preferences.
+        // On a missing file those opens can start overlapping disk loads on API 31,
+        // letting a late empty load overwrite the toolbar value used by this fixture.
+        assertTrue(activity.getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION, Context.MODE_PRIVATE)
+            .edit().putBoolean(TermuxPreferenceConstants.TERMUX_APP.KEY_SHOW_TERMINAL_TOOLBAR, showToolbar)
+            .commit());
         TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(activity);
         assertNotNull(preferences);
-        preferences.setShowTerminalToolbar(showToolbar);
+        assertEquals(showToolbar, preferences.shouldShowTerminalToolbar());
         ReflectionHelpers.setField(activity, "mPreferences", preferences);
         TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
         properties.loadTermuxPropertiesFromDisk();
