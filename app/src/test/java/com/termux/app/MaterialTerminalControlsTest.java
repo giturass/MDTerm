@@ -153,14 +153,13 @@ public class MaterialTerminalControlsTest {
     public void toolbarStyleReloadPreservesEveryExistingKeyAndItsPosition() {
         TermuxActivity activity = drawerActivity(true);
         setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, "default");
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS);
         TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
             activity.mTermuxTerminalViewClient, null);
         ExtraKeysInfo before = extraKeys.getExtraKeysInfo();
         assertEquals("ESC", before.getMatrix()[0][0].getDisplay());
 
         setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, "all");
-        // An existing custom layout must not replace the toolbar the user asked to retain.
-        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, "[['A','B']]");
         extraKeys.reload();
 
         ExtraKeysInfo after = extraKeys.getExtraKeysInfo();
@@ -170,6 +169,26 @@ public class MaterialTerminalControlsTest {
         for (int i = 0; i < before.getMatrix()[0].length; i++)
             assertEquals(before.getMatrix()[0][i].getKey(), after.getMatrix()[0][i].getKey());
         assertEquals("TAB", after.getMatrix()[0][4].getDisplay());
+    }
+
+    @Test
+    public void toolbarReloadUsesCustomKeysRowsAndPopups() {
+        TermuxActivity activity = drawerActivity(true);
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS,
+            "[['ESC',{'key':'TAB','popup':'HOME'}],['CTRL','KEYBOARD']]");
+        TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
+            activity.mTermuxTerminalViewClient, null);
+        ExtraKeysInfo configured = extraKeys.getExtraKeysInfo();
+        assertEquals(2, configured.getMatrix().length);
+        assertEquals(2, configured.getMatrix()[0].length);
+        assertEquals("HOME", configured.getMatrix()[0][1].getPopup().getKey());
+        assertEquals("KEYBOARD", configured.getMatrix()[1][1].getKey());
+
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, "[['A','B']]");
+        extraKeys.reload();
+        assertEquals(1, extraKeys.getExtraKeysInfo().getMatrix().length);
+        assertEquals(2, extraKeys.getExtraKeysInfo().getMatrix()[0].length);
+        assertEquals("A", extraKeys.getExtraKeysInfo().getMatrix()[0][0].getKey());
     }
 
     @Test

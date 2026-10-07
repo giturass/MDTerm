@@ -81,7 +81,7 @@
     <string name="msg_terminal_reset">Terminal reset</string>
 
 
-    <string name="action_style_terminal">Style</string>
+    <string name="action_style_terminal">Terminal font and colors</string>
     <string name="action_toggle_keep_screen_on">Keep screen on</string>
     <string name="action_open_help">Help</string>
     <string name="action_open_settings">Settings</string>

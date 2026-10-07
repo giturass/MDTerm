@@ -13,7 +13,6 @@ import androidx.preference.PreferenceScreen;
 
 import com.termux.R;
 import com.termux.app.settings.properties.TermuxPropertiesSettings;
-import com.termux.shared.termux.TermuxConstants;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,7 +43,6 @@ public final class TermuxPropertiesPreferences {
     public void reload() {
         try {
             settings.reload();
-            updateFileSummary();
             for (Preference preference : properties) {
                 Object value = settings.get(preference.getKey());
                 preference.setEnabled(true);
@@ -66,14 +64,6 @@ public final class TermuxPropertiesPreferences {
     private void addPreferences() {
         PreferenceScreen screen = fragment.getPreferenceScreen();
         if (screen == null) throw new IllegalStateException("Create the preference screen before attaching properties");
-
-        Preference information = new Preference(context);
-        information.setKey("termux_properties_information");
-        information.setOrder(-10);
-        information.setTitle(R.string.mdterm_prop_file_title);
-        information.setSelectable(false);
-        screen.addPreference(information);
-        updateFileSummary();
 
         PreferenceCategory appearance = category("appearance", R.string.mdterm_settings_appearance, 10);
         Preference fullscreen = fragment.findPreference("fullscreen");
@@ -112,11 +102,11 @@ public final class TermuxPropertiesPreferences {
             R.string.mdterm_prop_disable_session_toast_summary);
 
         PreferenceCategory toolbar = category("property_toolbar", R.string.mdterm_prop_toolbar, 40);
-        Preference toolbarInformation = new Preference(context);
-        toolbarInformation.setTitle(R.string.mdterm_prop_toolbar_keys);
-        toolbarInformation.setSummary(R.string.mdterm_prop_toolbar_keys_summary);
-        toolbarInformation.setSelectable(false);
-        toolbar.addPreference(toolbarInformation);
+        EditTextPreference toolbarKeys = edit(toolbar, "extra-keys", R.string.mdterm_prop_toolbar_keys,
+            R.string.mdterm_prop_toolbar_keys_help, "[['ESC','CTRL','ALT','TAB','CURSOR','KEYBOARD']]",
+            InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        toolbarKeys.setSummaryProvider(null);
+        toolbarKeys.setSummary(R.string.mdterm_prop_toolbar_keys_summary);
         list(toolbar, "extra-keys-style", R.string.mdterm_prop_extra_keys_style, 0,
             R.array.mdterm_prop_extra_keys_entries, "default", "arrows-only", "arrows-all", "all", "none");
         toggle(toolbar, "extra-keys-text-all-caps", R.string.mdterm_prop_extra_keys_caps,
@@ -140,7 +130,7 @@ public final class TermuxPropertiesPreferences {
         toggle(compatibility, "use-fullscreen-workaround", R.string.mdterm_prop_fullscreen_workaround,
             R.string.mdterm_prop_fullscreen_workaround_summary);
 
-        PreferenceCategory integration = category("property_integration", R.string.mdterm_prop_integration, 70);
+        PreferenceCategory integration = category("property_integration", R.string.mdterm_prop_integration, 0);
         toggle(integration, "allow-external-apps", R.string.mdterm_prop_external_apps,
             R.string.mdterm_prop_external_apps_summary);
         category("notifications", R.string.mdterm_settings_notifications, 80);
@@ -158,15 +148,6 @@ public final class TermuxPropertiesPreferences {
         }
         category.setOrder(order);
         return category;
-    }
-
-    private void updateFileSummary() {
-        Preference information = fragment.findPreference("termux_properties_information");
-        if (information == null) return;
-        String path = settings.getFile().getAbsolutePath();
-        if (path.startsWith(TermuxConstants.TERMUX_HOME_DIR_PATH + "/"))
-            path = "~" + path.substring(TermuxConstants.TERMUX_HOME_DIR_PATH.length());
-        information.setSummary(context.getString(R.string.mdterm_prop_file_summary, path));
     }
 
     private void toggle(PreferenceCategory category, String key, @StringRes int title, @StringRes int summary) {
@@ -203,8 +184,8 @@ public final class TermuxPropertiesPreferences {
             InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
     }
 
-    private void edit(PreferenceCategory category, String key, @StringRes int title, @StringRes int help,
-                      String hint, int inputType) {
+    private EditTextPreference edit(PreferenceCategory category, String key, @StringRes int title, @StringRes int help,
+                                    String hint, int inputType) {
         EditTextPreference preference = new EditTextPreference(context);
         preference.setKey(key);
         preference.setTitle(title);
@@ -218,6 +199,7 @@ public final class TermuxPropertiesPreferences {
         });
         bind(preference);
         category.addPreference(preference);
+        return preference;
     }
 
     private CharSequence summary(String value, @StringRes int help) {

@@ -65,6 +65,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     boolean mVirtualControlKeyDown, mVirtualFnKeyDown;
 
     private Runnable mShowSoftKeyboardRunnable;
+    private boolean mShowSoftKeyboardPending;
 
     private boolean mShowSoftKeyboardIgnoreOnce;
     private boolean mShowSoftKeyboardWithDelayOnce;
@@ -113,7 +114,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      */
     public void onResume() {
         // Show the soft keyboard if required
-        setSoftKeyboardState(true, mActivity.isActivityRecreated());
+        setSoftKeyboardState(true, false);
 
         mTerminalCursorBlinkerStateAlreadySet = false;
 
@@ -131,8 +132,18 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * Should be called when mActivity.onStop() is called
      */
     public void onStop() {
+        cancelPendingSoftKeyboardShow();
         // Stop terminal cursor blinking if enabled
         setTerminalCursorBlinkerState(false);
+    }
+
+    public void onWindowFocusChanged(boolean hasFocus) {
+        // onResume can run before the window is ready to accept an IME request.
+        // Keep that request until window focus arrives, including after activity recreation.
+        if (hasFocus && mShowSoftKeyboardPending)
+            requestShowSoftKeyboard(0);
+        else if (!hasFocus)
+            mActivity.getTerminalView().removeCallbacks(getShowSoftKeyboardRunnable());
     }
 
     /**
@@ -550,6 +561,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * drawer or extra keys, or with ctrl+alt+k hardware keyboard shortcut.
      */
     public void onToggleSoftKeyboardRequest() {
+        cancelPendingSoftKeyboardShow();
         // If soft keyboard toggle behaviour is enable/disabled
         if (mActivity.getProperties().shouldEnableDisableSoftKeyboardOnToggle()) {
             // If soft keyboard is visible
@@ -567,7 +579,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 KeyboardUtils.clearDisableSoftKeyboardFlags(mActivity);
                 if(mShowSoftKeyboardWithDelayOnce) {
                     mShowSoftKeyboardWithDelayOnce = false;
-                    mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), 500);
+                    requestShowSoftKeyboard(500);
                     mActivity.getTerminalView().requestFocus();
                 } else
                     KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
@@ -588,6 +600,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     public void setSoftKeyboardState(boolean isStartup, boolean isReloadTermuxProperties) {
+        cancelPendingSoftKeyboardShow();
         boolean noShowKeyboard = false;
 
         // Requesting terminal view focus is necessary regardless of if soft keyboard is to be
@@ -644,7 +657,10 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                     Logger.logVerbose(LOG_TAG, "Hiding soft keyboard on focus change");
                 }
 
-                KeyboardUtils.setSoftKeyboardVisibility(getShowSoftKeyboardRunnable(), mActivity, mActivity.getTerminalView(), hasFocus);
+                if (hasFocus)
+                    requestShowSoftKeyboard(500);
+                else
+                    onHideSoftKeyboardRequest();
             }
         });
 
@@ -658,20 +674,43 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             // will also show keyboard even if it was closed before opening url. #2111
             Logger.logVerbose(LOG_TAG, "Requesting TerminalView focus and showing soft keyboard");
             mActivity.getTerminalView().requestFocus();
-            mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), 300);
+            requestShowSoftKeyboard(300);
+        } else if (noShowKeyboard) {
+            cancelPendingSoftKeyboardShow();
         }
     }
 
     public void onHideSoftKeyboardRequest() {
+        cancelPendingSoftKeyboardShow();
         KeyboardUtils.setSoftKeyboardVisibility(getShowSoftKeyboardRunnable(), mActivity,
             mActivity.getTerminalView(), false);
+    }
+
+    private void requestShowSoftKeyboard(long delayMillis) {
+        mShowSoftKeyboardPending = true;
+        mActivity.getTerminalView().removeCallbacks(getShowSoftKeyboardRunnable());
+        mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), delayMillis);
+    }
+
+    private void cancelPendingSoftKeyboardShow() {
+        mShowSoftKeyboardPending = false;
+        if (mShowSoftKeyboardRunnable != null)
+            mActivity.getTerminalView().removeCallbacks(mShowSoftKeyboardRunnable);
     }
 
     private Runnable getShowSoftKeyboardRunnable() {
         if (mShowSoftKeyboardRunnable == null) {
             mShowSoftKeyboardRunnable = () -> {
-                if (!mActivity.getDrawer().isDrawerVisible(Gravity.START))
-                    KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
+                if (!mShowSoftKeyboardPending) return;
+                if (KeyboardUtils.areDisableSoftKeyboardFlagsSet(mActivity)
+                    || mActivity.getDrawer().isDrawerVisible(Gravity.START)) {
+                    mShowSoftKeyboardPending = false;
+                    return;
+                }
+                View terminalView = mActivity.getTerminalView();
+                if (!terminalView.hasFocus() || !terminalView.hasWindowFocus()) return;
+                mShowSoftKeyboardPending = false;
+                KeyboardUtils.showSoftKeyboard(mActivity, terminalView);
             };
         }
         return mShowSoftKeyboardRunnable;

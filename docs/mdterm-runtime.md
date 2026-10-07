@@ -86,10 +86,12 @@ The screen exposes fullscreen, theme, cursor, terminal margins, scrollback,
 keyboard behavior, session shortcuts, bell behavior, and the other options in
 the standard properties template. The obsolete `use-black-ui` setting is read
 through the upstream compatibility mapping; theme changes write `night-mode`.
-The existing scrolling toolbar keeps its ESC, Ctrl, Alt, /, Tab, cursor pad,
-keyboard, Home, End, PgUp, and PgDn keys. Its symbol style, label capitalization,
-and height remain configurable; `extra-keys` is preserved in the file without
-replacing this toolbar layout.
+The default scrolling toolbar contains ESC, Ctrl, Alt, /, Tab, cursor pad,
+keyboard, Home, End, PgUp, and PgDn. Toolbar keys can be edited in settings,
+including their order, rows, macros, and swipe-up keys; this saves `extra-keys`
+and applies the layout when returning to the terminal. Clearing the editor
+restores the default layout. Symbol style, label capitalization, and height
+remain configurable.
 
 After a successful edit, returning to the terminal reloads its properties and
 recreates the activity while preserving sessions. Scrollback size applies to

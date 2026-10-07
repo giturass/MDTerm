@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="mdterm_prop_file_title">终端配置</string>
-    <string name="mdterm_prop_file_summary">终端选项保存到 %1$s，返回终端后生效。需要新建会话或重启应用的选项会单独注明，也可以直接编辑此文件。</string>
     <string name="mdterm_prop_haptic_title">触觉反馈</string>
     <string name="mdterm_prop_haptic_summary">工具栏按键与终端手势的振动反馈</string>
     <string name="mdterm_prop_night_mode">应用主题</string>
@@ -29,7 +27,9 @@
     <string name="mdterm_prop_disable_session_toast_summary">切换终端会话时不显示短暂提示</string>
     <string name="mdterm_prop_toolbar">终端工具栏</string>
     <string name="mdterm_prop_toolbar_keys">工具栏键位</string>
-    <string name="mdterm_prop_toolbar_keys_summary">保留当前 ESC、Ctrl、Alt、Tab、方向键及导航键布局</string>
+    <string name="mdterm_prop_toolbar_keys_summary">自定义工具栏按键、排列顺序与行数</string>
+    <string name="mdterm_prop_toolbar_keys_help">编辑按行排列的按键列表。每组内层方括号代表一行，按键名称用逗号分隔；返回终端后生效。</string>
+    <string name="mdterm_prop_toolbar_keys_invalid">请输入有效的按键行列表，每个按键应为名称或按键配置对象。</string>
     <string name="mdterm_prop_extra_keys_style">按键符号样式</string>
     <string name="mdterm_prop_extra_keys_caps">按键标签大写</string>
     <string name="mdterm_prop_extra_keys_caps_summary">将工具栏按键上的文字转为大写</string>
