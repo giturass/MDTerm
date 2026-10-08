@@ -30,7 +30,14 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -63,6 +70,49 @@ import static com.termux.shared.termux.TermuxConstants.TERMUX_STAGING_PREFIX_DIR
 final class TermuxInstaller {
 
     private static final String LOG_TAG = "TermuxInstaller";
+
+    /** Supply the bundled login message for both new and existing installations. */
+    static void setupDefaultMotd(Context context) {
+        File motdFile = new File(TermuxConstants.TERMUX_DATA_HOME_DIR, "motd.sh");
+        // Preserve user configuration, including empty files and dangling symlinks.
+        if (Files.exists(motdFile.toPath(), LinkOption.NOFOLLOW_LINKS)) return;
+
+        try (InputStream input = context.getAssets().open("motd.sh")) {
+            installDefaultMotd(input, motdFile);
+        } catch (IOException e) {
+            // A missing welcome message must not prevent starting a shell.
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to install the default MOTD", e);
+        }
+    }
+
+    static void installDefaultMotd(InputStream input, File motdFile) throws IOException {
+        Files.createDirectories(motdFile.getParentFile().toPath());
+        OutputStream output;
+        try {
+            output = Files.newOutputStream(motdFile.toPath(),
+                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        } catch (FileAlreadyExistsException e) {
+            // Another caller may have created a custom MOTD since the initial check.
+            return;
+        }
+
+        try (OutputStream stream = output) {
+            byte[] buffer = new byte[4096];
+            int readBytes;
+            while ((readBytes = input.read(buffer)) != -1)
+                stream.write(buffer, 0, readBytes);
+            if (!motdFile.setExecutable(true, true))
+                throw new IOException("Failed to make the default MOTD executable");
+        } catch (IOException e) {
+            // Only remove a file created by this call, so a later launch can retry.
+            try {
+                Files.deleteIfExists(motdFile.toPath());
+            } catch (IOException cleanupError) {
+                e.addSuppressed(cleanupError);
+            }
+            throw e;
+        }
+    }
 
     /** Performs bootstrap setup if necessary. */
     static void setupBootstrapIfNeeded(final Activity activity, final Runnable whenDone) {

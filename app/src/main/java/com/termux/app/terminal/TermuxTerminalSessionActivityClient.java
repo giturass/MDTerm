@@ -566,7 +566,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             mPendingColorReload |= !Arrays.equals(previousColors, TerminalColors.COLOR_SCHEME.mDefaultColors);
             applyPendingColorChanges();
 
-            final Typeface newTypeface = (fontFile.exists() && fontFile.length() > 0) ? Typeface.createFromFile(fontFile) : Typeface.MONOSPACE;
+            final Typeface newTypeface = (fontFile.exists() && fontFile.length() > 0)
+                ? Typeface.createFromFile(fontFile)
+                : mActivity.getResources().getFont(R.font.terminal_default);
             mActivity.getTerminalView().setTypeface(newTypeface);
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Error in checkForFontAndColors()", e);

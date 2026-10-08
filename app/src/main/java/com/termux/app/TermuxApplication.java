@@ -65,6 +65,8 @@ public class TermuxApplication extends Application {
                 return;
             }
 
+            TermuxInstaller.setupDefaultMotd(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {
