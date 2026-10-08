@@ -54,6 +54,25 @@ public class TerminalCursorGestureTest {
     }
 
     @Test
+    public void disablingGesturesStopsBothCursorAxesAndKeepsHistoryScrolling() {
+        TerminalView view = terminal(false, true);
+        swipe(view, 80, 0);
+        swipe(view, -80, 0);
+        assertEquals(0, takeOutput(view).length);
+
+        StringBuilder history = new StringBuilder();
+        for (int i = 0; i < 40; i++) history.append("line\r\n");
+        byte[] lines = history.toString().getBytes(StandardCharsets.UTF_8);
+        view.mEmulator.append(lines, lines.length);
+        long time = SystemClock.uptimeMillis();
+        touch(view, time, time, MotionEvent.ACTION_DOWN, 150, 150);
+        touch(view, time, time + 30, MotionEvent.ACTION_MOVE, 150, 230);
+        assertEquals(0, takeOutput(view).length);
+        assertTrue(view.mTopRow < 0);
+        touch(view, time, time + 60, MotionEvent.ACTION_CANCEL, 150, 230);
+    }
+
+    @Test
     public void cursorModeVerticalSwipesSendUnmodifiedArrowsAndDoNotFling() {
         TerminalView view = terminal(true);
         swipe(view, 0, -80);
@@ -124,10 +143,14 @@ public class TerminalCursorGestureTest {
     }
 
     private static TerminalView terminal(boolean cursorMode) {
+        return terminal(true, cursorMode);
+    }
+
+    private static TerminalView terminal(boolean gesturesEnabled, boolean cursorMode) {
         TerminalView view = new TerminalView(RuntimeEnvironment.getApplication(), null);
         view.setTerminalViewClient(new TermuxTerminalViewClientBase() {
-            @Override public boolean shouldUseHorizontalCursorGestures() { return true; }
-            @Override public boolean shouldUseVerticalCursorGestures() { return cursorMode; }
+            @Override public boolean shouldUseHorizontalCursorGestures() { return gesturesEnabled; }
+            @Override public boolean shouldUseVerticalCursorGestures() { return gesturesEnabled && cursorMode; }
             @Override public boolean readControlKey() {
                 throw new AssertionError("Cursor gestures must not consume CTRL");
             }

@@ -295,13 +295,16 @@ public final class TerminalView extends View {
 
             @Override
             public boolean onDoubleTap(MotionEvent event) {
-                // Do not treat is as a single confirmed tap - it may be followed by zoom.
-                return false;
+                if (mEmulator == null || mMultiTouchGesture || mGestureRecognizer.isInProgress()
+                    || event.isFromSource(InputDevice.SOURCE_MOUSE) || mEmulator.isMouseTrackingActive())
+                    return false;
+                if (!isSelectingText()) startTextSelectionMode(event);
+                return true;
             }
 
             @Override
             public void onLongPress(MotionEvent event) {
-                if (mGestureRecognizer.isInProgress()) return;
+                if (mEmulator == null || mMultiTouchGesture || mGestureRecognizer.isInProgress()) return;
                 if (mClient.onLongPress(event)) return;
                 if (!isSelectingText()) {
                     performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
@@ -1594,7 +1597,7 @@ public final class TerminalView extends View {
     }
 
     private boolean hideTextSelectionCursors() {
-        return getTextSelectionCursorController().hide();
+        return mTextSelectionCursorController != null && mTextSelectionCursorController.hide();
     }
 
     private void renderTextSelection() {
@@ -1638,10 +1641,11 @@ public final class TerminalView extends View {
     }
 
     public void startTextSelectionMode(MotionEvent event) {
-        if (!requestFocus()) {
+        if (mEmulator == null || mRenderer == null || !requestFocus()) {
             return;
         }
 
+        mScroller.abortAnimation();
         showTextSelectionCursors(event);
         mClient.copyModeChanged(isSelectingText());
 

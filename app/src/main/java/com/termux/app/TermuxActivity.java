@@ -358,6 +358,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
+        if (mExtraKeysView != null && mTermuxTerminalExtraKeys != null
+            && mTermuxTerminalExtraKeys.reloadIfCursorGesturesChanged()) {
+            mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
+            setTerminalToolbarHeight();
+        }
+
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onResume();
 

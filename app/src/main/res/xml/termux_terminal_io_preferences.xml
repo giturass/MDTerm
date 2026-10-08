@@ -22,6 +22,13 @@
             app:summaryOn="@string/termux_ime_composing_enabled_on"
             app:title="@string/termux_ime_composing_enabled_title" />
 
+        <com.termux.app.fragments.settings.MaterialSwitchPreference
+            app:key="cursor_gestures_enabled"
+            app:defaultValue="true"
+            app:summaryOff="@string/mdterm_cursor_gestures_off"
+            app:summaryOn="@string/mdterm_cursor_gestures_on"
+            app:title="@string/mdterm_cursor_gestures_title" />
+
     </PreferenceCategory>
 
 </PreferenceScreen>

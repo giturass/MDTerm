@@ -7,4 +7,7 @@
     <string name="mdterm_settings_diagnostics">Diagnostics</string>
     <string name="mdterm_settings_extensions">Extensions</string>
     <string name="mdterm_settings_back">Go back</string>
+    <string name="mdterm_cursor_gestures_title">Cursor gestures</string>
+    <string name="mdterm_cursor_gestures_on">Use swipes to move the cursor. (Enabled by default)</string>
+    <string name="mdterm_cursor_gestures_off">Use the Up, Down, Left, and Right keys on the toolbar to move the cursor.</string>
 </resources>

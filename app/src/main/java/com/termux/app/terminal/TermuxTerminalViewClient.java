@@ -236,12 +236,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     @Override
     public boolean shouldUseHorizontalCursorGestures() {
-        return true;
+        return mActivity.getPreferences().isCursorGesturesEnabled();
     }
 
     @Override
     public boolean shouldUseVerticalCursorGestures() {
-        return mActivity.getExtraKeysView() != null && Boolean.TRUE.equals(
+        return mActivity.getPreferences().isCursorGesturesEnabled()
+            && mActivity.getExtraKeysView() != null && Boolean.TRUE.equals(
             mActivity.getExtraKeysView().readSpecialButton(SpecialButton.CURSOR, false));
     }
 
@@ -371,10 +372,8 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     @Override
     public boolean onLongPress(MotionEvent event) {
-        if (mActivity.getTerminalView().isSelectingText()) return false;
-        boolean shown = mActivity.showTerminalActions(event.getX(), event.getY());
-        if (shown) mActivity.getTerminalView().performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
-        return shown;
+        // Let TerminalView select the touched text and show its copy/paste toolbar.
+        return false;
     }
 
 

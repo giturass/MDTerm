@@ -1,7 +1,7 @@
 package com.termux.shared.termux.settings.preferences;
 
 /*
- * Version: v0.16.0
+ * Version: v0.18.0
  *
  * Changelog
  *
@@ -73,6 +73,10 @@ package com.termux.shared.termux.settings.preferences;
  * - 0.17.0 (2026-08-06)
  *      - Added following to `TERMUX_APP`:
  *          `KEY_IME_COMPOSING_ENABLED` and `DEFAULT_VALUE_KEY_IME_COMPOSING_ENABLED`.
+ *
+ * - 0.18.0 (2026-10-08)
+ *      - Added following to `TERMUX_APP`:
+ *          `KEY_CURSOR_GESTURES_ENABLED` and `DEFAULT_VALUE_KEY_CURSOR_GESTURES_ENABLED`.
  */
 
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -129,6 +133,13 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_IME_COMPOSING_ENABLED = "ime_composing_enabled";
         public static final boolean DEFAULT_VALUE_KEY_IME_COMPOSING_ENABLED = false;
+
+        /**
+         * Defines the key for whether swipes move the terminal cursor. When disabled,
+         * the terminal toolbar provides all four arrow keys instead.
+         */
+        public static final String KEY_CURSOR_GESTURES_ENABLED = "cursor_gestures_enabled";
+        public static final boolean DEFAULT_VALUE_KEY_CURSOR_GESTURES_ENABLED = true;
 
 
         /**
