@@ -24,6 +24,7 @@ public final class TermuxSettingsDataStore extends PreferenceDataStore {
             case "soft_keyboard_enabled": return preferences.isSoftKeyboardEnabled();
             case "soft_keyboard_enabled_only_if_no_hardware": return preferences.isSoftKeyboardEnabledOnlyIfNoHardware();
             case "ime_composing_enabled": return preferences.isImeComposingEnabled();
+            case "cursor_gestures_enabled": return preferences.isCursorGesturesEnabled();
             case "terminal_view_key_logging_enabled": return preferences.isTerminalViewKeyLoggingEnabled();
             case "plugin_error_notifications_enabled": return preferences.arePluginErrorNotificationsEnabled(false);
             case "crash_report_notifications_enabled": return preferences.areCrashReportNotificationsEnabled(false);
@@ -40,6 +41,7 @@ public final class TermuxSettingsDataStore extends PreferenceDataStore {
             case "soft_keyboard_enabled": preferences.setSoftKeyboardEnabled(value); break;
             case "soft_keyboard_enabled_only_if_no_hardware": preferences.setSoftKeyboardEnabledOnlyIfNoHardware(value); break;
             case "ime_composing_enabled": preferences.setImeComposingEnabled(value); break;
+            case "cursor_gestures_enabled": preferences.setCursorGesturesEnabled(value); break;
             case "terminal_view_key_logging_enabled": preferences.setTerminalViewKeyLoggingEnabled(value); break;
             case "plugin_error_notifications_enabled": preferences.setPluginErrorNotificationsEnabled(value); break;
             case "crash_report_notifications_enabled": preferences.setCrashReportNotificationsEnabled(value); break;

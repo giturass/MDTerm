@@ -38,10 +38,14 @@ import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
 import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeyButton;
 import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.termux.extrakeys.SpecialButton;
 import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;
 import org.junit.Rule;
@@ -62,6 +66,8 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -190,6 +196,164 @@ public class MaterialTerminalControlsTest {
         assertEquals(1, extraKeys.getExtraKeysInfo().getMatrix().length);
         assertEquals(2, extraKeys.getExtraKeysInfo().getMatrix()[0].length);
         assertEquals("A", extraKeys.getExtraKeysInfo().getMatrix()[0][0].getKey());
+    }
+
+    @Test
+    @Config(shadows = RecordingRecreationActivity.class)
+    public void returningFromSettingsSwitchesCursorControlsWithoutRecreation() {
+        TermuxActivity activity = drawerActivity(true);
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS);
+        ReflectionHelpers.callInstanceMethod(activity, "setTerminalToolbarView");
+        ReflectionHelpers.setField(activity, "mPropertiesRevision", TermuxPropertiesSettings.getRevision());
+        TermuxTerminalViewClient client = activity.getTermuxTerminalViewClient();
+        activity.mTermuxTerminalViewClient = null;
+        FragmentController fragments = ReflectionHelpers.getField(activity, "mFragments");
+        fragments.attachHost(null);
+
+        assertTrue(activity.getPreferences().isCursorGesturesEnabled());
+        assertTrue(client.shouldUseHorizontalCursorGestures());
+        assertFalse(client.shouldUseVerticalCursorGestures());
+        List<String> original = toolbarKeyNames(activity.getTermuxTerminalExtraKeys().getExtraKeysInfo());
+        MaterialButton cursor = toolbarButton(activity, "CURSOR");
+        cursor.performClick();
+        toolbarButton(activity, "CTRL").performClick();
+        activity.onResume();
+        assertSame(cursor, toolbarButton(activity, "CURSOR"));
+        assertTrue(client.shouldUseVerticalCursorGestures());
+
+        activity.getPreferences().setCursorGesturesEnabled(false);
+        assertFalse(client.shouldUseHorizontalCursorGestures());
+        assertFalse(client.shouldUseVerticalCursorGestures());
+        activity.onResume();
+        ExtraKeysInfo traditional = activity.getTermuxTerminalExtraKeys().getExtraKeysInfo();
+        assertTraditionalCursorKeys(traditional);
+        assertEquals(14, traditional.getMatrix()[0].length);
+        assertTrue(toolbarButton(activity, "CTRL").isChecked());
+        assertEquals(View.VISIBLE, activity.getTerminalToolbar().getVisibility());
+        activity.onResume();
+        assertSame(traditional, activity.getTermuxTerminalExtraKeys().getExtraKeysInfo());
+
+        activity.toggleTerminalToolbar();
+        activity.getPreferences().setCursorGesturesEnabled(true);
+        activity.onResume();
+        assertEquals(original, toolbarKeyNames(activity.getTermuxTerminalExtraKeys().getExtraKeysInfo()));
+        assertTrue(client.shouldUseHorizontalCursorGestures());
+        assertTrue(client.shouldUseVerticalCursorGestures());
+        assertTrue(toolbarButton(activity, "CURSOR").isChecked());
+        assertFalse(activity.getPreferences().shouldShowTerminalToolbar());
+        assertEquals(View.GONE, activity.getTerminalToolbar().getVisibility());
+        RecordingRecreationActivity shadow = Shadow.extract(activity);
+        assertEquals(0, shadow.recreations);
+    }
+
+    @Test
+    public void traditionalCursorControlsPreserveCustomRowsMacrosPopupsAndStyle() throws Exception {
+        TermuxActivity activity = drawerActivity(true);
+        String layout = "[['LEFT',{'key':'CTRL','popup':{'macro':'CTRL c','display':'Copy'}},"
+            + "{'key':'CURSOR','popup':'PGUP'}],[{'macro':'echo CURSOR','display':'literal'},"
+            + "{'key':'RIGHT','display':'Right','popup':{'macro':'CURSOR'}}]]";
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, layout);
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, "all");
+        activity.getPreferences().setCursorGesturesEnabled(false);
+        TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
+            activity.mTermuxTerminalViewClient, null);
+        ExtraKeysInfo configured = new ExtraKeysInfo(layout, "all", ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+        ExtraKeyButton[][] traditional = extraKeys.getExtraKeysInfo().getMatrix();
+        assertTraditionalCursorKeys(extraKeys.getExtraKeysInfo());
+        assertEquals(2, traditional.length);
+        assertEquals(4, traditional[0].length);
+        assertEquals(configured.getMatrix()[0][1].getDisplay(), traditional[0][1].getDisplay());
+        assertEquals("CTRL c", traditional[0][1].getPopup().getKey());
+        assertTrue(traditional[0][1].getPopup().isMacro());
+        assertEquals("PGUP", traditional[0][2].getPopup().getKey());
+        assertEquals("echo CURSOR", traditional[1][0].getKey());
+        assertTrue(traditional[1][0].isMacro());
+        assertEquals("literal", traditional[1][0].getDisplay());
+        assertEquals("Right", traditional[1][1].getDisplay());
+        assertNull(traditional[1][1].getPopup());
+        assertEquals(layout, activity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS, true));
+
+        activity.getPreferences().setCursorGesturesEnabled(true);
+        assertTrue(extraKeys.reloadIfCursorGesturesChanged());
+        ExtraKeyButton[][] restored = extraKeys.getExtraKeysInfo().getMatrix();
+        assertEquals(3, restored[0].length);
+        assertEquals("CURSOR", restored[0][2].getKey());
+        assertEquals("PGUP", restored[0][2].getPopup().getKey());
+        assertEquals("CURSOR", restored[1][1].getPopup().getKey());
+        assertTrue(restored[1][1].getPopup().isMacro());
+    }
+
+    @Test
+    public void traditionalCursorControlsFillEmptyOrIncompleteCustomLayouts() {
+        TermuxActivity activity = drawerActivity(true);
+        activity.getPreferences().setCursorGesturesEnabled(false);
+        for (String layout : new String[]{"[]", "[[]]", "[['A']]", "[[{'macro':'CURSOR'}]]",
+            "[['UP','DOWN'],['LEFT','CURSOR','RIGHT']]"}) {
+            setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, layout);
+            TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
+                activity.mTermuxTerminalViewClient, null);
+            assertTraditionalCursorKeys(extraKeys.getExtraKeysInfo());
+            assertTrue(extraKeys.getExtraKeysInfo().getMatrix().length > 0);
+            assertEquals(layout, activity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS, true));
+        }
+    }
+
+    @Test
+    public void traditionalCursorControlsKeepAlternateActionWhenArrowsAlreadyExist() {
+        TermuxActivity activity = drawerActivity(true);
+        activity.getPreferences().setCursorGesturesEnabled(false);
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS,
+            "[['LEFT','DOWN','UP','RIGHT',{'key':'CURSOR','popup':{'macro':'CTRL c','display':'Copy'}}]]");
+        TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
+            activity.mTermuxTerminalViewClient, null);
+        assertTraditionalCursorKeys(extraKeys.getExtraKeysInfo());
+        ExtraKeyButton alternate = extraKeys.getExtraKeysInfo().getMatrix()[0][4];
+        assertEquals("CTRL c", alternate.getKey());
+        assertEquals("Copy", alternate.getDisplay());
+        assertTrue(alternate.isMacro());
+    }
+
+    @Test
+    public void invalidToolbarConfigurationFallsBackToTheSelectedCursorMode() {
+        TermuxActivity activity = drawerActivity(true);
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, "[[");
+        activity.getPreferences().setCursorGesturesEnabled(false);
+        TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
+            activity.mTermuxTerminalViewClient, null);
+        assertTraditionalCursorKeys(extraKeys.getExtraKeysInfo());
+        assertEquals(14, extraKeys.getExtraKeysInfo().getMatrix()[0].length);
+        activity.getPreferences().setCursorGesturesEnabled(true);
+        extraKeys.reload();
+        assertEquals(11, extraKeys.getExtraKeysInfo().getMatrix()[0].length);
+        assertEquals("CURSOR", extraKeys.getExtraKeysInfo().getMatrix()[0][5].getKey());
+    }
+
+    @Test
+    public void traditionalToolbarArrowsSendNormalApplicationAndModifiedCursorSequences() {
+        TermuxActivity activity = drawerActivity(true);
+        activity.getPreferences().setCursorGesturesEnabled(false);
+        setProperty(activity, TermuxPropertyConstants.KEY_EXTRA_KEYS, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS);
+        ReflectionHelpers.callInstanceMethod(activity, "setTerminalToolbarView");
+        TermuxTerminalSessionClientBase client = new TermuxTerminalSessionClientBase();
+        TerminalSession session = new TerminalSession("", "", new String[0], new String[0], 100, client);
+        TerminalEmulator emulator = new TerminalEmulator(session, 80, 24, 10, 20, 100, client);
+        ReflectionHelpers.setField(session, "mEmulator", emulator);
+        ReflectionHelpers.setField(session, "mShellPid", 1);
+        ReflectionHelpers.setField(activity.getTerminalView(), "mTermSession", session);
+        activity.getTerminalView().mEmulator = emulator;
+
+        for (String prefix : new String[]{"\u001b[", "\u001bO"}) {
+            if (prefix.equals("\u001bO")) {
+                byte[] mode = "\u001b[?1h".getBytes(StandardCharsets.UTF_8);
+                emulator.append(mode, mode.length);
+            }
+            for (String key : Arrays.asList("UP", "DOWN", "LEFT", "RIGHT")) toolbarButton(activity, key).performClick();
+            assertEquals(prefix + "A" + prefix + "B" + prefix + "D" + prefix + "C", takeTerminalOutput(session));
+        }
+        toolbarButton(activity, "CTRL").performClick();
+        toolbarButton(activity, "LEFT").performClick();
+        assertEquals("\u001b[1;5D", takeTerminalOutput(session));
+        assertFalse(toolbarButton(activity, "CTRL").isChecked());
     }
 
     @Test
@@ -378,6 +542,40 @@ public class MaterialTerminalControlsTest {
         Object shared = ReflectionHelpers.getField(activity.getProperties(), "mSharedProperties");
         java.util.Map<String, Object> values = ReflectionHelpers.getField(shared, "mMap");
         values.put(key, TermuxSharedProperties.getInternalTermuxPropertyValueFromValue(activity, key, value));
+    }
+
+    private static List<String> toolbarKeyNames(ExtraKeysInfo info) {
+        List<String> names = new ArrayList<>();
+        for (ExtraKeyButton[] row : info.getMatrix()) {
+            for (ExtraKeyButton button : row) names.add(button.getKey());
+        }
+        return names;
+    }
+
+    private static void assertTraditionalCursorKeys(ExtraKeysInfo info) {
+        List<String> keys = toolbarKeyNames(info);
+        assertFalse(keys.contains("CURSOR"));
+        for (String arrow : Arrays.asList("LEFT", "DOWN", "UP", "RIGHT"))
+            assertEquals(arrow, 1, Collections.frequency(keys, arrow));
+        for (ExtraKeyButton[] row : info.getMatrix()) {
+            for (ExtraKeyButton button : row) {
+                if (button.getPopup() != null) assertNotEquals("CURSOR", button.getPopup().getKey());
+            }
+        }
+    }
+
+    private static MaterialButton toolbarButton(TermuxActivity activity, String key) {
+        int index = toolbarKeyNames(activity.getTermuxTerminalExtraKeys().getExtraKeysInfo()).indexOf(key);
+        assertTrue("Missing toolbar key " + key, index >= 0);
+        return (MaterialButton) activity.getExtraKeysView().getChildAt(index);
+    }
+
+    private static String takeTerminalOutput(TerminalSession session) {
+        Object queue = ReflectionHelpers.getField(session, "mTerminalToProcessIOQueue");
+        byte[] bytes = new byte[4096];
+        int count = ReflectionHelpers.callInstanceMethod(queue, "read",
+            ClassParameter.from(byte[].class, bytes), ClassParameter.from(boolean.class, false));
+        return new String(bytes, 0, count, StandardCharsets.UTF_8);
     }
 
     @Test

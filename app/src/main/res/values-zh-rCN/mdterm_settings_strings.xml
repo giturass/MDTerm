@@ -7,4 +7,7 @@
     <string name="mdterm_settings_diagnostics">诊断</string>
     <string name="mdterm_settings_extensions">扩展</string>
     <string name="mdterm_settings_back">返回</string>
+    <string name="mdterm_cursor_gestures_title">手势控制光标</string>
+    <string name="mdterm_cursor_gestures_on">通过滑动手势移动光标。（默认启用）</string>
+    <string name="mdterm_cursor_gestures_off">使用工具栏的上、下、左、右方向键移动光标。</string>
 </resources>

@@ -17,11 +17,13 @@ import com.termux.app.activities.SettingsActivity;
 import com.termux.app.fragments.settings.MaterialListPreferenceDialog;
 import com.termux.app.fragments.settings.MaterialSwitchPreference;
 import com.termux.app.fragments.settings.TermuxSettingsDataStore;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 
@@ -54,6 +56,7 @@ public class MaterialSettingsTest {
             assertEquals("property_toolbar", fragment.findPreference("terminal_vibration").getParent().getKey());
             assertEquals("property_toolbar", fragment.findPreference("soft-keyboard-toggle-behaviour").getParent().getKey());
             assertEquals("notifications", fragment.findPreference("bell-character").getParent().getKey());
+            assertEquals("input", fragment.findPreference("cursor_gestures_enabled").getParent().getKey());
 
             String homeTitle = title(activity);
             for (String category : categories) {
@@ -77,7 +80,7 @@ public class MaterialSettingsTest {
             String[][] groups = {
                 {"property_toolbar", "terminal_vibration"},
                 {"property_compatibility", "terminal_margin_adjustment"},
-                {"input", "soft_keyboard_enabled", "soft_keyboard_enabled_only_if_no_hardware", "ime_composing_enabled"},
+                {"input", "soft_keyboard_enabled", "soft_keyboard_enabled_only_if_no_hardware", "ime_composing_enabled", "cursor_gestures_enabled"},
                 {"diagnostics", "terminal_view_key_logging_enabled"},
                 {"notifications", "plugin_error_notifications_enabled", "crash_report_notifications_enabled"}
             };
@@ -115,6 +118,29 @@ public class MaterialSettingsTest {
                 activity.onBackPressed();
                 root(activity);
             }
+        }
+    }
+
+    @Test
+    public void cursorGesturesDefaultToEnabledBeforeOpeningSettings() {
+        Application application = RuntimeEnvironment.getApplication();
+        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(application);
+        assertNotNull(preferences);
+        assertTrue(preferences.isCursorGesturesEnabled());
+        assertTrue(new TermuxSettingsDataStore(application).getBoolean("cursor_gestures_enabled", false));
+
+        preferences.setCursorGesturesEnabled(false);
+        try (ActivityController<SettingsActivity> controller = Robolectric.buildActivity(SettingsActivity.class).setup()) {
+            SettingsActivity activity = controller.get();
+            SettingsActivity.RootPreferencesFragment fragment = open(activity, "input");
+            MaterialSwitchPreference preference = fragment.findPreference("cursor_gestures_enabled");
+            assertFalse(preference.isChecked());
+            assertEquals(activity.getString(R.string.mdterm_cursor_gestures_off),
+                ((TextView) row(fragment, preference).findViewById(android.R.id.summary)).getText().toString());
+            assertTrue(row(fragment, preference).itemView.performClick());
+            assertTrue(preferences.isCursorGesturesEnabled());
+            assertEquals(activity.getString(R.string.mdterm_cursor_gestures_on),
+                ((TextView) row(fragment, preference).findViewById(android.R.id.summary)).getText().toString());
         }
     }
 

@@ -24,7 +24,6 @@ public class TextSelectionCursorController implements CursorController {
     private final TextSelectionHandleView mStartHandle, mEndHandle;
     private String mStoredSelectedText;
     private boolean mIsSelectingText = false;
-    private long mShowStartTime = System.currentTimeMillis();
 
     private final int mHandleHeight;
     private int mSelX1 = -1, mSelX2 = -1, mSelY1 = -1, mSelY2 = -1;
@@ -49,7 +48,6 @@ public class TextSelectionCursorController implements CursorController {
         mEndHandle.positionAtCursor(mSelX2 + 1, mSelY2, true);
 
         setActionModeCallBacks();
-        mShowStartTime = System.currentTimeMillis();
         mIsSelectingText = true;
     }
 
@@ -57,23 +55,15 @@ public class TextSelectionCursorController implements CursorController {
     public boolean hide() {
         if (!isActive()) return false;
 
-        // prevent hide calls right after a show call, like long pressing the down key
-        // 300ms seems long enough that it wouldn't cause hide problems if action button
-        // is quickly clicked after the show, otherwise decrease it
-        if (System.currentTimeMillis() - mShowStartTime < 300) {
-            return false;
-        }
-
+        // Explicit copy, paste and dismissal must also work immediately after selecting.
+        mIsSelectingText = false;
         mStartHandle.hide();
         mEndHandle.hide();
 
-        if (mActionMode != null) {
-            // This will hide the TextSelectionCursorController
-            mActionMode.finish();
-        }
-
         mSelX1 = mSelY1 = mSelX2 = mSelY2 = -1;
-        mIsSelectingText = false;
+        ActionMode actionMode = mActionMode;
+        mActionMode = null;
+        if (actionMode != null) actionMode.finish();
 
         return true;
     }
@@ -92,11 +82,12 @@ public class TextSelectionCursorController implements CursorController {
 
     public void setInitialTextSelectionPosition(MotionEvent event) {
         int[] columnAndRow = terminalView.getColumnAndRow(event, true);
-        mSelX1 = mSelX2 = columnAndRow[0];
-        mSelY1 = mSelY2 = columnAndRow[1];
-
         TerminalBuffer screen = terminalView.mEmulator.getScreen();
-        if (!" ".equals(screen.getSelectedText(mSelX1, mSelY1, mSelX1, mSelY1))) {
+        mSelX1 = mSelX2 = Math.max(0, Math.min(terminalView.mEmulator.mColumns - 1, columnAndRow[0]));
+        mSelY1 = mSelY2 = Math.max(-screen.getActiveTranscriptRows(),
+            Math.min(terminalView.mEmulator.mRows - 1, columnAndRow[1]));
+
+        if (!TextUtils.isEmpty(screen.getSelectedText(mSelX1, mSelY1, mSelX1, mSelY1))) {
             // Selecting something other than whitespace. Expand to word.
             while (mSelX1 > 0 && !"".equals(screen.getSelectedText(mSelX1 - 1, mSelY1, mSelX1 - 1, mSelY1))) {
                 mSelX1--;
@@ -114,7 +105,8 @@ public class TextSelectionCursorController implements CursorController {
                 int show = MenuItem.SHOW_AS_ACTION_IF_ROOM | MenuItem.SHOW_AS_ACTION_WITH_TEXT;
 
                 ClipboardManager clipboard = (ClipboardManager) terminalView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-                menu.add(Menu.NONE, ACTION_COPY, Menu.NONE, R.string.copy_text).setShowAsAction(show);
+                menu.add(Menu.NONE, ACTION_COPY, Menu.NONE, R.string.copy_text)
+                    .setEnabled(!TextUtils.isEmpty(getSelectedText())).setShowAsAction(show);
                 menu.add(Menu.NONE, ACTION_PASTE, Menu.NONE, R.string.paste_text).setEnabled(clipboard != null && clipboard.hasPrimaryClip()).setShowAsAction(show);
                 menu.add(Menu.NONE, ACTION_MORE, Menu.NONE, R.string.text_selection_more);
                 return true;
@@ -122,7 +114,15 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-                return false;
+                ClipboardManager clipboard = (ClipboardManager) terminalView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                MenuItem copy = menu.findItem(ACTION_COPY);
+                MenuItem paste = menu.findItem(ACTION_PASTE);
+                boolean canCopy = !TextUtils.isEmpty(getSelectedText());
+                boolean canPaste = clipboard != null && clipboard.hasPrimaryClip();
+                boolean changed = copy.isEnabled() != canCopy || paste.isEnabled() != canPaste;
+                copy.setEnabled(canCopy);
+                paste.setEnabled(canPaste);
+                return changed;
             }
 
             @Override
@@ -159,6 +159,10 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public void onDestroyActionMode(ActionMode mode) {
+                if (mActionMode == mode) {
+                    mActionMode = null;
+                    terminalView.stopTextSelectionMode();
+                }
             }
 
         };
@@ -177,7 +181,7 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-                return false;
+                return callback.onPrepareActionMode(mode, menu);
             }
 
             @Override
@@ -187,7 +191,7 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public void onDestroyActionMode(ActionMode mode) {
-                // Ignore.
+                callback.onDestroyActionMode(mode);
             }
 
             @Override
