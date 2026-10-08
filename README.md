@@ -25,6 +25,8 @@ MDTerm 是基于 [Termux](https://github.com/termux/termux-app) 的 Android 终�
 
 界面跟随系统语言，包含简体中文。已有的 `~/.termux/colors.properties` 显式颜色配置优先于动态配色提供的默认值。
 
+默认终端字体随应用内置，`~/.termux/font.ttf` 可覆盖默认字体。首次启动或升级后，如果 `~/.termux/motd.sh` 不存在，应用会安装带有自适应 MDTERM 字标、欢迎语和项目链接的默认登录欢迎脚本；已有脚本会保留。可用 `~/.hushlogin` 关闭登录欢迎消息。
+
 ### 沿用的运行环境
 
 MDTerm 继续使用 Termux 的终端模拟器、会话与软件包运行方式：
