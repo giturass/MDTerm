@@ -198,6 +198,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         // clients with references to the activity.
         if (mTermuxTerminalSessionActivityClient != null)
             unsetTermuxTerminalSessionClient();
+        updateNotification();
         return false;
     }
 
@@ -223,6 +224,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     private void actionStopService() {
         mWantsToStop = true;
         killAllTermuxExecutionCommands();
+        if (mTermuxTerminalSessionActivityClient != null)
+            mTermuxTerminalSessionActivityClient.onServiceStopped();
         requestStopService();
     }
 
@@ -868,8 +871,9 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
     /** Update the shown foreground service notification after making any changes that affect it. */
     private synchronized void updateNotification() {
-        if (mWakeLock == null && mShellManager.mTermuxSessions.isEmpty() && mShellManager.mTermuxTasks.isEmpty()) {
-            // Exit if we are updating after the user disabled all locks with no sessions or tasks running.
+        if (mWakeLock == null && mShellManager.mTermuxSessions.isEmpty() && mShellManager.mTermuxTasks.isEmpty()
+            && mTermuxTerminalSessionActivityClient == null) {
+            // Keep the bound activity ready to launch a bookmark; stop once its empty drawer is left.
             requestStopService();
         } else {
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).notify(TermuxConstants.TERMUX_APP_NOTIFICATION_ID, buildNotification());

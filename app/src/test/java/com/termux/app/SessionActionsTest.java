@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.app.Application;
+import android.content.Intent;
 import android.graphics.Rect;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -15,16 +16,19 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
+import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.R;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
+import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.shell.TermuxShellManager;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Before;
@@ -65,6 +69,8 @@ public class SessionActionsTest {
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         activity.setContentView(R.layout.activity_termux);
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
+        activity.mTerminalView.setVisibility(View.GONE);
+        ReflectionHelpers.setField(activity, "mPreferences", TermuxAppSharedPreferences.build(activity));
         service = Robolectric.buildService(TermuxService.class).get();
         manager = new TermuxShellManager(activity);
         ReflectionHelpers.setField(service, "mShellManager", manager);
@@ -76,6 +82,9 @@ public class SessionActionsTest {
             }
         };
         ReflectionHelpers.setField(activity, "mTermuxTerminalSessionActivityClient", client);
+        activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, client);
+        activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
+        ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
     }
 
     @Test
@@ -118,7 +127,7 @@ public class SessionActionsTest {
     }
 
     @Test
-    public void closingFinishedCurrentSessionSelectsNeighborAndClosingLastFinishesActivity() {
+    public void closingFinishedCurrentSessionSelectsNeighborAndClosingLastReturnsToDrawer() {
         TermuxSession first = addSession(false);
         TermuxSession last = addSession(false);
         client.setCurrentSession(last.getTerminalSession());
@@ -131,7 +140,34 @@ public class SessionActionsTest {
 
         activity.showCloseSessionDialog(first.getTerminalSession());
         assertEquals(0, service.getTermuxSessionsSize());
+        assertFalse(activity.isFinishing());
+        assertNull(activity.getCurrentSession());
+        assertTrue(activity.getDrawer().isDrawerOpen(Gravity.START));
+        assertEquals(DrawerLayout.LOCK_MODE_LOCKED_OPEN, activity.getDrawer().getDrawerLockMode(Gravity.START));
+        assertEquals(View.GONE, activity.getTerminalToolbar().getVisibility());
+        activity.onBackPressed();
         assertTrue(activity.isFinishing());
+    }
+
+    @Test
+    public void emptyServiceRemainsAvailableUntilActivityUnbinds() {
+        service.setTermuxTerminalSessionClient(client);
+
+        service.onTermuxSessionExited(null);
+        assertFalse(Shadows.shadowOf(service).isStoppedBySelf());
+
+        service.onUnbind(new Intent());
+        assertTrue(Shadows.shadowOf(service).isStoppedBySelf());
+    }
+
+    @Test
+    public void stoppingServiceAlsoClosesActivityWithoutSessions() {
+        service.setTermuxTerminalSessionClient(client);
+
+        ReflectionHelpers.callInstanceMethod(service, "actionStopService");
+
+        assertTrue(activity.isFinishing());
+        assertTrue(Shadows.shadowOf(service).isStoppedBySelf());
     }
 
     @Test

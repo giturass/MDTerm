@@ -17,6 +17,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.provider.DocumentsContract;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -200,6 +201,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private boolean mIsDrawerCompact;
     private boolean mIsDrawerInputCollapsed;
+    private boolean mIsWaitingForSession;
     private AlertDialog mActionsDialog;
     private TerminalBookmarkStore mBookmarkStore;
     private TerminalBookmarksListViewController mBookmarksController;
@@ -222,6 +224,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_REPORT_ID = 9;
 
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
+    private static final String ARG_WAITING_FOR_SESSION = "waiting_for_session";
 
     private static final String LOG_TAG = "TermuxActivity";
 
@@ -230,8 +233,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Logger.logDebug(LOG_TAG, "onCreate");
         mIsOnResumeAfterOnCreate = true;
 
-        if (savedInstanceState != null)
+        if (savedInstanceState != null) {
             mIsActivityRecreated = savedInstanceState.getBoolean(ARG_ACTIVITY_RECREATED, false);
+            mIsWaitingForSession = savedInstanceState.getBoolean(ARG_WAITING_FOR_SESSION, false);
+        }
 
         // Delete ReportInfo serialized object files from cache older than 14 days
         ReportActivity.deleteReportInfoFilesOlderThanXDays(this, 14, false);
@@ -293,6 +298,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             bookmark -> mTermuxTerminalSessionActivityClient.openBookmark(bookmark));
 
         setAdaptiveDrawerLayout();
+
+        if (mIsWaitingForSession || (!mIsActivityRecreated && hasBookmarks() && !isNewSessionIntent(getIntent()))) {
+            // Show navigation before the service binds, without briefly revealing terminal input.
+            mIsWaitingForSession = true;
+            updateSessionUi();
+        }
 
         mTerminalView.setContextMenuAction(() ->
             showTerminalActions(mTerminalView.getWidth() / 2f, mTerminalView.getHeight() / 2f));
@@ -364,6 +375,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             setTerminalToolbarHeight();
         }
 
+        if (mTermuxService != null || mIsWaitingForSession) updateSessionUi();
+
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onResume();
 
@@ -398,7 +411,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         removeTermuxActivityRootViewGlobalLayoutListener();
 
         unregisterTermuxActivityBroadcastReceiver();
-        getDrawer().closeDrawers();
+        if (!mIsWaitingForSession) getDrawer().closeDrawers();
     }
 
     @Override
@@ -431,6 +444,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         super.onSaveInstanceState(savedInstanceState);
         savedInstanceState.putBoolean(ARG_ACTIVITY_RECREATED, true);
+        savedInstanceState.putBoolean(ARG_WAITING_FOR_SESSION, mIsWaitingForSession);
     }
 
 
@@ -453,11 +467,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         final Intent intent = getIntent();
         setIntent(null);
+        final boolean launchNewSession = isNewSessionIntent(intent);
+        final boolean showSessionDrawer = (hasBookmarks() || mIsWaitingForSession) && !launchNewSession;
 
         if (mTermuxService.isTermuxSessionsEmpty()) {
             if (mIsVisible) {
+                if (showSessionDrawer) updateSessionUi();
                 TermuxInstaller.setupBootstrapIfNeeded(TermuxActivity.this, () -> {
-                    if (mTermuxService == null) return; // Activity might have been destroyed.
+                    if (mTermuxService == null || isFinishing()) return;
+                    if (showSessionDrawer) return;
                     try {
                         boolean launchFailsafe = false;
                         if (intent != null && intent.getExtras() != null) {
@@ -476,17 +494,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // If termux was started from launcher "New session" shortcut and activity is recreated,
             // then the original intent will be re-delivered, resulting in a new session being re-added
             // each time.
-            if (!mIsActivityRecreated && intent != null && Intent.ACTION_RUN.equals(intent.getAction())) {
+            if (launchNewSession) {
                 // Android 7.1 app shortcut from res/xml/shortcuts.xml.
                 boolean isFailSafe = intent.getBooleanExtra(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false);
                 mTermuxTerminalSessionActivityClient.addNewSession(isFailSafe, null);
             } else {
                 mTermuxTerminalSessionActivityClient.setCurrentSession(mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast());
             }
+            if (showSessionDrawer && !mIsActivityRecreated) {
+                getDrawer().openDrawer(Gravity.START, false);
+                setDrawerInputCollapsed(true);
+            }
         }
 
         // Update the {@link TerminalSession} and {@link TerminalEmulator} clients.
         mTermuxService.setTermuxTerminalSessionClient(mTermuxTerminalSessionActivityClient);
+    }
+
+    private boolean hasBookmarks() {
+        return mBookmarkStore != null && !mBookmarkStore.getAll().isEmpty();
+    }
+
+    private boolean isNewSessionIntent(@Nullable Intent intent) {
+        return !mIsActivityRecreated && intent != null && Intent.ACTION_RUN.equals(intent.getAction());
     }
 
     @Override
@@ -640,7 +670,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ResolveInfo manager = managers.get(0);
             intent.setClassName(manager.activityInfo.packageName, manager.activityInfo.name);
             ActivityUtils.startActivity(this, intent);
-            getDrawer().closeDrawers();
+            if (!mIsWaitingForSession) getDrawer().closeDrawers();
         });
     }
 
@@ -666,6 +696,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
             @Override
             public void onDrawerClosed(@NonNull View drawerView) {
+                if (mIsWaitingForSession) {
+                    // DrawerLayout finishes hiding the view after this callback returns.
+                    getDrawer().post(() -> {
+                        if (mIsWaitingForSession && !isFinishing() && !isDestroyed())
+                            getDrawer().openDrawer(Gravity.START, false);
+                    });
+                    return;
+                }
                 setDrawerInputCollapsed(false);
             }
         });
@@ -701,6 +739,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void setDrawerInputCollapsed(boolean collapsed) {
+        collapsed |= mIsWaitingForSession;
         if (mIsDrawerInputCollapsed == collapsed) return;
         mIsDrawerInputCollapsed = collapsed;
         getTerminalToolbar().setVisibility(
@@ -712,6 +751,31 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    /** Keep navigation available until there is a session to display. */
+    public void updateSessionUi() {
+        if (mTermuxService != null)
+            mIsWaitingForSession = mTermuxService.isTermuxSessionsEmpty();
+
+        DrawerLayout drawer = getDrawer();
+        int lockMode = mIsWaitingForSession
+            ? DrawerLayout.LOCK_MODE_LOCKED_OPEN : mTerminalView.isSelectingText()
+                ? DrawerLayout.LOCK_MODE_LOCKED_CLOSED : DrawerLayout.LOCK_MODE_UNLOCKED;
+        if (mIsWaitingForSession) {
+            mTerminalView.stopTextSelectionMode();
+            mTermuxTerminalViewClient.onSessionDetached();
+            if (mTerminalView.attachSession(null)) mTerminalView.invalidate();
+            drawer.openDrawer(Gravity.START, false);
+            mTermuxTerminalViewClient.onHideSoftKeyboardRequest();
+        }
+        if (drawer.getDrawerLockMode(Gravity.START) != lockMode)
+            drawer.setDrawerLockMode(lockMode, Gravity.START);
+        setDrawerInputCollapsed(mIsWaitingForSession || drawer.isDrawerVisible(Gravity.START));
+    }
+
+    public boolean isWaitingForSession() {
+        return mIsWaitingForSession;
+    }
+
 
 
 
@@ -719,11 +783,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @SuppressLint("RtlHardcoded")
     @Override
     public void onBackPressed() {
-        if (getDrawer().isDrawerOpen(Gravity.LEFT)) {
+        if (mIsWaitingForSession) {
+            finishActivityIfNotFinishing();
+        } else if (getDrawer().isDrawerOpen(Gravity.LEFT)) {
             getDrawer().closeDrawers();
         } else {
             finishActivityIfNotFinishing();
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        // DrawerLayout consumes Back even when locked open, so handle the empty state first.
+        if (mIsWaitingForSession && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled())
+                finishActivityIfNotFinishing();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     public void finishActivityIfNotFinishing() {
@@ -1056,7 +1133,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public void termuxSessionListNotifyUpdated() {
-        mTermuxSessionListViewController.notifyDataSetChanged();
+        if (mTermuxSessionListViewController != null)
+            mTermuxSessionListViewController.notifyDataSetChanged();
+        if (getCurrentSession() == null && mTermuxService != null && !mTermuxService.isTermuxSessionsEmpty()) {
+            // A background command may create the first session without requesting a switch.
+            mTermuxTerminalSessionActivityClient.setCurrentSession(
+                mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast());
+        } else {
+            updateSessionUi();
+        }
     }
 
     public void onSessionActivity(TerminalSession session) {
