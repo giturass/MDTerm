@@ -131,6 +131,9 @@ public class TerminalTextSelectionTest {
         assertEquals("beta", view.getSelectedText());
         assertNull("Long press should not open the terminal actions dialog", ShadowDialog.getLatestDialog());
         assertEquals(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, drawer.getDrawerLockMode(Gravity.START));
+        activity.updateSessionUi();
+        assertTrue(view.isSelectingText());
+        assertEquals(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, drawer.getDrawerLockMode(Gravity.START));
         RecordingActionMode mode = host.mode;
         mode.click(view.getTextSelectionCursorController().ACTION_COPY);
 

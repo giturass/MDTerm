@@ -421,7 +421,7 @@ public final class ExtraKeysView extends GridLayout {
                 boolean isCursorButton = SpecialButton.CURSOR.getKey().equals(buttonInfo.getKey());
                 if (isCursorButton || "KEYBOARD".equals(buttonInfo.getKey())) {
                     button.setText("");
-                    button.setIconResource(isCursorButton ? R.drawable.ic_touch_app : R.drawable.ic_keyboard);
+                    button.setIconResource(isCursorButton ? R.drawable.ic_cursor_lock : R.drawable.ic_keyboard);
                     button.setIconSize(dp(24));
                     button.setIconPadding(0);
                     button.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);

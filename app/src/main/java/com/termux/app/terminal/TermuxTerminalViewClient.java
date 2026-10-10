@@ -12,6 +12,7 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.ListView;
 import android.widget.Toast;
 
@@ -168,6 +169,11 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             setTerminalCursorBlinkerState(true);
             mTerminalCursorBlinkerStateAlreadySet = true;
         }
+    }
+
+    public void onSessionDetached() {
+        setTerminalCursorBlinkerState(false);
+        mTerminalCursorBlinkerStateAlreadySet = false;
     }
 
 
@@ -549,6 +555,10 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * drawer or extra keys, or with ctrl+alt+k hardware keyboard shortcut.
      */
     public void onToggleSoftKeyboardRequest() {
+        if (mActivity.isWaitingForSession()) {
+            onHideSoftKeyboardRequest();
+            return;
+        }
         // If soft keyboard toggle behaviour is enable/disabled
         if (mActivity.getProperties().shouldEnableDisableSoftKeyboardOnToggle()) {
             // If soft keyboard is visible
@@ -630,6 +640,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             }
         }
 
+        if (mActivity.isWaitingForSession() || mActivity.getDrawer().isDrawerVisible(Gravity.START)) {
+            mActivity.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+                | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            onHideSoftKeyboardRequest();
+            noShowKeyboard = true;
+        }
+
         mActivity.getTerminalView().setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override
             public void onFocusChange(View view, boolean hasFocus) {
@@ -669,7 +686,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     private Runnable getShowSoftKeyboardRunnable() {
         if (mShowSoftKeyboardRunnable == null) {
             mShowSoftKeyboardRunnable = () -> {
-                if (!mActivity.getDrawer().isDrawerVisible(Gravity.START))
+                if (!mActivity.isWaitingForSession() && !mActivity.getDrawer().isDrawerVisible(Gravity.START))
                     KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
             };
         }

@@ -1,10 +1,13 @@
 package com.termux.view;
 
+import android.app.Activity;
 import android.app.Application;
 import android.graphics.Typeface;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
+import android.view.ViewGroup;
 
 import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
@@ -13,9 +16,12 @@ import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.LooperMode;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
@@ -25,6 +31,7 @@ import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 31, manifest = Config.NONE, application = Application.class)
+@LooperMode(LooperMode.Mode.PAUSED)
 public class TerminalCursorGestureTest {
     @Test
     public void horizontalSwipesSendPlainArrowsInBothDirections() {
@@ -140,6 +147,84 @@ public class TerminalCursorGestureTest {
         assertTrue(view.mScroller.isFinished());
         swipe(view, 80, 0);
         assertOnlyArrow(view, "\u001b[C");
+    }
+
+    @Test
+    public void detachingSessionCancelsItsQueuedFlingWithoutAccessingAnEmptyTerminal() {
+        TerminalView view = terminal(false);
+        attachForPostedCallbacks(view);
+        appendHistory(view);
+        MotionEvent event = startFling(view);
+        try {
+            assertTrue(view.attachSession(null));
+            assertTrue(view.mScroller.isFinished());
+
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+            assertNull(view.mTermSession);
+            assertNull(view.mEmulator);
+            assertEquals(0, view.mTopRow);
+            assertTrue(view.mScroller.isFinished());
+        } finally {
+            event.recycle();
+        }
+    }
+
+    @Test
+    public void oldQueuedFlingDoesNotScrollOrCancelAnimationInReplacementSession() {
+        TerminalView view = terminal(false);
+        attachForPostedCallbacks(view);
+        appendHistory(view);
+        MotionEvent oldEvent = startFling(view);
+        TerminalView replacement = terminal(false);
+        appendHistory(replacement);
+        byte[] mouseMode = "\u001b[?1000h".getBytes(StandardCharsets.UTF_8);
+        replacement.mEmulator.append(mouseMode, mouseMode.length);
+        assertTrue(replacement.mEmulator.isMouseTrackingActive());
+        assertTrue(view.attachSession(replacement.mTermSession));
+        assertTrue(view.mScroller.isFinished());
+        // The zero-size host avoids native PTY resize; supply the new session's emulator.
+        view.mEmulator = replacement.mEmulator;
+        view.setTopRow(-5);
+        MotionEvent newEvent = startFling(view);
+        try {
+            // The old session's frame was posted first and must leave the new fling alone.
+            Shadows.shadowOf(Looper.getMainLooper()).runOneTask();
+
+            assertSame(replacement.mTermSession, view.mTermSession);
+            assertEquals(-5, view.mTopRow);
+            assertFalse(view.mScroller.isFinished());
+            assertEquals(0, takeOutput(view).length);
+        } finally {
+            view.attachSession(null);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            oldEvent.recycle();
+            newEvent.recycle();
+        }
+    }
+
+    private static void attachForPostedCallbacks(TerminalView view) {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setContentView(view, new ViewGroup.LayoutParams(0, 0));
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(view.isAttachedToWindow());
+    }
+
+    private static void appendHistory(TerminalView view) {
+        StringBuilder history = new StringBuilder();
+        for (int i = 0; i < 60; i++) history.append("line\r\n");
+        byte[] lines = history.toString().getBytes(StandardCharsets.UTF_8);
+        view.mEmulator.append(lines, lines.length);
+        assertTrue(view.mEmulator.getScreen().getActiveTranscriptRows() > 5);
+    }
+
+    private static MotionEvent startFling(TerminalView view) {
+        long time = SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(time, time, MotionEvent.ACTION_UP, 150, 150, 0);
+        event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        view.mGestureRecognizer.mListener.onFling(event, 0, 4000);
+        assertFalse(view.mScroller.isFinished());
+        return event;
     }
 
     private static TerminalView terminal(boolean cursorMode) {

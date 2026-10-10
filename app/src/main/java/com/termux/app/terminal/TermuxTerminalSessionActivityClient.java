@@ -112,6 +112,11 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         releaseBellSoundPool();
     }
 
+    /** A stopped service may have no sessions left to deliver an onSessionFinished callback. */
+    public void onServiceStopped() {
+        mActivity.finishActivityIfNotFinishing();
+    }
+
     /**
      * Should be called when mActivity.reloadActivityStyling() is called
      */
@@ -307,6 +312,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     public void setCurrentSession(TerminalSession session) {
         if (session == null) return;
 
+        mActivity.updateSessionUi();
+
         if (mActivity.getTerminalView().attachSession(session)) {
             notifyOfSessionChange();
             termuxSessionListNotifyUpdated();
@@ -485,8 +492,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
         int size = service.getTermuxSessionsSize();
         if (size == 0) {
-            // There are no sessions to show, so finish the activity.
-            mActivity.finishActivityIfNotFinishing();
+            mActivity.updateSessionUi();
         } else if (wasCurrent) {
             if (index >= size) {
                 index = size - 1;

@@ -245,7 +245,8 @@ public final class TerminalView extends View {
                 // Do not start scrolling until last fling has been taken care of:
                 if (!mScroller.isFinished()) return true;
 
-                final boolean mouseTrackingAtStartOfFling = mEmulator.isMouseTrackingActive();
+                final TerminalEmulator flingEmulator = mEmulator;
+                final boolean mouseTrackingAtStartOfFling = flingEmulator.isMouseTrackingActive();
                 float SCALE = 0.25f;
                 if (mouseTrackingAtStartOfFling) {
                     mScroller.fling(0, 0, 0, -(int) (velocityY * SCALE), 0, 0, -mEmulator.mRows / 2, mEmulator.mRows / 2);
@@ -258,7 +259,9 @@ public final class TerminalView extends View {
 
                     @Override
                     public void run() {
-                        if (mouseTrackingAtStartOfFling != mEmulator.isMouseTrackingActive()) {
+                        // A queued frame must not scroll or stop an animation in another session.
+                        if (mEmulator != flingEmulator) return;
+                        if (mouseTrackingAtStartOfFling != flingEmulator.isMouseTrackingActive()) {
                             mScroller.abortAnimation();
                             return;
                         }
@@ -368,6 +371,7 @@ public final class TerminalView extends View {
         if (session == mTermSession) return false;
         mTopRow = 0;
 
+        mScroller.abortAnimation();
         mTermSession = session;
         mEmulator = null;
         mCombiningAccent = 0;
@@ -695,8 +699,8 @@ public final class TerminalView extends View {
     private void moveCursorByScroll(float distance, boolean horizontal) {
         if (mTermSession == null || mRenderer == null) return;
         float density = getResources().getDisplayMetrics().density;
-        float step = horizontal ? Math.max(mRenderer.mFontWidth, 12 * density)
-            : Math.max(mRenderer.mFontLineSpacing, 18 * density);
+        float step = horizontal ? Math.max(mRenderer.mFontWidth, 24 * density)
+            : Math.max(mRenderer.mFontLineSpacing, 36 * density);
         mCursorScrollRemainder += distance;
         int count = (int) (mCursorScrollRemainder / step);
         mCursorScrollRemainder -= count * step;
