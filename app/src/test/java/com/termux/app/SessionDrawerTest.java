@@ -173,15 +173,15 @@ public class SessionDrawerTest {
             previousWidth = drawer.getWidth();
             previousSettingsRight = settingsRight;
             previousFilesRight = filesRight;
-            int cardWidth = drawer.getWidth() - dp(drawer, 24);
+            int cardWidth = drawer.getWidth() - dp(drawer, 32);
             assertEquals(2, bookmarks.getChildCount());
             assertEquals(2, sessions.getChildCount());
             assertCardSizesAndSpacing(bookmarks, cardWidth);
             assertCardSizesAndSpacing(sessions, cardWidth);
             for (ListView list : new ListView[]{bookmarks, sessions}) {
                 Rect card = bounds(drawer, list.getChildAt(0));
-                assertEquals(dp(drawer, 12), card.left);
-                assertEquals(dp(drawer, 12), drawer.getWidth() - card.right);
+                assertEquals(dp(drawer, 16), card.left);
+                assertEquals(dp(drawer, 16), drawer.getWidth() - card.right);
             }
         }
     }
