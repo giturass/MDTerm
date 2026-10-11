@@ -202,9 +202,12 @@
                         android:layout_height="56dp"
                         android:contentDescription="@string/action_new_session"
                         android:tooltipText="@string/action_new_session"
+                        app:backgroundTint="?attr/colorPrimary"
                         app:fabSize="normal"
                         app:maxImageSize="24dp"
+                        app:rippleColor="?attr/colorControlHighlight"
                         app:srcCompat="@drawable/ic_new_session"
+                        app:tint="?attr/colorOnPrimary"
                         app:useCompatPadding="false" />
                 </FrameLayout>
             </FrameLayout>
