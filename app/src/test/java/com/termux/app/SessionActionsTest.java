@@ -12,15 +12,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListView;
 import android.widget.PopupWindow;
-import android.widget.ScrollView;
 import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.termux.R;
-import com.termux.app.terminal.TermuxSessionsListViewController;
+import com.termux.app.terminal.TerminalBookmarkStore;
+import com.termux.app.terminal.TerminalDrawerAdapter;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -69,6 +70,8 @@ public class SessionActionsTest {
         activity = controller.get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         activity.setContentView(R.layout.activity_termux);
+        activity.getSharedPreferences("terminal_bookmarks", 0).edit().clear().commit();
+        ReflectionHelpers.setField(activity, "mBookmarkStore", new TerminalBookmarkStore(activity));
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
         activity.mTerminalView.setVisibility(View.GONE);
         ReflectionHelpers.setField(activity, "mPreferences", TermuxAppSharedPreferences.build(activity));
@@ -225,8 +228,8 @@ public class SessionActionsTest {
         measure(drawer, 320, 640);
         activity.getDrawer().openDrawer(Gravity.START, false);
         measure(drawer, 320, 640);
-        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
-        View name = sessions.getChildAt(0).findViewById(R.id.session_name);
+        RecyclerView sessions = activity.findViewById(R.id.terminal_drawer_list);
+        View name = sessionRow(sessions, 0).findViewById(R.id.session_name);
         Rect bounds = new Rect(0, 0, name.getWidth(), name.getHeight());
         drawer.offsetDescendantRectToMyCoords(name, bounds);
         assertTrue(name.isShown());
@@ -276,9 +279,9 @@ public class SessionActionsTest {
         TermuxSession other = addSession(true);
         setSummary(active, "A long changing command summary abcdefghijklmnopqrstuvwxyz");
         setSummary(other, "Another long command summary abcdefghijklmnopqrstuvwxyz");
-        ListView sessions = showSessionDrawer();
-        TextView activeSummary = sessions.getChildAt(0).findViewById(R.id.session_title);
-        TextView otherSummary = sessions.getChildAt(1).findViewById(R.id.session_title);
+        RecyclerView sessions = showSessionDrawer();
+        TextView activeSummary = sessionRow(sessions, 0).findViewById(R.id.session_title);
+        TextView otherSummary = sessionRow(sessions, 1).findViewById(R.id.session_title);
         assertSummaryScrolling(activeSummary, true);
         assertSummaryScrolling(otherSummary, true);
 
@@ -307,13 +310,15 @@ public class SessionActionsTest {
     public void titleOnlyChangesPauseSummaryScrollingUntilIdle() {
         TermuxSession session = addSession(true);
         setSummary(session, "Original long command summary abcdefghijklmnopqrstuvwxyz");
-        ListView sessions = showSessionDrawer();
-        TextView summary = sessions.getChildAt(0).findViewById(R.id.session_title);
+        RecyclerView sessions = showSessionDrawer();
+        TextView summary = sessionRow(sessions, 0).findViewById(R.id.session_title);
         ReflectionHelpers.setField(activity, "mIsVisible", true);
 
         setSummary(session, "Updated long command summary abcdefghijklmnopqrstuvwxyz");
         client.onTitleChanged(session.getTerminalSession());
         assertSummaryScrolling(summary, false);
+        // RecyclerView applies the changed title payload during the next layout.
+        measure(activity.getDrawer(), 320, 640);
         assertEquals("Updated long command summary abcdefghijklmnopqrstuvwxyz",
             summary.getText().toString());
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1999));
@@ -328,16 +333,24 @@ public class SessionActionsTest {
         TermuxSession idle = addSession(true);
         setSummary(active, "Active command summary abcdefghijklmnopqrstuvwxyz");
         setSummary(idle, "Idle command summary abcdefghijklmnopqrstuvwxyz");
-        ListView sessions = showSessionDrawer();
+        RecyclerView sessions = showSessionDrawer();
         client.onTextChanged(active.getTerminalSession());
-        TermuxSessionsListViewController adapter =
-            ReflectionHelpers.getField(activity, "mTermuxSessionListViewController");
+        TerminalDrawerAdapter adapter =
+            ReflectionHelpers.getField(activity, "mDrawerAdapter");
 
-        View row = adapter.getView(0, null, sessions);
+        int activePosition = adapter.findSessionPosition(active.getTerminalSession());
+        int idlePosition = adapter.findSessionPosition(idle.getTerminalSession());
+        RecyclerView.ViewHolder holder = adapter.createViewHolder(sessions,
+            adapter.getItemViewType(activePosition));
+        adapter.bindViewHolder(holder, activePosition);
+        View row = holder.itemView;
+        assertSame(active.getTerminalSession(), row.getTag());
         assertSummaryScrolling(row.findViewById(R.id.session_title), false);
-        assertSame(row, adapter.getView(1, row, sessions));
+        adapter.bindViewHolder(holder, idlePosition);
+        assertSame(idle.getTerminalSession(), row.getTag());
         assertSummaryScrolling(row.findViewById(R.id.session_title), true);
-        assertSame(row, adapter.getView(0, row, sessions));
+        adapter.bindViewHolder(holder, activePosition);
+        assertSame(active.getTerminalSession(), row.getTag());
         assertSummaryScrolling(row.findViewById(R.id.session_title), false);
     }
 
@@ -345,19 +358,19 @@ public class SessionActionsTest {
     public void disposingSessionListCancelsPendingIdleRefresh() {
         TermuxSession session = addSession(true);
         setSummary(session, "Long command summary abcdefghijklmnopqrstuvwxyz");
-        ListView sessions = showSessionDrawer();
-        TextView summary = sessions.getChildAt(0).findViewById(R.id.session_title);
+        RecyclerView sessions = showSessionDrawer();
+        TextView summary = sessionRow(sessions, 0).findViewById(R.id.session_title);
         client.onTextChanged(session.getTerminalSession());
         assertSummaryScrolling(summary, false);
 
-        TermuxSessionsListViewController adapter =
-            ReflectionHelpers.getField(activity, "mTermuxSessionListViewController");
+        TerminalDrawerAdapter adapter =
+            ReflectionHelpers.getField(activity, "mDrawerAdapter");
         adapter.dispose();
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2500));
         assertSummaryScrolling(summary, false);
     }
 
-    private ListView showSessionDrawer() {
+    private RecyclerView showSessionDrawer() {
         ReflectionHelpers.callInstanceMethod(activity, "setTermuxSessionsListView");
         activity.mTerminalView.setVisibility(View.GONE);
         controller.visible();
@@ -365,7 +378,7 @@ public class SessionActionsTest {
         measure(drawer, 320, 640);
         activity.getDrawer().openDrawer(Gravity.START, false);
         measure(drawer, 320, 640);
-        return activity.findViewById(R.id.terminal_sessions_list);
+        return activity.findViewById(R.id.terminal_drawer_list);
     }
 
     private static void assertSummaryScrolling(TextView summary, boolean scrolling) {
@@ -391,9 +404,9 @@ public class SessionActionsTest {
         measure(drawer, widthDp, heightDp);
         activity.getDrawer().openDrawer(Gravity.START, false);
         measure(drawer, widthDp, heightDp);
-        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
-        View menuButton = sessions.getChildAt(0).findViewById(R.id.session_menu_button);
-        TextView summary = sessions.getChildAt(0).findViewById(R.id.session_title);
+        RecyclerView sessions = activity.findViewById(R.id.terminal_drawer_list);
+        View menuButton = sessionRow(sessions, 0).findViewById(R.id.session_menu_button);
+        TextView summary = sessionRow(sessions, 0).findViewById(R.id.session_title);
         assertEquals(TextUtils.TruncateAt.MARQUEE, summary.getEllipsize());
         assertTrue("Session summaries must be selected for marquee scrolling", summary.isSelected());
         Rect bounds = new Rect(0, 0, menuButton.getWidth(), menuButton.getHeight());
@@ -469,24 +482,26 @@ public class SessionActionsTest {
     @Test
     public void selectingSessionBelowViewportRevealsItInSharedDrawerScroll() {
         for (int i = 0; i < 12; i++) addSession(true);
-        ListView sessions = showSessionDrawer();
-        ScrollView scroll = activity.findViewById(R.id.terminal_drawer_scroll);
+        RecyclerView sessions = showSessionDrawer();
         ReflectionHelpers.setField(activity, "mIsVisible", true);
+        TerminalSession selected = service.getTermuxSession(11).getTerminalSession();
+        client.setCurrentSession(selected);
+        activity.termuxSessionListNotifyUpdated();
 
-        client.checkAndScrollToSession(service.getTermuxSession(11).getTerminalSession());
+        client.checkAndScrollToSession(selected);
         measure(activity.getDrawer(), 320, 640);
 
-        assertEquals(11, sessions.getCheckedItemPosition());
-        assertEquals(0, sessions.getFirstVisiblePosition());
-        assertEquals(12, sessions.getChildCount());
-        assertTrue(scroll.getScrollY() > 0);
-        View lastCard = sessions.getChildAt(11);
+        assertEquals(14, sessions.getAdapter().getItemCount());
+        assertTrue("Off-screen sessions must be recycled", sessions.getChildCount() < 14);
+        assertTrue(sessions.canScrollVertically(-1));
+        View lastCard = sessionRow(sessions, 11);
+        assertTrue(lastCard.isActivated());
         Rect card = new Rect();
         lastCard.getDrawingRect(card);
-        scroll.offsetDescendantRectToMyCoords(lastCard, card);
-        assertTrue(card.top >= scroll.getScrollY() + scroll.getPaddingTop());
+        sessions.offsetDescendantRectToMyCoords(lastCard, card);
+        assertTrue(card.top >= sessions.getPaddingTop());
         assertTrue("The selected session must remain above the fixed FAB",
-            card.bottom <= scroll.getScrollY() + scroll.getHeight() - scroll.getPaddingBottom());
+            card.bottom <= sessions.getHeight() - sessions.getPaddingBottom());
     }
 
     private void verifySessionSwipe(int touchTargetId) {
@@ -500,8 +515,8 @@ public class SessionActionsTest {
         measure(drawer, 320, 640);
         activity.getDrawer().openDrawer(Gravity.START, false);
         measure(drawer, 320, 640);
-        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
-        View target = sessions.getChildAt(0).findViewById(touchTargetId);
+        RecyclerView sessions = activity.findViewById(R.id.terminal_drawer_list);
+        View target = sessionRow(sessions, 0).findViewById(touchTargetId);
         Rect bounds = new Rect(0, 0, target.getWidth(), target.getHeight());
         drawer.offsetDescendantRectToMyCoords(target, bounds);
         long time = SystemClock.uptimeMillis();
@@ -516,10 +531,9 @@ public class SessionActionsTest {
         }
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertNull(ShadowApplication.getInstance().getLatestPopupWindow());
-        ScrollView scroll = activity.findViewById(R.id.terminal_drawer_scroll);
-        assertTrue("Dragging a session must scroll the shared page", scroll.getScrollY() > 0);
-        assertEquals(0, sessions.getFirstVisiblePosition());
-        assertEquals(sessions.getPaddingTop(), sessions.getChildAt(0).getTop());
+        assertTrue("Dragging a session must scroll the shared page", sessions.canScrollVertically(-1));
+        assertEquals(14, sessions.getAdapter().getItemCount());
+        assertTrue("Off-screen sessions must be recycled", sessions.getChildCount() < 14);
         assertEquals(12, service.getTermuxSessionsSize());
         assertSame(current, activity.getCurrentSession());
     }
@@ -537,12 +551,14 @@ public class SessionActionsTest {
         manager.mTermuxSessions.remove(removed);
         activity.termuxSessionListNotifyUpdated();
         remaining.getTerminalSession().mSessionName = "Remaining session";
-        // Both callbacks can arrive before ListView lays out the structural update.
+        // Both callbacks can arrive before RecyclerView lays out the structural update.
         activity.termuxSessionListNotifyUpdated();
         measure(drawer, 320, 640);
-        ListView sessions = activity.findViewById(R.id.terminal_sessions_list);
-        assertEquals(1, sessions.getChildCount());
-        sessions.getChildAt(0).findViewById(R.id.session_menu_button).performClick();
+        RecyclerView sessions = activity.findViewById(R.id.terminal_drawer_list);
+        assertEquals(3, sessions.getAdapter().getItemCount());
+        assertEquals(-1, ((TerminalDrawerAdapter) sessions.getAdapter())
+            .findSessionPosition(removed.getTerminalSession()));
+        sessionRow(sessions, 0).findViewById(R.id.session_menu_button).performClick();
         PopupWindow popup = ShadowApplication.getInstance().getLatestPopupWindow();
         ListView actions = popupList(popup.getContentView());
         actions.performItemClick(actions.getAdapter().getView(0, null, actions), 0, 0);
@@ -554,6 +570,16 @@ public class SessionActionsTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertEquals("Renamed survivor", remaining.getTerminalSession().mSessionName);
         assertNull(removed.getTerminalSession().mSessionName);
+    }
+
+    private View sessionRow(RecyclerView sessions, int sessionIndex) {
+        TerminalSession session = service.getTermuxSession(sessionIndex).getTerminalSession();
+        TerminalDrawerAdapter adapter = (TerminalDrawerAdapter) sessions.getAdapter();
+        int position = adapter.findSessionPosition(session);
+        RecyclerView.ViewHolder holder = sessions.findViewHolderForAdapterPosition(position);
+        assertNotNull("Expected visible session at adapter position " + position, holder);
+        assertSame(session, holder.itemView.getTag());
+        return holder.itemView;
     }
 
     private static ListView popupList(View view) {

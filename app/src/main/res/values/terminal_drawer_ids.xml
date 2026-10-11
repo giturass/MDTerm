@@ -1,0 +1,4 @@
+<resources>
+    <item name="terminal_bookmarks_header" type="id" />
+    <item name="terminal_sessions_header" type="id" />
+</resources>

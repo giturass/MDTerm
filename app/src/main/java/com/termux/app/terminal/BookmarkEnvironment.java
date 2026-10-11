@@ -48,12 +48,16 @@ public final class BookmarkEnvironment {
                 BookmarkProcessSnapshot.Process ssh = findSshProcess(foreground);
                 String distro = "";
                 boolean proot = false;
+                BookmarkProcessSnapshot.Process prootProcess = null;
                 // A proxy helper's environment does not belong to the selected SSH client.
                 for (BookmarkProcessSnapshot.Process process = ssh != null ? ssh : foreground;
                      process != null; process = process.parent) {
                     boolean isProot = "proot".equals(executable(process.args));
                     if (isProot) {
+                        if (prootProcess != null)
+                            throw new IllegalStateException("暂不支持保存多层嵌套的 PRoot 环境");
                         proot = true;
+                        prootProcess = process;
                     }
                     String detected = distroFromArguments(process.args);
                     if (isProot && detected.isEmpty()) {
@@ -69,6 +73,25 @@ public final class BookmarkEnvironment {
                 }
                 if (ssh == null && !isShell(executable(foreground.args))) {
                     throw new IllegalStateException("请先返回 Shell 提示符，再保存当前位置");
+                }
+                final BookmarkProotLaunch prootLaunch;
+                try {
+                    prootLaunch = prootProcess == null ? null : BookmarkProotLaunch.capture(
+                        prootProcess, readCwd(procDirectory, prootProcess.pid), procDirectory);
+                    boolean initialSu = false;
+                    for (BookmarkProcessSnapshot.Process process = ssh == null ? foreground : ssh;
+                         process != null && process != prootProcess; process = process.parent) {
+                        String executable = executable(process.args);
+                        if (executable.equals("su") || executable.equals("sudo")
+                            || executable.equals("runuser") || executable.equals("doas")) {
+                            if (prootLaunch != null && !initialSu && prootLaunch.isInitialSu(process.args))
+                                initialSu = true;
+                            else if (prootLaunch != null)
+                                throw new IllegalStateException("PRoot 登录后切换了用户，请使用目标用户直接登录后保存");
+                        }
+                    }
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalStateException("无法完整还原当前 PRoot 启动命令，请使用交互式登录后保存", e);
                 }
                 String kind = ssh != null ? "ssh" : (proot || !distro.isEmpty() ? "proot" : "local");
                 List<String> sshArgs = ssh == null ? Collections.emptyList()
@@ -88,7 +111,7 @@ public final class BookmarkEnvironment {
                                 callback.onError("终端环境已变化，请重新保存书签");
                                 return;
                             }
-                            callback.onCaptured(target(kind, targetDistro, sshArgs, path));
+                            callback.onCaptured(target(kind, targetDistro, sshArgs, path, prootLaunch));
                         } catch (Exception e) {
                             callback.onError("当前终端环境已不可用");
                         }
@@ -123,7 +146,7 @@ public final class BookmarkEnvironment {
                                 callback.onError("当前终端环境已不可用");
                                 return;
                             }
-                            callback.onCaptured(target(kind, targetDistro, sshArgs, path));
+                            callback.onCaptured(target(kind, targetDistro, sshArgs, path, prootLaunch));
                         }
                         @Override public void onFailure() {
                             callback.onError("未能读取环境中的当前路径，请返回 Shell 提示符后重试（需要 base64 命令）");
@@ -153,10 +176,11 @@ public final class BookmarkEnvironment {
         return ssh;
     }
 
-    private static TerminalBookmark target(String kind, String distro, List<String> sshArgs, String path) {
+    private static TerminalBookmark target(String kind, String distro, List<String> sshArgs, String path,
+                                           BookmarkProotLaunch prootLaunch) {
         String name = new File(path).getName();
         if (name.isEmpty()) name = path;
-        return new TerminalBookmark(UUID.randomUUID().toString(), name, kind, distro, sshArgs, path);
+        return new TerminalBookmark(UUID.randomUUID().toString(), name, kind, distro, sshArgs, path, prootLaunch);
     }
 
     public static String launchWorkingDirectory(TerminalBookmark bookmark) {
@@ -173,10 +197,12 @@ public final class BookmarkEnvironment {
             for (String arg : bookmark.sshArgs) command.append(' ').append(quote(arg));
             // SSH invokes the user's login shell, which may be fish: run our POSIX script via sh.
             command.append(' ').append(quote("sh -c " + quote(enter)));
+            if (bookmark.prootLaunch != null) return bookmark.prootLaunch.launch(null, command.toString());
             if (bookmark.distro.isEmpty()) return command.toString();
             return prootLogin(bookmark.distro, command.toString());
         }
         if ("proot".equals(bookmark.kind)) {
+            if (bookmark.prootLaunch != null) return bookmark.prootLaunch.launch(bookmark.path, null);
             // Let proot-distro select the guest account's login shell. Its environment
             // need not export SHELL, so a sh wrapper can otherwise fall back to /bin/sh.
             return "exec \"$(command -v pd || command -v proot-distro)\" login --work-dir "
@@ -235,14 +261,51 @@ public final class BookmarkEnvironment {
         return result;
     }
 
-    private static boolean isRestoreCommand(String command) {
-        if (!command.startsWith("sh -c ")) return false;
-        String inner = unquote(command.substring(6));
+    static boolean isRestoreCommand(String command) {
+        String inner = unwrapShell(command);
         if (inner == null || !inner.startsWith("cd -- ")) return false;
         String suffix = " && exec \"${SHELL:-/bin/sh}\" -l";
         if (!inner.endsWith(suffix)) return false;
         String path = unquote(inner.substring(6, inner.length() - suffix.length()));
         return path != null && path.startsWith("/");
+    }
+
+    static boolean isProotRestoreCommand(String command) {
+        if (isRestoreCommand(command)) return true;
+        String inner = unwrapShell(command);
+        if (inner == null) inner = command;
+        if (!inner.startsWith("exec ssh -t ")) return false;
+        List<String> args = new ArrayList<>();
+        args.add("ssh");
+        args.add("-t");
+        String quoted = inner.substring("exec ssh -t ".length());
+        for (int i = 0; i < quoted.length();) {
+            if (quoted.charAt(i++) != '\'') return false;
+            StringBuilder value = new StringBuilder();
+            boolean closed = false;
+            while (i < quoted.length()) {
+                if (quoted.startsWith("'\\''", i)) { value.append('\''); i += 4; }
+                else if (quoted.charAt(i) == '\'') { i++; closed = true; break; }
+                else value.append(quoted.charAt(i++));
+            }
+            if (!closed) return false;
+            args.add(value.toString());
+            if (i < quoted.length() && quoted.charAt(i++) != ' ') return false;
+        }
+        if (args.size() < 4 || !isRestoreCommand(args.get(args.size() - 1))) return false;
+        try {
+            sshArguments(args);
+            return true;
+        } catch (IllegalStateException e) {
+            return false;
+        }
+    }
+
+    private static String unwrapShell(String command) {
+        for (String prefix : new String[]{"sh -c ", "/bin/sh -c ", "sh -lc ", "/bin/sh -lc "}) {
+            if (command.startsWith(prefix)) return unquote(command.substring(prefix.length()));
+        }
+        return null;
     }
 
     private static String unquote(String value) {
@@ -386,7 +449,7 @@ public final class BookmarkEnvironment {
         return name.startsWith("-") ? name.substring(1) : name;
     }
 
-    private static boolean isShell(String name) {
+    static boolean isShell(String name) {
         return name.equals("sh") || name.equals("bash") || name.equals("zsh") || name.equals("fish")
             || name.equals("dash") || name.equals("ksh") || name.equals("ash") || name.equals("nu");
     }

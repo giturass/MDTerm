@@ -102,8 +102,8 @@
                             app:tint="?attr/termuxActivityDrawerImageTint" />
                     </LinearLayout>
 
-                    <ScrollView
-                        android:id="@+id/terminal_drawer_scroll"
+                    <com.termux.app.terminal.TerminalDrawerRecyclerView
+                        android:id="@+id/terminal_drawer_list"
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
                         android:layout_weight="1"
@@ -111,78 +111,7 @@
                         android:paddingEnd="16dp"
                         android:paddingBottom="88dp"
                         android:clipToPadding="false"
-                        android:scrollbars="none">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical">
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:minHeight="48dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <com.google.android.material.textview.MaterialTextView
-                                    android:id="@+id/terminal_bookmarks_header"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:paddingStart="16dp"
-                                    android:paddingEnd="16dp"
-                                    android:paddingTop="8dp"
-                                    android:paddingBottom="8dp"
-                                    android:text="@string/terminal_bookmarks_header"
-                                    android:textAppearance="?attr/textAppearanceLabelLarge"
-                                    android:textColor="?attr/colorOnSurfaceVariant" />
-
-                            </LinearLayout>
-
-                            <com.termux.app.terminal.TerminalDrawerListView
-                                android:id="@+id/terminal_bookmarks_list"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:divider="@android:color/transparent"
-                                android:dividerHeight="8dp"
-                                android:listSelector="@android:color/transparent"
-                                android:scrollbars="none"
-                                android:longClickable="false" />
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:minHeight="48dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <com.google.android.material.textview.MaterialTextView
-                                    android:id="@+id/terminal_sessions_header"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:paddingStart="16dp"
-                                    android:paddingEnd="16dp"
-                                    android:paddingTop="8dp"
-                                    android:paddingBottom="8dp"
-                                    android:text="@string/terminal_sessions_header"
-                                    android:textAppearance="?attr/textAppearanceLabelLarge"
-                                    android:textColor="?attr/colorOnSurfaceVariant" />
-                            </LinearLayout>
-
-                            <com.termux.app.terminal.TerminalDrawerListView
-                                android:id="@+id/terminal_sessions_list"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:divider="@android:color/transparent"
-                                android:dividerHeight="8dp"
-                                android:listSelector="@android:color/transparent"
-                                android:scrollbars="none"
-                                android:choiceMode="singleChoice"
-                                android:longClickable="false" />
-                        </LinearLayout>
-                    </ScrollView>
+                        android:scrollbars="none" />
                 </LinearLayout>
 
                 <FrameLayout

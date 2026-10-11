@@ -513,11 +513,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
         final int indexOfSession = service.getIndexOfSession(session);
         if (indexOfSession < 0) return;
-        final TerminalDrawerListView termuxSessionsListView = mActivity.findViewById(R.id.terminal_sessions_list);
-        if (termuxSessionsListView == null) return;
-
-        termuxSessionsListView.setItemChecked(indexOfSession, true);
-        termuxSessionsListView.revealItem(() -> service.getIndexOfSession(session));
+        TerminalDrawerRecyclerView drawer = mActivity.findViewById(R.id.terminal_drawer_list);
+        if (drawer == null || !(drawer.getAdapter() instanceof TerminalDrawerAdapter)) return;
+        ((TerminalDrawerAdapter) drawer.getAdapter()).revealSession(session);
     }
 
 

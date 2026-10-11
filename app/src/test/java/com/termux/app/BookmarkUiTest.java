@@ -15,15 +15,16 @@ import android.view.MenuItem;
 import android.widget.ListView;
 import android.widget.PopupMenu;
 import android.widget.PopupWindow;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.termux.R;
 import com.termux.app.terminal.TerminalBookmark;
 import com.termux.app.terminal.TerminalBookmarkStore;
-import com.termux.app.terminal.TerminalBookmarksListViewController;
+import com.termux.app.terminal.TerminalDrawerAdapter;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalSession;
@@ -67,51 +68,54 @@ public class BookmarkUiTest {
         }
         activity.getSharedPreferences("terminal_bookmarks", 0).edit()
             .putBoolean("collapsed", legacyCollapsedPreference).commit();
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> {});
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> {});
         controller.visible();
         ViewGroup drawer = activity.getDrawer();
         activity.getDrawer().openDrawer(Gravity.START, false);
         measureDrawer(drawer);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        ScrollView scroll = activity.findViewById(R.id.terminal_drawer_scroll);
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
         assertEquals(View.VISIBLE, list.getVisibility());
-        assertEquals(adapter.getCount(), list.getChildCount());
-        View lastCard = list.getChildAt(adapter.getCount() - 1);
-        assertTrue(bounds(drawer, lastCard).bottom > bounds(drawer, scroll).bottom - scroll.getPaddingBottom());
+        assertEquals(8, adapter.getBookmarkCount());
+        RecyclerView.ViewHolder lastCard = list.findViewHolderForAdapterPosition(
+            adapter.findBookmarkPosition("saved-7"));
+        assertTrue(lastCard == null || bounds(drawer, lastCard.itemView).bottom
+            > bounds(drawer, list).bottom - list.getPaddingBottom());
 
         store.add(bookmark());
-        adapter.refreshAndReveal("location");
+        adapter.refreshAndRevealBookmark("location");
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
         assertEquals(View.VISIBLE, list.getVisibility());
-        int newPosition = adapter.getCount() - 1;
-        assertEquals(0, list.getFirstVisiblePosition());
-        assertEquals(adapter.getCount(), list.getChildCount());
-        View newCard = list.getChildAt(newPosition);
+        int newPosition = adapter.findBookmarkPosition("location");
+        assertEquals(9, adapter.getBookmarkCount());
+        View newCard = itemView(list, newPosition);
         assertEquals("location", newCard.getTag());
-        Rect viewport = bounds(drawer, scroll);
+        Rect viewport = bounds(drawer, list);
         Rect cardBounds = bounds(drawer, newCard);
-        assertTrue("The drawer must scroll to reveal the new bookmark", scroll.getScrollY() > 0);
-        assertTrue("The new card must be fully visible", cardBounds.top >= viewport.top + scroll.getPaddingTop());
+        assertTrue("The drawer must scroll to reveal the new bookmark", list.canScrollVertically(-1));
+        assertTrue("The new card must be fully visible", cardBounds.top >= viewport.top + list.getPaddingTop());
         assertTrue("The new card must be fully visible",
-            cardBounds.bottom <= viewport.bottom - scroll.getPaddingBottom());
+            cardBounds.bottom <= viewport.bottom - list.getPaddingBottom());
         assertTrue("The new card must stay above the floating action",
             cardBounds.bottom <= bounds(drawer, activity.findViewById(R.id.new_session_button)).top);
 
         // Once the user scrolls elsewhere, terminal refreshes must not pull them back to the new item.
-        scroll.scrollTo(0, Math.round(72 * drawer.getResources().getDisplayMetrics().density));
+        list.scrollToPosition(0);
         measureDrawer(drawer);
-        int scrollY = scroll.getScrollY();
-        int firstTop = bounds(drawer, list.getChildAt(0)).top;
+        list.scrollBy(0, Math.round(72 * drawer.getResources().getDisplayMetrics().density));
+        measureDrawer(drawer);
+        LinearLayoutManager layout = (LinearLayoutManager) list.getLayoutManager();
+        int firstPosition = layout.findFirstVisibleItemPosition();
+        int firstTop = bounds(drawer, itemView(list, firstPosition)).top;
         store.rename("saved-1", "Renamed while browsing");
-        adapter.refresh();
+        adapter.refreshBookmarks();
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
-        assertEquals(scrollY, scroll.getScrollY());
-        assertEquals(firstTop, bounds(drawer, list.getChildAt(0)).top);
+        assertEquals(firstPosition, layout.findFirstVisibleItemPosition());
+        assertEquals(firstTop, bounds(drawer, itemView(list, firstPosition)).top);
     }
 
     @Test
@@ -122,10 +126,10 @@ public class BookmarkUiTest {
             .putBoolean("collapsed", true).commit());
         TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
         store.add(bookmark());
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> {});
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> {});
         ViewGroup drawer = activity.getDrawer();
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
         controller.visible();
         activity.getDrawer().openDrawer(Gravity.START, false);
         measureDrawer(drawer);
@@ -133,23 +137,24 @@ public class BookmarkUiTest {
         measureDrawer(drawer);
         assertEquals(View.VISIBLE, list.getVisibility());
         assertTrue(list.getHeight() > 0);
-        assertEquals(1, list.getChildCount());
-        assertEquals("location", list.getChildAt(0).getTag());
+        assertEquals(1, adapter.getBookmarkCount());
+        assertEquals(3, adapter.getItemCount());
+        assertEquals("location", itemView(list, 1).getTag());
         store.rename("location", "Updated bookmark");
-        adapter.refresh();
+        adapter.refreshBookmarks();
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
         assertEquals(View.VISIBLE, list.getVisibility());
-        assertEquals("Updated bookmark", ((TextView) list.getChildAt(0)
+        assertEquals("Updated bookmark", ((TextView) itemView(list, 1)
             .findViewById(R.id.session_name)).getText().toString());
 
         ActivityController<TermuxActivity> recreatedController = Robolectric.buildActivity(TermuxActivity.class);
         TermuxActivity recreated = recreatedController.get();
         recreated.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         recreated.setContentView(R.layout.activity_termux);
-        TerminalBookmarksListViewController restored = new TerminalBookmarksListViewController(
+        TerminalDrawerAdapter restored = new TerminalDrawerAdapter(
             recreated, new TerminalBookmarkStore(recreated), item -> {});
-        ListView restoredList = recreated.findViewById(R.id.terminal_bookmarks_list);
+        RecyclerView restoredList = recreated.findViewById(R.id.terminal_drawer_list);
         assertEquals(View.VISIBLE, restoredList.getVisibility());
         recreatedController.visible();
         recreated.getDrawer().openDrawer(Gravity.START, false);
@@ -158,9 +163,10 @@ public class BookmarkUiTest {
         measureDrawer(recreated.getDrawer());
         assertEquals(View.VISIBLE, restoredList.getVisibility());
         assertTrue(restoredList.getHeight() > 0);
-        assertEquals(1, restoredList.getChildCount());
-        assertEquals("Updated bookmark", restored.getItem(0).name);
-        assertEquals("Updated bookmark", ((TextView) restoredList.getChildAt(0)
+        assertEquals(1, restored.getBookmarkCount());
+        assertEquals(3, restored.getItemCount());
+        assertEquals("Updated bookmark", restored.getBookmark(0).name);
+        assertEquals("Updated bookmark", ((TextView) itemView(restoredList, 1)
             .findViewById(R.id.session_name)).getText().toString());
     }
 
@@ -193,10 +199,14 @@ public class BookmarkUiTest {
         TermuxActivity activity = host();
         TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
         store.add(bookmark());
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> {});
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        View bookmark = adapter.getView(0, null, list);
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> {});
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
+        int bookmarkPosition = adapter.findBookmarkPosition("location");
+        RecyclerView.ViewHolder holder = adapter.createViewHolder(list,
+            adapter.getItemViewType(bookmarkPosition));
+        adapter.bindViewHolder(holder, bookmarkPosition);
+        View bookmark = holder.itemView;
         View session = activity.getLayoutInflater().inflate(R.layout.item_terminal_sessions_list, list, false);
         ((TextView) session.findViewById(R.id.session_number)).setText("12");
         TextView name = session.findViewById(R.id.session_name);
@@ -258,14 +268,13 @@ public class BookmarkUiTest {
                 Collections.emptyList(), "/tmp/" + i));
         }
         TerminalBookmark[] opened = {null};
-        new TerminalBookmarksListViewController(activity, store, item -> opened[0] = item);
+        new TerminalDrawerAdapter(activity, store, item -> opened[0] = item);
         controller.visible();
         activity.getDrawer().openDrawer(Gravity.START, false);
         ViewGroup drawer = activity.getDrawer();
         measureDrawer(drawer);
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        ScrollView scroll = activity.findViewById(R.id.terminal_drawer_scroll);
-        Rect target = bounds(drawer, list.getChildAt(1).findViewById(touchTargetId));
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
+        Rect target = bounds(drawer, itemView(list, 2).findViewById(touchTargetId));
         long time = SystemClock.uptimeMillis();
         float step = 40 * activity.getResources().getDisplayMetrics().density;
         int[] actions = {MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
@@ -277,9 +286,9 @@ public class BookmarkUiTest {
             event.recycle();
         }
         Shadows.shadowOf(Looper.getMainLooper()).idle();
-        assertTrue("Dragging a bookmark must scroll the shared page", scroll.getScrollY() > 0);
-        assertEquals(0, list.getFirstVisiblePosition());
-        assertEquals(list.getPaddingTop(), list.getChildAt(0).getTop());
+        assertTrue("Dragging a bookmark must scroll the shared page", list.canScrollVertically(-1));
+        assertEquals(14, list.getAdapter().getItemCount());
+        assertTrue("Off-screen bookmarks must be recycled", list.getChildCount() < 14);
         assertNull(ShadowApplication.getInstance().getLatestPopupWindow());
         assertNull(opened[0]);
     }
@@ -297,8 +306,8 @@ public class BookmarkUiTest {
             Collections.emptyList(), "/tmp"));
         TerminalBookmark[] opened = {null};
         int[] openCount = {0};
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> {
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> {
                 opened[0] = item;
                 openCount[0]++;
             });
@@ -308,8 +317,8 @@ public class BookmarkUiTest {
         activity.getDrawer().openDrawer(Gravity.START, false);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        View path = list.getChildAt(0).findViewById(R.id.session_title);
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
+        View path = itemView(list, 1).findViewById(R.id.session_title);
         Rect bounds = bounds(drawer, path);
         assertTrue(path.isShown());
         assertTrue(bounds.width() > 0);
@@ -321,13 +330,13 @@ public class BookmarkUiTest {
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150));
         if (refresh) {
             store.rename("location", "Updated bookmark");
-            adapter.refresh();
+            adapter.refreshBookmarks();
             measureDrawer(drawer);
         }
         if (delete) {
             store.delete("location");
-            adapter.refresh();
-            // Deliberately deliver UP before ListView lays out its changed data.
+            adapter.refreshBookmarks();
+            // Deliberately deliver UP before RecyclerView lays out its changed data.
         }
         MotionEvent up = MotionEvent.obtain(time, time + 150, MotionEvent.ACTION_UP,
             bounds.exactCenterX(), bounds.exactCenterY(), 0);
@@ -337,7 +346,7 @@ public class BookmarkUiTest {
         if (delete) {
             assertEquals(0, openCount[0]);
             assertNull(opened[0]);
-            assertEquals("remaining", adapter.getItem(0).id);
+            assertEquals("remaining", adapter.getBookmark(0).id);
             return;
         }
         assertEquals("A card tap must open its bookmark exactly once", 1, openCount[0]);
@@ -350,26 +359,31 @@ public class BookmarkUiTest {
 
     @Test
     public void drawerRefreshReflectsRenameAndDeleteAndOpeningKeepsSavedEnvironment() {
-        TermuxActivity activity = host();
+        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class);
+        TermuxActivity activity = host(controller);
         TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
         store.add(bookmark());
         TerminalBookmark[] opened = {null};
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> opened[0] = item);
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> opened[0] = item);
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
         assertSame(adapter, list.getAdapter());
-        View row = adapter.getView(0, null, list);
-        list.performItemClick(row, 0, 0);
+        controller.visible();
+        activity.getDrawer().openDrawer(Gravity.START, false);
+        measureDrawer(activity.getDrawer());
+        View row = itemView(list, adapter.findBookmarkPosition("location"));
+        assertTrue(row.findViewById(R.id.session_card_content).performClick());
         assertEquals("ubuntu", opened[0].distro);
         assertEquals(bookmark().path, opened[0].path);
         store.rename("location", "新名称");
-        adapter.refresh();
-        row = adapter.getView(0, row, list);
+        adapter.refreshBookmarks();
+        measureDrawer(activity.getDrawer());
+        row = itemView(list, adapter.findBookmarkPosition("location"));
         assertEquals("新名称", ((TextView) row.findViewById(R.id.session_name)).getText().toString());
         assertEquals("新名称", new TerminalBookmarkStore(activity).getAll().get(0).name);
         store.delete("location");
-        adapter.refresh();
-        assertEquals(0, adapter.getCount());
+        adapter.refreshBookmarks();
+        assertEquals(0, adapter.getBookmarkCount());
     }
 
     @Test
@@ -395,16 +409,16 @@ public class BookmarkUiTest {
         store.add(new TerminalBookmark("remaining", "Remaining bookmark", "local", "",
             Collections.emptyList(), "/tmp"));
         TerminalBookmark[] opened = {null};
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> opened[0] = item);
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> opened[0] = item);
         controller.visible();
         View drawer = activity.getDrawer();
         activity.getDrawer().openDrawer(Gravity.START, false);
         measureDrawer(drawer);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        list.getChildAt(0).findViewById(R.id.session_menu_button).performClick();
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
+        itemView(list, 1).findViewById(R.id.session_menu_button).performClick();
         PopupWindow popup = ShadowApplication.getInstance().getLatestPopupWindow();
         assertNotNull(popup);
         ListView actions = popupList(popup.getContentView());
@@ -417,7 +431,7 @@ public class BookmarkUiTest {
         TextView message = dialog.findViewById(android.R.id.message);
         assertEquals(activity.getString(R.string.message_confirm_delete_bookmark, bookmark().name),
             message.getText().toString());
-        assertEquals(2, adapter.getCount());
+        assertEquals(2, adapter.getBookmarkCount());
         assertEquals(2, new TerminalBookmarkStore(activity).getAll().size());
         assertNull(opened[0]);
 
@@ -430,11 +444,11 @@ public class BookmarkUiTest {
         measureDrawer(drawer);
         assertFalse(dialog.isShowing());
         boolean deleted = action == AlertDialog.BUTTON_POSITIVE;
-        assertEquals(deleted ? 1 : 2, adapter.getCount());
+        assertEquals(deleted ? 1 : 2, adapter.getBookmarkCount());
         assertEquals(deleted ? 1 : 2, new TerminalBookmarkStore(activity).getAll().size());
         String firstId = deleted ? "remaining" : "location";
-        assertEquals(firstId, adapter.getItem(0).id);
-        assertEquals(firstId, list.getChildAt(0).getTag());
+        assertEquals(firstId, adapter.getBookmark(0).id);
+        assertEquals(firstId, itemView(list, 1).getTag());
         assertEquals(firstId, new TerminalBookmarkStore(activity).getAll().get(0).id);
         assertNull(opened[0]);
     }
@@ -446,16 +460,16 @@ public class BookmarkUiTest {
         TerminalBookmarkStore store = new TerminalBookmarkStore(activity);
         store.add(bookmark());
         TerminalBookmark[] opened = {null};
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> opened[0] = item);
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> opened[0] = item);
         controller.visible();
         ViewGroup drawer = activity.getDrawer();
         measureDrawer(drawer);
         activity.getDrawer().openDrawer(Gravity.START, false);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        View menu = list.getChildAt(0).findViewById(R.id.session_menu_button);
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
+        View menu = itemView(list, 1).findViewById(R.id.session_menu_button);
         Rect bounds = bounds(drawer, menu);
         long time = SystemClock.uptimeMillis();
         MotionEvent down = MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN,
@@ -464,7 +478,7 @@ public class BookmarkUiTest {
         down.recycle();
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150));
         store.rename("location", "Updated bookmark");
-        adapter.refresh();
+        adapter.refreshBookmarks();
         measureDrawer(drawer);
         MotionEvent up = MotionEvent.obtain(time, time + 150, MotionEvent.ACTION_UP,
             bounds.exactCenterX(), bounds.exactCenterY(), 0);
@@ -475,7 +489,7 @@ public class BookmarkUiTest {
         assertNotNull(popup);
         assertTrue(popup.isShowing());
         assertNull(opened[0]);
-        assertEquals("Updated bookmark", ((TextView) list.getChildAt(0)
+        assertEquals("Updated bookmark", ((TextView) itemView(list, 1)
             .findViewById(R.id.session_name)).getText().toString());
         popup.dismiss();
     }
@@ -488,8 +502,8 @@ public class BookmarkUiTest {
         store.add(bookmark());
         store.add(new TerminalBookmark("remaining", "Second", "local", "",
             Collections.emptyList(), "/tmp"));
-        TerminalBookmarksListViewController adapter =
-            new TerminalBookmarksListViewController(activity, store, item -> {});
+        TerminalDrawerAdapter adapter =
+            new TerminalDrawerAdapter(activity, store, item -> {});
         controller.visible();
         ViewGroup drawer = activity.getDrawer();
         measureDrawer(drawer);
@@ -497,15 +511,22 @@ public class BookmarkUiTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
         store.delete("location");
-        adapter.refresh();
+        adapter.refreshBookmarks();
         store.rename("remaining", "Updated survivor");
-        adapter.refresh();
+        adapter.refreshBookmarks();
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureDrawer(drawer);
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        assertEquals(1, list.getChildCount());
-        assertEquals("Updated survivor", ((TextView) list.getChildAt(0)
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
+        assertEquals(1, adapter.getBookmarkCount());
+        assertEquals(3, adapter.getItemCount());
+        assertEquals("Updated survivor", ((TextView) itemView(list, 1)
             .findViewById(R.id.session_name)).getText().toString());
+    }
+
+    private static View itemView(RecyclerView list, int position) {
+        RecyclerView.ViewHolder holder = list.findViewHolderForAdapterPosition(position);
+        assertNotNull("Expected visible drawer item at adapter position " + position, holder);
+        return holder.itemView;
     }
 
     private static void measureDrawer(View drawer) {

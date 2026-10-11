@@ -76,15 +76,22 @@ final class BookmarkProcessSnapshot {
     }
 
     private static Process readProcess(File procDirectory, int pid, Process parent) throws IOException {
-        String command = new String(readBytes(new File(new File(procDirectory,
-            Integer.toString(pid)), "cmdline")), StandardCharsets.UTF_8);
+        return new Process(pid, readArguments(new File(procDirectory, pid + "/cmdline")), parent);
+    }
+
+    static List<String> readEnvironment(File procDirectory, int pid) throws IOException {
+        return readArguments(new File(procDirectory, pid + "/environ"));
+    }
+
+    private static List<String> readArguments(File file) throws IOException {
+        String command = new String(readBytes(file), StandardCharsets.UTF_8);
         List<String> args = new ArrayList<>();
         if (!command.isEmpty()) {
             // Remove the final terminator only; an empty last argv is meaningful too.
             if (command.endsWith("\u0000")) command = command.substring(0, command.length() - 1);
             Collections.addAll(args, command.split("\u0000", -1));
         }
-        return new Process(pid, args, parent);
+        return args;
     }
 
     private static Process sshpassClient(File procDirectory, Map<Integer, Stat> processes,

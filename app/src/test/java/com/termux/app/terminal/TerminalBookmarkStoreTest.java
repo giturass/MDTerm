@@ -58,4 +58,24 @@ public class TerminalBookmarkStoreTest {
         assertEquals(1, store.getAll().size());
         assertEquals("ok", store.getAll().get(0).id);
     }
+
+    @Test public void prootLaunchSettingsSurviveStorageAndRenameWhileOldBookmarksRemainCompatible() {
+        BookmarkProotLaunch launch = new BookmarkProotLaunch(Arrays.asList("proot", "--rootfs=.",
+            "--change-id=1000:1000", "--bind=/shared dir:/mnt/shared", "/bin/zsh", "-l"),
+            Arrays.asList("HOME=/home/alice", "USER=alice", "CUSTOM=a'b\nvalue"), "/containers/debian/rootfs");
+        store.add(new TerminalBookmark("full", "Saved", "proot", "debian", Collections.emptyList(),
+            "/mnt/shared/工作", launch));
+        store.add(new TerminalBookmark("legacy", "Legacy", "proot", "debian", Collections.emptyList(), "/root"));
+        TerminalBookmarkStore reopened = new TerminalBookmarkStore(context);
+        reopened.rename("full", "Renamed");
+        TerminalBookmark saved = reopened.getAll().get(0);
+        assertEquals("Renamed", saved.name);
+        assertEquals(launch.arguments, saved.prootLaunch.arguments);
+        assertEquals(launch.environment, saved.prootLaunch.environment);
+        assertEquals(launch.workingDirectory, saved.prootLaunch.workingDirectory);
+        assertTrue(BookmarkEnvironment.launchCommand(saved).contains("'--cwd=/mnt/shared/工作'"));
+        TerminalBookmark legacy = reopened.getAll().get(1);
+        assertNull(legacy.prootLaunch);
+        assertTrue(BookmarkEnvironment.launchCommand(legacy).contains("login --work-dir '/root' 'debian'"));
+    }
 }

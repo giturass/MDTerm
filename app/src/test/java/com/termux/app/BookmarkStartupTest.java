@@ -11,14 +11,14 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.ListView;
 
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.termux.R;
 import com.termux.app.terminal.TerminalBookmark;
 import com.termux.app.terminal.TerminalBookmarkStore;
-import com.termux.app.terminal.TerminalBookmarksListViewController;
+import com.termux.app.terminal.TerminalDrawerAdapter;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -341,8 +341,8 @@ public class BookmarkStartupTest {
         ReflectionHelpers.setField(renderer, "mFontLineSpacing", 20);
         activity.getTerminalToolbar().setVisibility(View.VISIBLE);
         ReflectionHelpers.setField(activity, "mBookmarkStore", bookmarks);
-        ReflectionHelpers.setField(activity, "mBookmarksController",
-            new TerminalBookmarksListViewController(activity, bookmarks, client::openBookmark));
+        ReflectionHelpers.setField(activity, "mDrawerAdapter",
+            new TerminalDrawerAdapter(activity, bookmarks, client::openBookmark));
         ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
         controller.visible();
         measureDrawer();
@@ -355,10 +355,18 @@ public class BookmarkStartupTest {
     }
 
     private void clickBookmark() {
-        ListView list = activity.findViewById(R.id.terminal_bookmarks_list);
-        assertEquals(1, list.getAdapter().getCount());
-        View row = list.getAdapter().getView(0, null, list);
-        assertTrue(list.performItemClick(row, 0, list.getAdapter().getItemId(0)));
+        RecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
+        TerminalDrawerAdapter adapter = (TerminalDrawerAdapter) list.getAdapter();
+        assertEquals(1, adapter.getBookmarkCount());
+        int position = adapter.findBookmarkPosition("saved");
+        list.scrollToPosition(position);
+        measureDrawer();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        measureDrawer();
+        RecyclerView.ViewHolder holder = list.findViewHolderForAdapterPosition(position);
+        assertNotNull(holder);
+        assertEquals("saved", holder.itemView.getTag());
+        assertTrue(holder.itemView.findViewById(R.id.session_card_content).performClick());
     }
 
     private void assertEmptyNavigation() {

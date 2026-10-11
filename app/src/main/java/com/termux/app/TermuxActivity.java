@@ -28,7 +28,6 @@ import android.widget.PopupMenu;
 import android.view.WindowManager;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
-import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
@@ -56,11 +55,10 @@ import com.termux.app.activities.HelpActivity;
 import com.termux.app.activities.SettingsActivity;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.app.terminal.TermuxSessionsListViewController;
+import com.termux.app.terminal.TerminalDrawerAdapter;
 import com.termux.app.terminal.BookmarkEnvironment;
 import com.termux.app.terminal.TerminalBookmark;
 import com.termux.app.terminal.TerminalBookmarkStore;
-import com.termux.app.terminal.TerminalBookmarksListViewController;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
@@ -155,9 +153,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     TermuxTerminalExtraKeys mTermuxTerminalExtraKeys;
 
     /**
-     * The termux sessions list controller.
+     * The shared adapter for bookmark and session cards in the drawer.
      */
-    TermuxSessionsListViewController mTermuxSessionListViewController;
+    TerminalDrawerAdapter mDrawerAdapter;
 
     /**
      * The {@link TermuxActivity} broadcast receiver for various things like terminal style configuration changes.
@@ -202,7 +200,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean mIsWaitingForSession;
     private AlertDialog mActionsDialog;
     private TerminalBookmarkStore mBookmarkStore;
-    private TerminalBookmarksListViewController mBookmarksController;
     private boolean mSavingBookmark;
 
 
@@ -292,7 +289,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setFileSystemView();
 
         mBookmarkStore = new TerminalBookmarkStore(this);
-        mBookmarksController = new TerminalBookmarksListViewController(this, mBookmarkStore,
+        mDrawerAdapter = new TerminalDrawerAdapter(this, mBookmarkStore,
             bookmark -> mTermuxTerminalSessionActivityClient.openBookmark(bookmark));
 
         setAdaptiveDrawerLayout();
@@ -421,7 +418,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState) return;
 
         if (mActionsDialog != null) mActionsDialog.dismiss();
-        if (mTermuxSessionListViewController != null) mTermuxSessionListViewController.dispose();
+        if (mDrawerAdapter != null) mDrawerAdapter.dispose();
 
         if (mTermuxService != null) {
             // Do not leave service and session clients with references to activity.
@@ -587,11 +584,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void setTermuxSessionsListView() {
-        ListView termuxSessionsListView = findViewById(R.id.terminal_sessions_list);
-        if (mTermuxSessionListViewController != null) mTermuxSessionListViewController.dispose();
-        mTermuxSessionListViewController = new TermuxSessionsListViewController(this, mTermuxService.getTermuxSessions());
-        termuxSessionsListView.setAdapter(mTermuxSessionListViewController);
-        termuxSessionsListView.setOnItemClickListener(mTermuxSessionListViewController);
+        if (mDrawerAdapter == null) {
+            if (mBookmarkStore == null) mBookmarkStore = new TerminalBookmarkStore(this);
+            mDrawerAdapter = new TerminalDrawerAdapter(this, mBookmarkStore,
+                bookmark -> mTermuxTerminalSessionActivityClient.openBookmark(bookmark));
+        }
+        mDrawerAdapter.setSessions(mTermuxService.getTermuxSessions());
     }
 
 
@@ -951,7 +949,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         if (isFinishing() || isDestroyed()) return;
                         String name = text == null ? "" : text.trim();
                         mBookmarkStore.add(name.isEmpty() ? bookmark : bookmark.withName(name));
-                        mBookmarksController.refreshAndReveal(bookmark.id);
+                        mDrawerAdapter.refreshAndRevealBookmark(bookmark.id);
                         showToast(getString(R.string.bookmark_saved), false);
                     }, -1, null, -1, null, null);
             }
@@ -1120,8 +1118,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public void termuxSessionListNotifyUpdated() {
-        if (mTermuxSessionListViewController != null)
-            mTermuxSessionListViewController.notifyDataSetChanged();
+        if (mDrawerAdapter != null) mDrawerAdapter.refreshSessions();
         if (getCurrentSession() == null && mTermuxService != null && !mTermuxService.isTermuxSessionsEmpty()) {
             // A background command may create the first session without requesting a switch.
             mTermuxTerminalSessionActivityClient.setCurrentSession(
@@ -1132,7 +1129,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public void onSessionActivity(TerminalSession session) {
-        if (mTermuxSessionListViewController != null) mTermuxSessionListViewController.onSessionActivity(session);
+        if (mDrawerAdapter != null) mDrawerAdapter.onSessionActivity(session);
     }
 
     public boolean isVisible() {

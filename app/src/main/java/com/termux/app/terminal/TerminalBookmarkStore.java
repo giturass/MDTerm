@@ -10,7 +10,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Private application storage; SSH passwords are never stored. */
+/** Private application storage for saved locations and their login settings. */
 public final class TerminalBookmarkStore {
     private final SharedPreferences preferences;
 
@@ -34,9 +34,15 @@ public final class TerminalBookmarkStore {
                     if (args != null) {
                         for (int j = 0; j < args.length(); j++) sshArgs.add(args.getString(j));
                     }
+                    JSONObject proot = item.optJSONObject("prootLaunch");
+                    if (item.has("prootLaunch") && proot == null)
+                        throw new JSONException("Invalid PRoot login settings");
+                    BookmarkProotLaunch prootLaunch = proot == null ? null : new BookmarkProotLaunch(
+                        readStrings(proot.getJSONArray("arguments")), readStrings(proot.getJSONArray("environment")),
+                        proot.getString("workingDirectory"));
                     bookmarks.add(new TerminalBookmark(item.getString("id"), item.getString("name"),
-                        kind, item.optString("distro", ""), sshArgs, path));
-                } catch (JSONException ignored) {
+                        kind, item.optString("distro", ""), sshArgs, path, prootLaunch));
+                } catch (JSONException | IllegalArgumentException ignored) {
                     // Preserve other entries if an individual saved item is damaged.
                 }
             }
@@ -51,6 +57,12 @@ public final class TerminalBookmarkStore {
         bookmarks.removeIf(item -> item.id.equals(bookmark.id));
         bookmarks.add(bookmark);
         save(bookmarks);
+    }
+
+    private static List<String> readStrings(JSONArray array) throws JSONException {
+        List<String> values = new ArrayList<>();
+        for (int i = 0; i < array.length(); i++) values.add(array.getString(i));
+        return values;
     }
 
     public void rename(String id, String name) {
@@ -78,6 +90,13 @@ public final class TerminalBookmarkStore {
                 item.put("distro", bookmark.distro);
                 item.put("sshArgs", new JSONArray(bookmark.sshArgs));
                 item.put("path", bookmark.path);
+                if (bookmark.prootLaunch != null) {
+                    JSONObject proot = new JSONObject();
+                    proot.put("arguments", new JSONArray(bookmark.prootLaunch.arguments));
+                    proot.put("environment", new JSONArray(bookmark.prootLaunch.environment));
+                    proot.put("workingDirectory", bookmark.prootLaunch.workingDirectory);
+                    item.put("prootLaunch", proot);
+                }
                 saved.put(item);
             }
         } catch (JSONException e) {

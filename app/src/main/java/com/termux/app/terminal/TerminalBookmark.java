@@ -12,9 +12,15 @@ public final class TerminalBookmark {
     public final String distro;
     public final List<String> sshArgs;
     public final String path;
+    public final BookmarkProotLaunch prootLaunch;
 
     public TerminalBookmark(String id, String name, String kind, String distro,
                             List<String> sshArgs, String path) {
+        this(id, name, kind, distro, sshArgs, path, null);
+    }
+
+    public TerminalBookmark(String id, String name, String kind, String distro,
+                            List<String> sshArgs, String path, BookmarkProotLaunch prootLaunch) {
         this.id = id;
         this.name = name;
         this.kind = kind;
@@ -22,9 +28,10 @@ public final class TerminalBookmark {
         this.sshArgs = Collections.unmodifiableList(new ArrayList<>(
             sshArgs == null ? Collections.emptyList() : sshArgs));
         this.path = path;
+        this.prootLaunch = prootLaunch;
     }
 
     public TerminalBookmark withName(String name) {
-        return new TerminalBookmark(id, name, kind, distro, sshArgs, path);
+        return new TerminalBookmark(id, name, kind, distro, sshArgs, path, prootLaunch);
     }
 }

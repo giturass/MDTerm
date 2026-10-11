@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
@@ -46,6 +47,8 @@ public class BookmarkCaptureTest {
             assertEquals("proot", result.bookmark.kind);
             assertEquals("debian", result.bookmark.distro);
             assertEquals(path, result.bookmark.path);
+            assertNotNull(result.bookmark.prootLaunch);
+            assertEquals(root.getAbsolutePath(), result.bookmark.prootLaunch.workingDirectory);
         }
     }
 
@@ -84,6 +87,56 @@ public class BookmarkCaptureTest {
         assertEquals(0, result.queries);
         assertEquals("local", result.bookmark.kind);
         assertEquals(cwd.getCanonicalPath(), result.bookmark.path);
+        assertNull(result.bookmark.prootLaunch);
+    }
+
+    @Test public void prootCaptureIncludesAccountMountsShellAndLaunchEnvironment() throws Exception {
+        File root = rootfs();
+        process(100, 0, 100, 120, temporary.getRoot(), "bash", "-l");
+        process(110, 100, 110, 120, root, "proot", "--rootfs=.", "--change-id=1000:1000",
+            "--bind=/storage/shared:/mnt/shared", "--bind=/host/tmp:/tmp", "--sysvipc",
+            "--cwd=/home/alice", "/bin/zsh", "-l");
+        process(120, 110, 120, 120, null, "/bin/zsh", "-l");
+        String[] environment = {"HOME=/home/alice", "USER=alice", "SHELL=/bin/zsh",
+            "PATH=/usr/local/bin:/usr/bin:/bin", "LANG=zh_CN.UTF-8", "CUSTOM=value with spaces",
+            "PROOT_NO_SECCOMP=1"};
+        Files.write(new File(temporary.getRoot(), "110/environ").toPath(),
+            (String.join("\0", environment) + "\0").getBytes(StandardCharsets.UTF_8));
+        TerminalSession session = session();
+        Result result = capture(session);
+        reply(session, "/mnt/shared/work");
+        assertEquals(Arrays.asList(environment), result.bookmark.prootLaunch.environment);
+        assertTrue(result.bookmark.prootLaunch.arguments.contains("--change-id=1000:1000"));
+        assertTrue(result.bookmark.prootLaunch.arguments.contains("--bind=/storage/shared:/mnt/shared"));
+        assertTrue(result.bookmark.prootLaunch.arguments.contains("/bin/zsh"));
+        assertTrue(BookmarkEnvironment.launchCommand(result.bookmark).contains("'--cwd=/mnt/shared/work'"));
+    }
+
+    @Test public void switchingUsersAfterProotLoginDoesNotSaveTheOriginalAccount() throws Exception {
+        File root = rootfs();
+        process(100, 0, 100, 120, temporary.getRoot(), "bash", "-l");
+        process(110, 100, 110, 120, root, "proot", "--rootfs=.", "--change-id=0:0", "/bin/bash", "-l");
+        process(115, 110, 115, 120, root, "su", "-l", "alice");
+        process(120, 115, 120, 120, null, "/bin/bash", "-l");
+        Result result = awaitCapture(session());
+        assertNotNull(result.error);
+        assertTrue(result.error.contains("切换了用户"));
+        assertEquals(0, result.queries);
+        assertNull(result.bookmark);
+    }
+
+    @Test public void originalSuLoginFromOlderProotDistroKeepsItsAccount() throws Exception {
+        File root = rootfs();
+        process(100, 0, 100, 120, temporary.getRoot(), "bash", "-l");
+        process(110, 100, 110, 120, root, "proot", "--rootfs=.", "--root-id",
+            "/usr/bin/env", "-i", "TERM=xterm-256color", "/bin/su", "-l", "alice");
+        process(115, 110, 115, 120, root, "/bin/su", "-l", "alice");
+        process(120, 115, 120, 120, null, "/bin/bash", "-l");
+        TerminalSession session = session();
+        Result result = capture(session);
+        reply(session, "/home/alice/work");
+        assertTrue(result.bookmark.prootLaunch.arguments.contains("alice"));
+        assertTrue(BookmarkEnvironment.launchCommand(result.bookmark).contains("'/bin/su' '-l' 'alice' -c"));
     }
 
     private File rootfs() throws IOException {
@@ -112,10 +165,18 @@ public class BookmarkCaptureTest {
         Files.write(new File(directory, "stat").toPath(), stat.getBytes(StandardCharsets.UTF_8));
         Files.write(new File(directory, "cmdline").toPath(),
             (String.join("\0", args) + "\0").getBytes(StandardCharsets.UTF_8));
+        Files.write(new File(directory, "environ").toPath(),
+            "HOME=/root\0USER=root\0PATH=/usr/bin:/bin\0".getBytes(StandardCharsets.UTF_8));
         if (cwd != null) Files.createSymbolicLink(new File(directory, "cwd").toPath(), cwd.toPath());
     }
 
     private Result capture(TerminalSession session) throws InterruptedException {
+        Result result = awaitCapture(session);
+        assertNull(result.error);
+        return result;
+    }
+
+    private Result awaitCapture(TerminalSession session) throws InterruptedException {
         Result result = new Result();
         BookmarkEnvironment.capture(session, result, temporary.getRoot());
         long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
@@ -125,7 +186,6 @@ public class BookmarkCaptureTest {
             Thread.sleep(5);
         }
         assertTrue("Capture worker did not respond", result.queries > 0 || result.bookmark != null || result.error != null);
-        assertNull(result.error);
         return result;
     }
 
