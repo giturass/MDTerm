@@ -862,7 +862,7 @@ diff --git a/src/terminal/osc/parsers/rxvt_extension.zig b/src/terminal/osc/pars
 diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
 --- a/src/terminal/c/terminal.zig
 +++ b/src/terminal/c/terminal.zig
-@@ -7168,3 +7168,52 @@
+@@ -7168,3 +7168,57 @@
      try testing.expectEqual(Result.success, get(t, .mouse_shape, @ptrCast(&shape)));
      try testing.expectEqual(mouse.Shape.wait, shape);
  }
@@ -897,11 +897,16 @@ diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
 +    try testing.expectEqual(Result.success, set(t, .unknown_sequence, @ptrCast(&S.unknownSequence)));
 +    try testing.expectEqual(Result.success, set(t, .desktop_notification, @ptrCast(&S.desktopNotification)));
 +    const first = "\x1b]777;mdterm;nonce;";
-+    const second = "L3RtcAo=\x1b";
++    const second = "L3RtcAo=";
 +    const third = "\\\x1b]777;notify;Title;Body\x07";
 +    vt_write(t, first, first.len);
 +    vt_write(t, second, second.len);
 +    try testing.expectEqual(@as(usize, 0), S.bookmarks);
++    // Ghostty dispatches OSC on ESC, before the ST backslash arrives.
++    const st_start = "\x1b";
++    vt_write(t, st_start, st_start.len);
++    try testing.expectEqual(@as(usize, 1), S.bookmarks);
++    try testing.expectEqual(@as(usize, 0), S.notifications);
 +    vt_write(t, third, third.len);
 +    try testing.expectEqual(@as(usize, 1), S.bookmarks);
 +    try testing.expectEqual(@as(usize, 1), S.notifications);
