@@ -13,8 +13,16 @@ checkout_source() {
         printf '%s must be pinned to a full Git commit, got %s\n' "$name" "$commit" >&2
         return 1
     fi
+    if [[ -L "$path" ]]; then
+        printf 'Refusing to use a symlink as a checkout: %s\n' "$path" >&2
+        return 1
+    fi
     if [[ ! -d "$path/.git" ]]; then
-        if [[ -e "$path" ]]; then
+        # Gradle creates declared output directories before running this task.
+        # Initialize those empty directories, but never replace existing data
+        # in a directory that is not already a checkout.
+        if [[ -e "$path" && ! -d "$path" ]] ||
+                [[ -d "$path" && -n "$(find "$path" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
             printf 'Refusing to replace a non-checkout directory: %s\n' "$path" >&2
             return 1
         fi
