@@ -47,8 +47,9 @@ program-status UI from the reference fork is not included.
 The source repositories and pins are declared in [build.gradle](../build.gradle).
 The JNI bridge, renderer and Android patch originate from reference commit
 `9bdfe0b90bbe3e21cd6070e488d9d38abe3af3e9`. MDTerm adds the bounded bookmark
-callback and native cursor state used by its IME overlay. Keep the C API,
-Android patch, JNI bridge and terminfo in sync when updating the Ghostty pin.
+callback, native cursor state used by its IME overlay, and CJK glyph width
+adaptation. Keep the C API, Android patch, JNI bridge and terminfo in sync when
+updating the Ghostty pin.
 
 The build uses Java 17, Gradle 9.2.1, AGP 8.13.2, SDK 36, NDK 29.0.14206865,
 CMake 3.22.1, Zig 0.16.0, Git, Bash and ncurses `tic`. The GitHub workflows
@@ -81,6 +82,13 @@ The bundled JetBrains Mono font is copied to the app cache for FreeType.
 filename order, followed by the native renderer's Android system font fallback.
 Explicit `colors.properties` values still override wallpaper theme defaults.
 
+Ordinary CJK outline glyphs are fitted horizontally to their two terminal cells
+before rasterization. The scale uses the complete shaped grapheme's advance,
+preserving proportional side bearings and punctuation spacing. This avoids
+extra gaps when the primary Latin font and the CJK fallback have different
+width proportions. Glyph height, baseline, and terminal grid positions remain
+unchanged. Color fonts, emoji, and bitmap-only fonts retain their existing sizing.
+
 ## Validation
 
 All compilation, tests that require compilation, and APK builds run in GitHub
@@ -92,6 +100,9 @@ pinned NDK and runs Ghostty's `test-lib-vt` suites on the Linux host, using the
 same patched source as Android. These cover terminal parsing, keyboard/paste,
 resize/scrollback, Kitty image decode/storage/placements, and the added OSC 777
 regressions. Host tests do not exercise the Android Vulkan driver or PNG hook.
+The native job also runs CJK font fitting tests with the pinned FreeType and
+HarfBuzz libraries, covering actual glyph rasterization, punctuation, combining
+marks, and unchanged glyphs outside the CJK fitting path.
 
 The [debug](../.github/workflows/debug_build.yml) and
 [release](../.github/workflows/release.yml) workflows build APKs and verify their

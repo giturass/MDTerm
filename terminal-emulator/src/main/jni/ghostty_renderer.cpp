@@ -4,6 +4,7 @@
 #include "ghostty_renderer.h"
 
 #include "ghostty_engine.h"
+#include "terminal_font_fit.h"
 
 #include <android/font.h>
 #include <android/font_matcher.h>
@@ -746,13 +747,41 @@ CachedTextRun load_text_run(FontSystem *fonts, const uint8_t *bytes,
     hb_glyph_info_t *infos = hb_buffer_get_glyph_infos(buffer, &count);
     hb_glyph_position_t *positions =
         hb_buffer_get_glyph_positions(buffer, &count);
+    FT_Fixed x_scale = termux::FONT_SCALE_IDENTITY;
+    if (cell_columns == 2 && !face->has_color && FT_IS_SCALABLE(face->ft)) {
+        x_scale = termux::cjk_horizontal_scale(
+            utf8_to_codepoints(bytes, length), fonts->cell_width,
+            cell_columns, positions, count);
+        if (x_scale != termux::FONT_SCALE_IDENTITY) {
+            // Fit a complete grapheme or leave all of it at its natural size.
+            // Scalable CJK fonts may also contain embedded bitmap strikes.
+            for (unsigned int i = 0; i < count; ++i) {
+                if (infos[i].codepoint == 0 ||
+                    FT_Load_Glyph(face->ft, infos[i].codepoint,
+                                  FT_LOAD_DEFAULT | FT_LOAD_COLOR |
+                                  FT_LOAD_NO_BITMAP) != 0 ||
+                    face->ft->glyph->format != FT_GLYPH_FORMAT_OUTLINE) {
+                    x_scale = termux::FONT_SCALE_IDENTITY;
+                    break;
+                }
+            }
+        }
+    }
+    FT_Int32 load_flags = FT_LOAD_DEFAULT | FT_LOAD_COLOR;
+    if (x_scale != termux::FONT_SCALE_IDENTITY) load_flags |= FT_LOAD_NO_BITMAP;
     int pen_x = 0;
     int pen_y = fonts->ascender;
+    FT_Pos fitted_pen_x = 0;
     for (unsigned int i = 0; i < count; ++i) {
         CachedTextGlyph glyph;
+        bool fitted_outline = false;
+        FT_Pos fitted_origin_x = fitted_pen_x + positions[i].x_offset;
+        fitted_pen_x += positions[i].x_advance;
         if (!render_color_glyph(face, infos[i].codepoint, &glyph)) {
             if (FT_Load_Glyph(face->ft, infos[i].codepoint,
-                              FT_LOAD_DEFAULT | FT_LOAD_COLOR) != 0) continue;
+                              load_flags) != 0) continue;
+            fitted_outline = termux::fit_cjk_glyph_outline(
+                face->ft->glyph, x_scale, fitted_origin_x);
             if (FT_Render_Glyph(face->ft->glyph, FT_RENDER_MODE_NORMAL) != 0)
                 continue;
             glyph.x = face->ft->glyph->bitmap_left;
@@ -776,7 +805,8 @@ CachedTextRun load_text_run(FontSystem *fonts, const uint8_t *bytes,
         }
         fit_colored_glyph(&glyph, fonts->cell_width * cell_columns,
                           fonts->cell_height);
-        glyph.x += pen_x + positions[i].x_offset / 64;
+        // A fitted outline already includes its scaled, subpixel X origin.
+        if (!fitted_outline) glyph.x += pen_x + positions[i].x_offset / 64;
         glyph.y += pen_y - positions[i].y_offset / 64;
         result.glyphs.emplace_back(std::move(glyph));
         pen_x += positions[i].x_advance / 64;
