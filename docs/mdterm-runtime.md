@@ -3,8 +3,10 @@
 The upstream source baseline is [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3),
 commit `e634d8f981f48b6b89202cf0e04533f0889e03b3`. MDTerm retains its Material
 interface, terminal bookmarks, and IME composing preview from upstream
-[PR #5242](https://github.com/termux/termux-app/pull/5242). Bitmap, Sixel, and
-iTerm image support added later on upstream `master` is outside this baseline.
+[PR #5242](https://github.com/termux/termux-app/pull/5242). The terminal core now uses Ghostty `libghostty-vt` and the Vulkan renderer
+adapted from XYenon/termux-app-ghostty, including Kitty images and animations.
+The later upstream Termux Sixel/iTerm renderer is not included. See
+[Ghostty integration](ghostty.md) for pinned revisions and native build details.
 
 Three later upstream fixes are retained:
 
@@ -34,15 +36,16 @@ The `downloadBootstraps` task supplies the baseline's official bootstrap,
 First installation uses the baseline's second-stage initialization as well.
 MDTerm's build and UI dependencies remain downstream customizations: Android
 12+ and arm64 targets, Java 17, Gradle 9.2.1, AGP 8.13.2, SDK 36,
-NDK 29.0.14206865, and Material Components 1.12.0.
-No Python runtime preparation or additional PRoot package downloads are required.
-
-```sh
-./gradlew :app:assembleDebug testDebugUnitTest
-```
-
-The APK is written to `app/build/outputs/apk/debug/`. The debug build uses the
-repository's test signing key.
+NDK 29.0.14206865, CMake 3.22.1, Zig 0.16.0, the ncurses `tic` tool,
+and Material Components 1.12.0. The device must support Vulkan 1.1 (level 1).
+The build fetches pinned Ghostty, FreeType, HarfBuzz and libpng sources, applies
+the checked-in Android patch, and builds `libtermux.so` and matching terminfo.
+Compilation and test builds run on GitHub Actions, not the local Termux device.
+The workflows provide Zig, `tic`, Java and the Android toolchain. The
+[test workflow](../.github/workflows/run_tests.yml) runs Java/Robolectric and
+native Ghostty tests; the [build workflow](../.github/workflows/debug_build.yml)
+uploads the debug APK and SHA-256 checksum. The debug APK uses the repository's
+test signing key. No Python runtime or additional PRoot packages are bundled.
 
 ## Release signing
 
@@ -58,10 +61,8 @@ The repository Actions Secrets are:
 - `MDTERM_RELEASE_KEY_ALIAS`: signing key alias.
 - `MDTERM_RELEASE_KEY_PASSWORD`: signing key password.
 
-For a local signed release, set `MDTERM_RELEASE_STORE_FILE` to the keystore path
-and the same password and alias environment variables, then run
-`./gradlew :app:assembleRelease`. Without signing configuration, local release
-builds are unsigned. The workflow requires all secrets and verifies the signature.
+The release workflow restores the keystore on the runner, requires all signing
+secrets, and verifies the resulting APK's signature and Ghostty native contents.
 
 The initial private key and its credentials are backed up locally under
 `.signing/`, which is excluded from Git. Keep a secure backup of that directory:

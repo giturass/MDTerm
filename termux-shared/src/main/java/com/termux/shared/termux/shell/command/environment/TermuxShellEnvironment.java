@@ -16,6 +16,7 @@ import com.termux.shared.shell.command.environment.ShellEnvironmentUtils;
 import com.termux.shared.shell.command.environment.ShellCommandShellEnvironment;
 import com.termux.shared.termux.TermuxBootstrap;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.GhosttyTerminfo;
 import com.termux.shared.termux.shell.TermuxShellUtils;
 
 import java.nio.charset.Charset;
@@ -93,6 +94,7 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         environment.put("TERMUX__HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
         environment.put(ENV_PREFIX, TermuxConstants.TERMUX_PREFIX_DIR_PATH);
         environment.put("TERMUX__PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+        environment.put("TERM", getTermValue(isFailSafe, GhosttyTerminfo.isInstalled()));
 
         // If failsafe is not enabled, then we keep default PATH and TMPDIR so that system binaries can be used
         if (!isFailSafe) {
@@ -111,6 +113,10 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         return environment;
     }
 
+
+    public static String getTermValue(boolean isFailSafe, boolean terminfoInstalled) {
+        return !isFailSafe && terminfoInstalled ? GhosttyTerminfo.TERM : "xterm-256color";
+    }
 
     @NonNull
     @Override

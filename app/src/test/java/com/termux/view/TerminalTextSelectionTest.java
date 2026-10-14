@@ -4,7 +4,6 @@ import android.app.Application;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.graphics.Typeface;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.ActionMode;
@@ -29,7 +28,7 @@ import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
-import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.GhosttyTerminal;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.After;
@@ -84,11 +83,8 @@ public class TerminalTextSelectionTest {
         view = new TerminalView(activity, null);
         view.setId(R.id.terminal_view);
         view.setFocusableInTouchMode(true);
-        view.mRenderer = new TerminalRenderer(20, Typeface.MONOSPACE);
-        // Robolectric's legacy graphics do not supply real terminal cell metrics.
-        ReflectionHelpers.setField(view.mRenderer, "mFontWidth", 10f);
-        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacing", 20);
-        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacingAndAscent", 0);
+        // The Ghostty shadow supplies deterministic terminal cell metrics without native rendering.
+        view.setTextSize(20);
         host.addView(view, new FrameLayout.LayoutParams(400, 160));
         ReflectionHelpers.setField(activity, "mTerminalView", view);
         client = new RecordingClient(activity);
@@ -102,11 +98,10 @@ public class TerminalTextSelectionTest {
 
         TermuxTerminalSessionClientBase sessionClient = new TermuxTerminalSessionClientBase();
         TerminalSession session = new TerminalSession("", "", new String[0], new String[0], 100, sessionClient);
-        TerminalEmulator emulator = new TerminalEmulator(session, 40, 8, 10, 20, 100, sessionClient);
-        ReflectionHelpers.setField(session, "mEmulator", emulator);
+        GhosttyTerminal terminal = new GhosttyTerminal(session, 40, 8, 10, 20, 100);
+        ReflectionHelpers.setField(session, "mTerminal", terminal);
         ReflectionHelpers.setField(session, "mShellPid", 1);
-        view.mTermSession = session;
-        view.mEmulator = emulator;
+        view.attachSession(session);
         session.updateTerminalSessionClient(new TermuxTerminalSessionActivityClient(activity));
         clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
         clipboard.clearPrimaryClip();
@@ -179,7 +174,7 @@ public class TerminalTextSelectionTest {
         assertFalse(view.isSelectingText());
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
         append("\u001b[?1000h");
-        assertTrue(view.mEmulator.isMouseTrackingActive());
+        assertTrue(view.getTerminal().isMouseTrackingActive());
         view.mGestureRecognizer.mListener.onDoubleTap(event);
         assertFalse(view.isSelectingText());
 
@@ -269,7 +264,7 @@ public class TerminalTextSelectionTest {
     @Test
     public void selectionUsesTheVisibleScrollbackRow() {
         appendHistory();
-        int historyRows = view.mEmulator.getScreen().getActiveTranscriptRows();
+        int historyRows = view.getScrollbackRows();
         assertTrue(historyRows > 0);
         view.setTopRow(-historyRows);
         select(15, 10);
@@ -331,7 +326,7 @@ public class TerminalTextSelectionTest {
 
     private void append(String text) {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        view.mEmulator.append(bytes, bytes.length);
+        view.getTerminal().feed(bytes, 0, bytes.length);
     }
 
     private void appendHistory() {

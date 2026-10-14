@@ -3,7 +3,7 @@
 [![Release APK](https://github.com/giturass/MDTerm/actions/workflows/release.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/release.yml)
 [![Unit tests](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml)
 
-MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3) 的 Android 终端应用，面向 **Android 12 及以上的 ARM64 设备**，在保留 Termux 原生运行环境的基础上，重新设计界面、配色和日常操作。
+MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3) 的 Android 终端应用，面向 **Android 12 及以上、支持 Vulkan 1.1 的 ARM64 设备**，在保留 Termux 原生运行环境的基础上，重新设计界面、配色和日常操作。
 
 这是独立维护的衍生项目。应用使用原版包名 `com.termux`，会替代原版 Termux，不能与其共存。安装前请阅读下方的[安装与迁移](#安装与迁移)。
 
@@ -11,11 +11,12 @@ MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/t
 
 ## 与上游 Termux 的区别
 
-以下对照以上游 `v0.119.0-beta.3` 为基础，保留 MDTerm 的界面、书签及输入法定制。此基线不包含后来上游 `master` 加入的位图、Sixel 和 iTerm 图像支持。
+应用运行环境以上游 `v0.119.0-beta.3` 为基础，终端核心和 Vulkan 渲染移植自 [termux-app-ghostty](https://github.com/XYenon/termux-app-ghostty)。MDTerm 的界面、书签、光标手势和输入法组合文本预览继续保留。
 
 | 方面 | 上游 Termux | MDTerm 当前实现 |
 | --- | --- | --- |
 | 系统与架构 | 覆盖更广的 Android 版本和设备架构 | 最低 Android 12（API 31），仅 `arm64-v8a` |
+| 终端核心与图像 | Java 终端模拟器与 Android Canvas 渲染 | Ghostty `libghostty-vt` 核心、Vulkan 呈现，支持 Kitty 图像协议（含动画） |
 | 应用界面 | 原有终端界面、菜单和偏好设置 | Material Design 3 风格，重做会话列表、菜单、设置、图标与通知样式 |
 | 配色 | 使用原有主题与终端颜色配置 | 支持壁纸动态配色，统一终端、控件与设置颜色，并调整浅色模式下默认 ANSI 颜色的可读性 |
 | 会话与终端操作 | 原有会话和终端操作入口 | 提供会话卡片、活动指示、长按改名、光标滑动手势、横向滚动工具栏和 MD3 操作菜单 |
@@ -29,7 +30,7 @@ MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/t
 
 ### 沿用的运行环境
 
-MDTerm 继续使用 Termux 的终端模拟器、会话与软件包运行方式：
+MDTerm 使用 Ghostty 处理终端协议，继续沿用 Termux 的 PTY 会话与软件包运行方式：
 
 - Android 包名为 `com.termux`。
 - 软件包前缀为 `/data/data/com.termux/files/usr`，主目录为 `/data/data/com.termux/files/home`。
@@ -41,14 +42,24 @@ MDTerm 继续使用 Termux 的终端模拟器、会话与软件包运行方式�
 
 构建工具与界面依赖保留 MDTerm 定制，继续使用 Gradle 9.2.1、AGP 8.13.2 和 Material Components 1.12.0，详见[构建说明](docs/mdterm-runtime.md#building)。
 
-因此，MDTerm 的主要变化在应用界面与交互层，并未建立独立的软件包仓库。软件包相关资料仍可参考 [Termux 软件包项目](https://github.com/termux/termux-packages)和[包管理文档](https://github.com/termux/termux-packages/wiki/Package-Management)。
+MDTerm 的变化覆盖终端核心、渲染、应用界面与交互层，并未建立独立的软件包仓库。软件包相关资料仍可参考 [Termux 软件包项目](https://github.com/termux/termux-packages)和[包管理文档](https://github.com/termux/termux-packages/wiki/Package-Management)。
+
+## Ghostty 终端与图片
+
+应用默认使用 Ghostty 核心，并通过 Vulkan 呈现终端文字和 Kitty 协议图片。支持滚动历史、备用屏幕、原生键盘与鼠标编码、同步输出，以及 Kitty 图片和动画。主屏幕和备用屏幕的图片存储上限各为 64 MiB；显示效果也取决于终端程序是否使用 Kitty 图像协议。Sixel 和 iTerm 图像协议不在此次移植范围内。
+
+应用会自动安装匹配的 `xterm-ghostty` terminfo，新建普通会话的 `$TERM` 为 `xterm-ghostty`。若安装失败或进入故障安全会话，则使用 `xterm-256color`。远程主机如不认识 `xterm-ghostty`，需要在远端安装对应 terminfo，或为该 SSH 会话使用 `TERM=xterm-256color`。
+
+字体仍可通过 `~/.termux/font.ttf` 覆盖；`~/.termux/fonts/` 内的 `.ttf`、`.otf`、`.ttc` 文件按文件名顺序作为后备字体。配色、复制粘贴、光标手势和可选的中文组合文本预览仍使用 MDTerm 的设置。
+
+移植来源、固定版本、构建依赖与验证方法见 [Ghostty 接入说明](docs/ghostty.md)。
 
 ## 安装与迁移
 
 ### 安装要求
 
 - Android 12 或更高版本。
-- ARM64（`arm64-v8a`）设备；当前构建不提供 ARM32 或 x86 APK。
+- ARM64（`arm64-v8a`）设备，支持 Vulkan 1.1（Android Vulkan level 1）；当前构建不提供 ARM32 或 x86 APK。
 - 首次使用及安装软件包时需要准备可用的网络连接。
 
 从 [MDTerm Releases](https://github.com/giturass/MDTerm/releases) 下载发布 APK，可使用同一版本附带的 SHA-256 文件校验下载内容。安装并完成初始化后，可运行：
@@ -106,4 +117,4 @@ MDTerm 的界面、交互、安装及构建问题，请提交到[本仓库 Issue
 
 ## 许可与致谢
 
-MDTerm 基于 Termux 及其贡献者的工作，沿用项目的 **GPLv3-only** 许可及相关组件的许可例外，详见 [LICENSE.md](LICENSE.md) 和 [termux-shared/LICENSE.md](termux-shared/LICENSE.md)。输入法组合文本预览相关贡献来源见上游 [PR #5242](https://github.com/termux/termux-app/pull/5242)。
+MDTerm 基于 Termux 及其贡献者的工作，沿用项目的 **GPLv3-only** 许可及相关组件的许可例外，详见 [LICENSE.md](LICENSE.md) 和 [termux-shared/LICENSE.md](termux-shared/LICENSE.md)。输入法组合文本预览相关贡献来源见上游 [PR #5242](https://github.com/termux/termux-app/pull/5242)。Ghostty Android 适配和 Vulkan 渲染基于 [XYenon/termux-app-ghostty](https://github.com/XYenon/termux-app-ghostty)，并使用 Ghostty、FreeType、HarfBuzz 和 libpng；相应许可证随 APK 一同提供。

@@ -25,11 +25,13 @@ env:
   TERMUX_PACKAGE_VARIANT: apt-android-7
   TERMUX_APP_ABIS: arm64-v8a
   TERMUX_SPLIT_APKS_FOR_RELEASE_BUILDS: '1'
+  GHOSTTY_BUILD_JOBS: '2'
 
 jobs:
   release:
     name: Signed Android 12+ arm64-v8a release
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: write
 
@@ -66,7 +68,23 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 ndk;29.0.14206865'
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 ndk;29.0.14206865 cmake;3.22.1'
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: '0.16.0'
+
+      - name: Cache pinned native dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            build/native-sources
+            build/zig-cache
+          key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build.gradle', 'gradle.properties', 'native/patches/**', 'scripts/*.sh') }}
+
+      - name: Check terminfo compiler
+        run: command -v tic
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -101,7 +119,8 @@ jobs:
             export TERMUX_APP_VERSION_NAME="$version+${SOURCE_SHA:0:7}"
           fi
           export TERMUX_APK_VERSION_TAG="v${TERMUX_APP_VERSION_NAME}-${TERMUX_PACKAGE_VARIANT}-github-release"
-          ./gradlew --no-daemon testDebugUnitTest :app:assembleRelease
+          ./gradlew --no-daemon --max-workers=2 testDebugUnitTest \
+            :terminal-emulator:testGhosttyNative :app:assembleRelease
           built_apk="mdterm_${TERMUX_APK_VERSION_TAG}_arm64-v8a.apk"
           apk_name="${REQUESTED_APK_NAME:-$built_apk}"
           if [[ "$apk_name" != "$built_apk" ]]; then
@@ -119,11 +138,15 @@ jobs:
           test "$(apkanalyzer manifest min-sdk "$apk")" -ge 31
           test "$(apkanalyzer manifest debuggable "$apk")" = false
           test "$(unzip -Z1 "$apk" | awk -F/ '$1 == "lib" && NF == 3 { print $2 }' | sort -u)" = arm64-v8a
+          unzip -Z1 "$apk" | grep -Fx 'assets/ghostty/terminfo/x/xterm-ghostty'
+          unzip -Z1 "$apk" | grep -Fx 'lib/arm64-v8a/libtermux.so'
           if unzip -Z1 "$apk" | grep -E 'libmdterm-|libtalloc|libandroid-shmem|assets/mdterm-runtime/'; then
             echo 'Unexpected coexistence runtime in APK' >&2
             exit 1
           fi
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
+          python3 scripts/verify-ghostty-binary.py \
+            --ndk "$ANDROID_HOME/ndk/29.0.14206865" "$apk"
           (cd "$apk_dir" && sha256sum "$APK_NAME" > "${APK_NAME%.apk}_sha256sums")
 
       - name: Upload release APK and checksum

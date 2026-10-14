@@ -45,7 +45,7 @@ import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.termux.extrakeys.SpecialButton;
 import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
-import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.GhosttyTerminal;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;
@@ -337,16 +337,16 @@ public class MaterialTerminalControlsTest {
         ReflectionHelpers.callInstanceMethod(activity, "setTerminalToolbarView");
         TermuxTerminalSessionClientBase client = new TermuxTerminalSessionClientBase();
         TerminalSession session = new TerminalSession("", "", new String[0], new String[0], 100, client);
-        TerminalEmulator emulator = new TerminalEmulator(session, 80, 24, 10, 20, 100, client);
-        ReflectionHelpers.setField(session, "mEmulator", emulator);
+        GhosttyTerminal terminal = new GhosttyTerminal(session, 80, 24, 10, 20, 100);
+        ReflectionHelpers.setField(session, "mTerminal", terminal);
         ReflectionHelpers.setField(session, "mShellPid", 1);
-        ReflectionHelpers.setField(activity.getTerminalView(), "mTermSession", session);
-        activity.getTerminalView().mEmulator = emulator;
+        activity.getTerminalView().setTextSize(20);
+        activity.getTerminalView().attachSession(session);
 
         for (String prefix : new String[]{"\u001b[", "\u001bO"}) {
             if (prefix.equals("\u001bO")) {
                 byte[] mode = "\u001b[?1h".getBytes(StandardCharsets.UTF_8);
-                emulator.append(mode, mode.length);
+                terminal.feed(mode, 0, mode.length);
             }
             for (String key : Arrays.asList("UP", "DOWN", "LEFT", "RIGHT")) toolbarButton(activity, key).performClick();
             assertEquals(prefix + "A" + prefix + "B" + prefix + "D" + prefix + "C", takeTerminalOutput(session));

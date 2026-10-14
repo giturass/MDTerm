@@ -44,7 +44,7 @@ import com.termux.shared.termux.data.TermuxUrlUtils;
 import com.termux.shared.view.KeyboardUtils;
 import com.termux.shared.view.ViewUtils;
 import com.termux.terminal.KeyHandler;
-import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.GhosttyTerminal;
 import com.termux.terminal.TerminalSession;
 
 import java.util.ArrayList;
@@ -71,6 +71,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     private boolean mShowSoftKeyboardWithDelayOnce;
 
     private boolean mTerminalCursorBlinkerStateAlreadySet;
+    private GhosttyTerminal mCursorBlinkerTerminal;
 
     private List<KeyboardShortcut> mSessionShortcuts;
 
@@ -118,7 +119,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         mTerminalCursorBlinkerStateAlreadySet = false;
 
-        if (mActivity.getTerminalView().mEmulator != null) {
+        if (mActivity.getTerminalView().getTerminal() != null) {
             // Start terminal cursor blinking if enabled
             // If emulator is already set, then start blinker now, otherwise wait for onEmulatorSet()
             // event to start it. This is needed since onEmulatorSet() may not be called after
@@ -155,18 +156,19 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     /**
-     * Should be called when {@link com.termux.view.TerminalView#mEmulator} is set
+     * Should be called when {@link com.termux.view.TerminalView#getTerminal()} is set
      */
     @Override
     public void onEmulatorSet() {
-        if (!mTerminalCursorBlinkerStateAlreadySet) {
+        if (!mTerminalCursorBlinkerStateAlreadySet ||
+            mCursorBlinkerTerminal != mActivity.getTerminalView().getTerminal()) {
             // Start terminal cursor blinking if enabled
             // We need to wait for the first session to be attached that's set in
             // TermuxActivity.onServiceConnected() and then the multiple calls to TerminalView.updateSize()
-            // where the final one eventually sets the mEmulator when width/height is not 0. Otherwise
+            // where the final one eventually sets the terminal when width/height is not 0. Otherwise
             // blinker will not start again if TermuxActivity is started again after exiting it with
             // double back press. Check TerminalView.setTerminalCursorBlinkerState().
-            setTerminalCursorBlinkerState(true);
+            setTerminalCursorBlinkerState(mActivity.isVisible());
             mTerminalCursorBlinkerStateAlreadySet = true;
         }
     }
@@ -192,11 +194,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     @Override
     public void onSingleTapUp(MotionEvent e) {
-        TerminalEmulator term = mActivity.getCurrentSession().getEmulator();
+        TerminalSession session = mActivity.getCurrentSession();
+        GhosttyTerminal term = session == null ? null : session.getTerminal();
+        if (term == null) return;
 
         if (mActivity.getProperties().shouldOpenTerminalTranscriptURLOnClick()) {
-            int[] columnAndRow = mActivity.getTerminalView().getColumnAndRow(e, true);
-            String wordAtTap = term.getScreen().getWordAtLocation(columnAndRow[0], columnAndRow[1]);
+            int[] columnAndRow = mActivity.getTerminalView().getColumnAndRow(e);
+            String wordAtTap = term.getWordAt(columnAndRow[0], columnAndRow[1]);
             LinkedHashSet<CharSequence> urlSet = TermuxUrlUtils.extractUrls(wordAtTap);
 
             if (!urlSet.isEmpty()) {
@@ -318,7 +322,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     public boolean onKeyUp(int keyCode, KeyEvent e) {
         // If emulator is not set, like if bootstrap installation failed and user dismissed the error
         // dialog, then just exit the activity, otherwise they will be stuck in a broken state.
-        if (keyCode == KeyEvent.KEYCODE_BACK && mActivity.getTerminalView().mEmulator == null) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && mActivity.getTerminalView().getTerminal() == null) {
             mActivity.finishActivityIfNotFinishing();
             return true;
         }
@@ -480,8 +484,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             }
 
             if (resultingKeyCode != -1) {
-                TerminalEmulator term = session.getEmulator();
-                session.write(KeyHandler.getCode(resultingKeyCode, 0, term.isCursorKeysApplicationMode(), term.isKeypadApplicationMode()));
+                mActivity.getTerminalView().handleKeyCode(resultingKeyCode, 0);
             } else if (resultingCodePoint != -1) {
                 session.writeCodePoint(altDown, resultingCodePoint);
             }
@@ -696,6 +699,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
 
     public void setTerminalCursorBlinkerState(boolean start) {
+        mCursorBlinkerTerminal = mActivity.getTerminalView().getTerminal();
         if (start) {
             // If set/update the cursor blinking rate is successful, then enable cursor blinker
             if (mActivity.getTerminalView().setTerminalCursorBlinkerRate(mActivity.getProperties().getTerminalCursorBlinkRate()))
@@ -835,7 +839,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         String text = ShareUtils.getTextStringFromClipboardIfSet(mActivity, true);
         if (text != null)
-            session.getEmulator().paste(text);
+            session.getTerminal().paste(text);
     }
 
 }

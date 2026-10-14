@@ -170,6 +170,7 @@ final class TermuxInstaller {
             if (TermuxFileUtils.isTermuxPrefixDirectoryEmpty()) {
                 Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" exists but is empty or only contains specific unimportant files.");
             } else {
+                GhosttyTerminfoInstaller.installIfNeeded(activity);
                 whenDone.run();
                 return;
             }
@@ -314,6 +315,7 @@ final class TermuxInstaller {
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 
+                    GhosttyTerminfoInstaller.installIfNeeded(activity);
                     activity.runOnUiThread(whenDone);
 
                 } catch (final Exception e) {

@@ -30,6 +30,7 @@ import com.termux.app.TermuxService;
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.termux.terminal.io.BellHandler;
 import com.termux.shared.logger.Logger;
+import com.termux.terminal.GhosttyTerminal;
 import com.termux.terminal.TerminalColors;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
@@ -54,6 +55,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     private int mBellSoundId;
 
     private boolean mPendingColorReload;
+    private GhosttyTerminal mCursorStateTerminal;
+    private boolean mCursorEnabled;
 
     private static final String LOG_TAG = "TermuxTerminalSessionActivityClient";
 
@@ -90,6 +93,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
      * Should be called when mActivity.onResume() is called
      */
     public void onResume() {
+        // Cursor mode may have changed while UI updates were suspended.
+        mCursorStateTerminal = null;
         // Just initialize the mBellSoundPool and load the sound, otherwise bell might not run
         // the first time bell key is pressed and play() is called, since sound may not be loaded
         // quickly enough before the call to play(). https://stackoverflow.com/questions/35435625
@@ -126,8 +131,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         TermuxService service = mActivity.getTermuxService();
         if (service != null) {
             for (TermuxSession session : service.getTermuxSessions()) {
-                if (session.getTerminalSession().getEmulator() != null)
-                    session.getTerminalSession().getEmulator().setCursorStyle();
+                if (session.getTerminalSession().getTerminal() != null)
+                    session.getTerminalSession().updateTerminalSessionClient(this);
             }
         }
     }
@@ -139,7 +144,18 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         mActivity.onSessionActivity(changedSession);
         if (!mActivity.isVisible()) return;
 
-        if (mActivity.getCurrentSession() == changedSession) mActivity.getTerminalView().onScreenUpdated();
+        if (mActivity.getCurrentSession() == changedSession) {
+            GhosttyTerminal terminal = changedSession.getTerminal();
+            boolean cursorEnabled = terminal != null && terminal.isCursorVisible();
+            // Ghostty exposes the cursor mode as state rather than a Java
+            // callback. Only the visible session may change the UI blink timer.
+            if (terminal != mCursorStateTerminal || cursorEnabled != mCursorEnabled) {
+                mCursorStateTerminal = terminal;
+                mCursorEnabled = cursorEnabled;
+                onTerminalCursorStateChange(cursorEnabled);
+            }
+            mActivity.getTerminalView().onScreenUpdated();
+        }
     }
 
     @Override
@@ -211,7 +227,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
         String text = ShareUtils.getTextStringFromClipboardIfSet(mActivity, true);
         if (text != null)
-            mActivity.getTerminalView().mEmulator.paste(text);
+            mActivity.getTerminalView().getTerminal().paste(text);
     }
 
     @Override
@@ -314,6 +330,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         mActivity.updateSessionUi();
 
         if (mActivity.getTerminalView().attachSession(session)) {
+            mCursorStateTerminal = null;
             notifyOfSessionChange();
             termuxSessionListNotifyUpdated();
         }
@@ -572,6 +589,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                 ? Typeface.createFromFile(fontFile)
                 : mActivity.getResources().getFont(R.font.terminal_default);
             mActivity.getTerminalView().setTypeface(newTypeface);
+            mActivity.getTerminalView().setFontFiles(TerminalFontFiles.resolve(mActivity, fontFile));
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Error in checkForFontAndColors()", e);
         }
@@ -582,8 +600,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         TermuxService service = mActivity.getTermuxService();
         if (mPendingColorReload && service != null) {
             for (TermuxSession session : service.getTermuxSessions()) {
-                if (session.getTerminalSession().getEmulator() != null)
-                    session.getTerminalSession().getEmulator().mColors.reset();
+                if (session.getTerminalSession().getTerminal() != null)
+                    session.getTerminalSession().getTerminal().setColorScheme(TerminalColors.COLOR_SCHEME.mDefaultColors);
             }
             mPendingColorReload = false;
         }
@@ -592,8 +610,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     public void updateBackgroundColor() {
         TerminalSession session = mActivity.getCurrentSession();
-        int color = session != null && session.getEmulator() != null
-            ? session.getEmulator().mColors.mCurrentColors[TextStyle.COLOR_INDEX_BACKGROUND]
+        int color = session != null && session.getTerminal() != null
+            ? session.getTerminal().getBackgroundColor()
             : TerminalColors.COLOR_SCHEME.mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND];
         mActivity.setTerminalSurfaceColor(color);
     }

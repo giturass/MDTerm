@@ -1,0 +1,29 @@
+# ghostty_engine.cpp resolves these TerminalOutput callbacks through
+# GetMethodID. They have no statically visible Java callers and are otherwise
+# removed from a minified application.
+-keepclasseswithmembernames,includedescriptorclasses class com.termux.terminal.GhosttyTerminal {
+    native <methods>;
+}
+-keepclassmembers class com.termux.terminal.TerminalOutput {
+    public <methods>;
+}
+-keepclassmembers class * extends com.termux.terminal.TerminalOutput {
+    public void write(byte[], int, int);
+    public void titleChanged(java.lang.String, java.lang.String);
+    public void workingDirectoryChanged(java.lang.String);
+    public void onBookmarkLocation(java.lang.String);
+    public void onMouseShapeChanged(int);
+    public void onDesktopNotification(java.lang.String, java.lang.String);
+    public void onProgressReport(int, int);
+    public void onProgramStatusReport(int, int, int, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    public void onProgramStatusPrompt();
+    public int onOscClipboard(int, java.lang.String, byte[], boolean);
+    public int onOscClipboard(int, java.lang.String[], byte[][], boolean);
+    public int onOscClipboardReadPermission(java.lang.String, boolean, boolean);
+    public java.lang.String[] onOscClipboardMimeTypes(int);
+    public byte[] onOscClipboardRead(int, java.lang.String);
+    public byte[] onOscClipboardRead(int);
+    public void onOscClipboardReadComplete();
+    public void onBell();
+    public void onColorsChanged();
+}

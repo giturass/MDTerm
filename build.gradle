@@ -24,3 +24,43 @@ ext.termuxUniversalApk = false
 if (termuxAppAbis.any { !supportedAbis.contains(it) }) {
     throw new GradleException("TERMUX_APP_ABIS must be a comma-separated list of: " + supportedAbis.join(", "))
 }
+
+ext {
+    nativeSourcesDir = new File(rootProject.projectDir, "build/native-sources")
+    // Pins used by XYenon/termux-app-ghostty at 9bdfe0b. Keep the Android patch
+    // and JNI bridge in sync when updating Ghostty's C API.
+    nativeSourceRevisions = [
+        ghostty: [
+            repository: "https://github.com/ghostty-org/ghostty.git",
+            revision: "7ec9e26a29399b30ef78f06985fc75045b3cecb6"],
+        freetype: [
+            repository: "https://github.com/freetype/freetype.git",
+            revision: "0a0221a1347e2f1e07c395263540026e9a0aa7c7"],
+        harfbuzz: [
+            repository: "https://github.com/harfbuzz/harfbuzz.git",
+            revision: "36cb489cb02ce4b92099669ba9f9bea348eff93f"],
+        libpng: [
+            repository: "https://github.com/pnggroup/libpng.git",
+            revision: "3061454d980de7d53608f594194cfac722721d2a"]]
+}
+
+tasks.register("prepareNativeSources", Exec) {
+    group = "build"
+    description = "Fetch the pinned Ghostty, FreeType, HarfBuzz and libpng sources."
+    workingDir rootProject.projectDir
+    commandLine "bash", "scripts/prepare-native-sources.sh"
+    environment "NATIVE_SOURCES_DIR", rootProject.ext.nativeSourcesDir.absolutePath
+    inputs.file rootProject.file("scripts/prepare-native-sources.sh")
+    inputs.property "offline", gradle.startParameter.offline
+    environment "NATIVE_SOURCES_OFFLINE", gradle.startParameter.offline ? "1" : "0"
+    rootProject.ext.nativeSourceRevisions.each { dependency, source ->
+        environment "${dependency.toUpperCase()}_REPOSITORY", source.repository
+        environment "${dependency.toUpperCase()}_REVISION", source.revision
+        inputs.property "nativeSource.${dependency}.repository", source.repository
+        inputs.property "nativeSource.${dependency}.revision", source.revision
+        // Track the checkout as well as its stamp so deleted/changed sources
+        // cannot silently reuse a successful preparation task.
+        outputs.dir new File(rootProject.ext.nativeSourcesDir, dependency)
+        outputs.file new File(rootProject.ext.nativeSourcesDir, ".revisions/$dependency")
+    }
+}

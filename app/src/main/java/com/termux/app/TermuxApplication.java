@@ -58,6 +58,7 @@ public class TermuxApplication extends Application {
         boolean isTermuxFilesDirectoryAccessible = error == null;
         if (isTermuxFilesDirectoryAccessible) {
             Logger.logInfo(LOG_TAG, "Termux files directory is accessible");
+            GhosttyTerminfoInstaller.installIfNeeded(this);
             /*
             error = TermuxFileUtils.isAppsTermuxAppDirectoryAccessible(true, true);
             if (error != null) {

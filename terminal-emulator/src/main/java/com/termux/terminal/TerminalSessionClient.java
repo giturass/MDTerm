@@ -14,6 +14,11 @@ public interface TerminalSessionClient {
 
     void onTitleChanged(@NonNull TerminalSession changedSession);
 
+    default void onWorkingDirectoryChanged(@NonNull TerminalSession changedSession,
+                                           @Nullable String workingDirectory) {}
+
+    default void onMouseShapeChanged(@NonNull TerminalSession changedSession, int shape) {}
+
     void onSessionFinished(@NonNull TerminalSession finishedSession);
 
     void onCopyTextToClipboard(@NonNull TerminalSession session, String text);
@@ -31,6 +36,8 @@ public interface TerminalSessionClient {
 
 
     Integer getTerminalCursorStyle();
+
+    default boolean isXtChecksumReportEnabled() { return false; }
 
 
 

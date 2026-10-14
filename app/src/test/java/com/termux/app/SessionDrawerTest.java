@@ -151,8 +151,8 @@ public class SessionDrawerTest {
             list.scrollBy(0, Integer.MAX_VALUE);
             assertCardSizesAndSpacing(list);
             Rect card = bounds(drawer, row(list, 5));
-            assertEquals(dp(drawer, 16), card.left);
-            assertEquals(dp(drawer, 16), drawer.getWidth() - card.right);
+            assertEquals(dp(drawer, 20), card.left);
+            assertEquals(dp(drawer, 20), drawer.getWidth() - card.right);
             assertTrue(card.bottom <= action.top);
         }
     }

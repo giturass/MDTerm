@@ -16,8 +16,12 @@ ext {
     bootstrapMaxRelease = packageVariant == "apt-android-5" ? "6.0" : null
 }
 
+def ghosttyTerminfoAssets = layout.buildDirectory.dir("generated/ghosttyTerminfo/assets").get().asFile
+def ghosttySrc = new File(rootProject.ext.nativeSourcesDir, "ghostty")
+
 android {
     namespace "com.termux"
+    sourceSets.main.assets.srcDir ghosttyTerminfoAssets
 
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
@@ -180,6 +184,38 @@ dependencies {
     testImplementation "junit:junit:4.13.2"
     testImplementation "org.robolectric:robolectric:4.10"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.1.5"
+}
+
+tasks.register("buildGhosttyTerminfo", Exec) {
+    dependsOn rootProject.tasks.named("prepareNativeSources")
+    workingDir rootProject.projectDir
+    commandLine "bash", "scripts/build-ghostty-terminfo.sh"
+    environment "GHOSTTY_TERMINFO_OUTPUT_DIR",
+        new File(ghosttyTerminfoAssets, "ghostty").absolutePath
+    environment "ZIG_VERSION", project.properties.zigVersion
+    environment "GHOSTTY_REVISION",
+        rootProject.ext.nativeSourceRevisions.ghostty.revision
+    environment "NATIVE_SOURCES_DIR",
+        rootProject.ext.nativeSourcesDir.absolutePath
+    inputs.property "ghosttyRevision", rootProject.ext.nativeSourceRevisions.ghostty.revision
+    inputs.property "zigVersion", project.properties.zigVersion
+    inputs.files(
+        rootProject.file("scripts/build-ghostty-terminfo.sh"),
+        rootProject.file("scripts/generate-ghostty-terminfo.zig"),
+        new File(ghosttySrc, "src/terminfo/main.zig"),
+        new File(ghosttySrc, "src/terminfo/ghostty.zig"),
+        new File(ghosttySrc, "src/terminfo/Source.zig"))
+    outputs.file new File(ghosttyTerminfoAssets,
+        "ghostty/ghostty.terminfo")
+    outputs.file new File(ghosttyTerminfoAssets,
+        "ghostty/terminfo/x/xterm-ghostty")
+}
+
+tasks.matching { task ->
+    (task.name.startsWith("merge") && task.name.endsWith("Assets")) ||
+        (task.name.contains("Release") && task.name.toLowerCase().contains("lint"))
+}.configureEach {
+    dependsOn tasks.named("buildGhosttyTerminfo")
 }
 
 task versionName {

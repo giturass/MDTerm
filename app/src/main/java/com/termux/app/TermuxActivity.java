@@ -812,7 +812,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mActionsDialog != null && mActionsDialog.isShowing()) return true;
         Menu menu = new PopupMenu(this, mTerminalView).getMenu();
         menu.add(Menu.NONE, CONTEXT_MENU_SELECT_TEXT_ID, Menu.NONE, R.string.action_select_text)
-            .setIcon(R.drawable.ic_action_select).setEnabled(session.getEmulator() != null);
+            .setIcon(R.drawable.ic_action_select).setEnabled(session.getTerminal() != null);
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         menu.add(Menu.NONE, CONTEXT_MENU_PASTE_ID, Menu.NONE, R.string.action_paste_text).setIcon(R.drawable.ic_action_paste)
             .setEnabled(session.isRunning() && clipboard != null && clipboard.hasPrimaryClip());
@@ -821,7 +821,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (session != getCurrentSession()) return;
             if (item.getItemId() == CONTEXT_MENU_SELECT_TEXT_ID) {
                 mTerminalView.post(() -> {
-                    if (isFinishing() || session != getCurrentSession() || session.getEmulator() == null) return;
+                    if (isFinishing() || session != getCurrentSession() || session.getTerminal() == null) return;
                     long now = SystemClock.uptimeMillis();
                     MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, selectionX, selectionY, 0);
                     mTerminalView.startTextSelectionMode(event);

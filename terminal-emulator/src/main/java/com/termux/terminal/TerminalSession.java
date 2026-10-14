@@ -3,19 +3,21 @@ package com.termux.terminal;
 import android.annotation.SuppressLint;
 import android.os.Handler;
 import android.os.Message;
+import android.os.ParcelFileDescriptor;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A terminal session, consisting of a process coupled to a terminal interface.
@@ -28,33 +30,39 @@ import java.util.UUID;
  * <p>
  * NOTE: The terminal session may outlive the EmulatorView, so be careful with callbacks!
  */
-public final class TerminalSession extends TerminalOutput {
+public final class TerminalSession extends TerminalOutput implements AutoCloseable {
 
     private static final int MSG_NEW_INPUT = 1;
     private static final int MSG_PROCESS_EXITED = 4;
+    private static final int PROCESS_INPUT_BUFFER_SIZE = 64 * 1024;
+    private static final int PROCESS_OUTPUT_BUFFER_SIZE = 64 * 1024;
 
     public final String mHandle = UUID.randomUUID().toString();
 
-    TerminalEmulator mEmulator;
+    private volatile GhosttyTerminal mTerminal;
 
     /**
      * A queue written to from a separate thread when the process outputs, and read by main thread to process by
      * terminal emulator.
      */
-    final ByteQueue mProcessToTerminalIOQueue = new ByteQueue(4096);
+    final ByteQueue mProcessToTerminalIOQueue = new ByteQueue(PROCESS_INPUT_BUFFER_SIZE);
+    private final AtomicBoolean mProcessInputPending = new AtomicBoolean();
     /**
      * A queue written to from the main thread due to user interaction, and read by another thread which forwards by
      * writing to the {@link #mTerminalFileDescriptor}.
      */
-    final ByteQueue mTerminalToProcessIOQueue = new ByteQueue(4096);
+    final PendingWriteQueue mTerminalToProcessIOQueue = new PendingWriteQueue();
     /** Buffer to write translate code points into utf8 before writing to mTerminalToProcessIOQueue */
     private final byte[] mUtf8InputBuffer = new byte[5];
+    private boolean mCloseRequested;
+    private boolean mClosed;
+    private boolean mProcessExitHandled;
 
     /** Callback which gets notified when a session finishes or changes title. */
     TerminalSessionClient mClient;
 
     /** The pid of the shell process. 0 if not started and -1 if finished running. */
-    int mShellPid;
+    volatile int mShellPid;
 
     /** The exit status of the shell process. Only valid if ${@link #mShellPid} is -1. */
     int mShellExitStatus;
@@ -63,7 +71,9 @@ public final class TerminalSession extends TerminalOutput {
      * The file descriptor referencing the master half of a pseudo-terminal pair, resulting from calling
      * {@link JNI#createSubprocess(String, String, String[], String[], int[], int, int, int, int)}.
      */
-    private int mTerminalFileDescriptor;
+    private int mTerminalFileDescriptor = -1;
+    private FileInputStream mProcessInput;
+    private FileOutputStream mProcessOutput;
 
     /** Set by the application for user identification of session, not by terminal. */
     public String mSessionName;
@@ -146,24 +156,46 @@ public final class TerminalSession extends TerminalOutput {
      */
     public void updateTerminalSessionClient(TerminalSessionClient client) {
         mClient = client;
+        GhosttyTerminal terminal = mTerminal;
+        if (terminal != null) applyTerminalPreferences(terminal);
+    }
 
-        if (mEmulator != null)
-            mEmulator.updateTerminalSessionClient(client);
+    private void applyTerminalPreferences(GhosttyTerminal terminal) {
+        terminal.setXtChecksumReportEnabled(mClient.isXtChecksumReportEnabled());
+        // TerminalView owns the Android blink timer; Ghostty stores the
+        // default shape used until a terminal application overrides it.
+        terminal.setDefaultCursor(toGhosttyCursorStyle(mClient.getTerminalCursorStyle()), false);
+    }
+
+    static int toGhosttyCursorStyle(Integer style) {
+        if (style != null) {
+            if (style == TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE)
+                return GhosttyTerminal.CURSOR_STYLE_UNDERLINE;
+            if (style == TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR)
+                return GhosttyTerminal.CURSOR_STYLE_BAR;
+        }
+        return GhosttyTerminal.CURSOR_STYLE_BLOCK;
     }
 
     /** Inform the attached pty of the new size and reflow or initialize the emulator. */
     public void updateSize(int columns, int rows, int cellWidthPixels, int cellHeightPixels) {
-        if (mEmulator == null) {
+        synchronized (this) {
+            if (mCloseRequested) return;
+        }
+        GhosttyTerminal terminal = mTerminal;
+        if (terminal == null) {
             initializeEmulator(columns, rows, cellWidthPixels, cellHeightPixels);
         } else {
-            JNI.setPtyWindowSize(mTerminalFileDescriptor, rows, columns, cellWidthPixels, cellHeightPixels);
-            mEmulator.resize(columns, rows, cellWidthPixels, cellHeightPixels);
+            if (mTerminalFileDescriptor >= 0)
+                JNI.setPtyWindowSize(mTerminalFileDescriptor, rows, columns, cellWidthPixels, cellHeightPixels);
+            terminal.resize(columns, rows, cellWidthPixels, cellHeightPixels);
         }
     }
 
     /** The terminal title as set through escape sequences or null if none set. */
     public String getTitle() {
-        return (mEmulator == null) ? null : mEmulator.getTitle();
+        GhosttyTerminal terminal = mTerminal;
+        return terminal == null ? null : terminal.getTitle();
     }
 
     /**
@@ -172,38 +204,77 @@ public final class TerminalSession extends TerminalOutput {
      * @param columns The number of columns in the terminal window.
      * @param rows    The number of rows in the terminal window.
      */
-    public void initializeEmulator(int columns, int rows, int cellWidthPixels, int cellHeightPixels) {
-        mEmulator = new TerminalEmulator(this, columns, rows, cellWidthPixels, cellHeightPixels, mTranscriptRows, mClient);
+    public synchronized void initializeEmulator(int columns, int rows, int cellWidthPixels, int cellHeightPixels) {
+        if (mCloseRequested || mTerminal != null) return;
+        int transcriptRows = mTranscriptRows == null ||
+            mTranscriptRows < TerminalEmulator.TERMINAL_TRANSCRIPT_ROWS_MIN ||
+            mTranscriptRows > TerminalEmulator.TERMINAL_TRANSCRIPT_ROWS_MAX
+            ? TerminalEmulator.DEFAULT_TERMINAL_TRANSCRIPT_ROWS : mTranscriptRows;
+        GhosttyTerminal terminal = new GhosttyTerminal(this, columns, rows,
+            cellWidthPixels, cellHeightPixels, transcriptRows);
+        mTerminal = terminal;
+        try {
+            applyTerminalPreferences(terminal);
+            terminal.setColorScheme(TerminalColors.COLOR_SCHEME.mDefaultColors.clone());
 
-        int[] processId = new int[1];
-        mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns, cellWidthPixels, cellHeightPixels);
-        mShellPid = processId[0];
+            int[] processId = new int[1];
+            mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv,
+                processId, rows, columns, cellWidthPixels, cellHeightPixels);
+            mShellPid = processId[0];
+            if (mTerminalFileDescriptor < 0 || mShellPid <= 0)
+                throw new IllegalStateException("Could not create terminal subprocess");
+            FileDescriptor descriptor = wrapFileDescriptor(mTerminalFileDescriptor, mClient);
+            // Each stream owns a separate descriptor; closing one must not close a
+            // descriptor that the other thread or a later session still uses.
+            mProcessInput = new ParcelFileDescriptor.AutoCloseInputStream(
+                ParcelFileDescriptor.dup(descriptor));
+            mProcessOutput = new ParcelFileDescriptor.AutoCloseOutputStream(
+                ParcelFileDescriptor.dup(descriptor));
+        } catch (IOException error) {
+            finishIfRunning();
+            cleanupResources(-1);
+            mCloseRequested = true;
+            mTerminal = null;
+            terminal.close();
+            throw new IllegalStateException("Could not open terminal I/O", error);
+        } catch (RuntimeException | Error error) {
+            finishIfRunning();
+            cleanupResources(-1);
+            mCloseRequested = true;
+            mTerminal = null;
+            terminal.close();
+            throw error;
+        }
         mClient.setTerminalShellPid(this, mShellPid);
 
-        final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor, mClient);
+        final FileInputStream processInput = mProcessInput;
+        final FileOutputStream processOutput = mProcessOutput;
 
-        new Thread("TermSessionInputReader[pid=" + mShellPid + "]") {
+        Thread inputReader = new Thread("TermSessionInputReader[pid=" + mShellPid + "]") {
             @Override
             public void run() {
-                try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
-                    final byte[] buffer = new byte[4096];
+                try (FileInputStream termIn = processInput) {
+                    final byte[] buffer = new byte[PROCESS_INPUT_BUFFER_SIZE];
                     while (true) {
                         int read = termIn.read(buffer);
                         if (read == -1) return;
+                        if (read == 0) continue;
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) return;
-                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
+                        if (mProcessInputPending.compareAndSet(false, true))
+                            mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                     }
                 } catch (Exception e) {
                     // Ignore, just shutting down.
                 }
             }
-        }.start();
+        };
+        inputReader.start();
 
         new Thread("TermSessionOutputWriter[pid=" + mShellPid + "]") {
             @Override
             public void run() {
-                final byte[] buffer = new byte[4096];
-                try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
+                final byte[] buffer = new byte[PROCESS_OUTPUT_BUFFER_SIZE];
+                try (FileOutputStream termOut = processOutput) {
                     while (true) {
                         int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
                         if (bytesToWrite == -1) return;
@@ -211,14 +282,24 @@ public final class TerminalSession extends TerminalOutput {
                     }
                 } catch (IOException e) {
                     // Ignore.
+                } finally {
+                    mTerminalToProcessIOQueue.close();
                 }
             }
         }.start();
 
-        new Thread("TermSessionWaiter[pid=" + mShellPid + "]") {
+        final int shellPid = mShellPid;
+        new Thread("TermSessionWaiter[pid=" + shellPid + "]") {
             @Override
             public void run() {
-                int processExitCode = JNI.waitFor(mShellPid);
+                int processExitCode = JNI.waitFor(shellPid);
+                // Let the input reader queue the final PTY output before posting the exit.
+                // A descendant can keep the PTY open, so do not wait indefinitely for EOF.
+                try {
+                    inputReader.join(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
                 mMainThreadHandler.sendMessage(mMainThreadHandler.obtainMessage(MSG_PROCESS_EXITED, processExitCode));
             }
         }.start();
@@ -228,12 +309,13 @@ public final class TerminalSession extends TerminalOutput {
     /** Write data to the shell process. */
     @Override
     public void write(byte[] data, int offset, int count) {
-        if (mShellPid > 0) mTerminalToProcessIOQueue.write(data, offset, count);
+        if (mShellPid > 0 && count > 0)
+            mTerminalToProcessIOQueue.write(data, offset, count);
     }
 
     /** Write the Unicode code point to the terminal encoded in UTF-8. */
-    public void writeCodePoint(boolean prependEscape, int codePoint) {
-        if (codePoint > 1114111 || (codePoint >= 0xD800 && codePoint <= 0xDFFF)) {
+    public synchronized void writeCodePoint(boolean prependEscape, int codePoint) {
+        if (codePoint < 0 || codePoint > 1114111 || (codePoint >= 0xD800 && codePoint <= 0xDFFF)) {
             // 1114111 (= 2**16 + 1024**2 - 1) is the highest code point, [0xD800,0xDFFF] is the surrogate range.
             throw new IllegalArgumentException("Invalid code point: " + codePoint);
         }
@@ -268,8 +350,8 @@ public final class TerminalSession extends TerminalOutput {
         write(mUtf8InputBuffer, 0, bufferPosition);
     }
 
-    public TerminalEmulator getEmulator() {
-        return mEmulator;
+    public GhosttyTerminal getTerminal() {
+        return mTerminal;
     }
 
     /** Notify the {@link #mClient} that the screen has changed. */
@@ -279,37 +361,95 @@ public final class TerminalSession extends TerminalOutput {
 
     /** Reset state for terminal emulator state. */
     public void reset() {
-        mEmulator.reset();
-        notifyScreenUpdate();
+        GhosttyTerminal terminal = mTerminal;
+        if (terminal != null) {
+            terminal.reset();
+            applyTerminalPreferences(terminal);
+            notifyScreenUpdate();
+        }
     }
 
     /** Finish this terminal session by sending SIGKILL to the shell. */
     public void finishIfRunning() {
-        if (isRunning()) {
+        int shellPid = mShellPid;
+        if (shellPid > 0) {
             try {
-                Os.kill(mShellPid, OsConstants.SIGKILL);
+                Os.kill(shellPid, OsConstants.SIGKILL);
             } catch (ErrnoException e) {
                 Logger.logWarn(mClient, LOG_TAG, "Failed sending SIGKILL: " + e.getMessage());
             }
         }
     }
 
+    /** Release the native terminal when this session is removed, after its process exits. */
+    @Override
+    public void close() {
+        boolean killProcess;
+        synchronized (this) {
+            if (mCloseRequested) return;
+            mCloseRequested = true;
+            killProcess = mShellPid > 0;
+        }
+        if (killProcess) finishIfRunning();
+        else closeTerminalIfRequested();
+    }
+
+    private void closeTerminalIfRequested() {
+        GhosttyTerminal terminal;
+        synchronized (this) {
+            if (!mCloseRequested || mClosed || mShellPid > 0) return;
+            mClosed = true;
+            if (mShellPid == 0) mShellPid = -1;
+            terminal = mTerminal;
+            mTerminal = null;
+        }
+        mTerminalToProcessIOQueue.close();
+        mProcessToTerminalIOQueue.close();
+        if (terminal != null) terminal.close();
+    }
+
     /** Cleanup resources when the process exits. */
     void cleanupResources(int exitStatus) {
+        int terminalFileDescriptor;
         synchronized (this) {
             mShellPid = -1;
             mShellExitStatus = exitStatus;
+            terminalFileDescriptor = mTerminalFileDescriptor;
+            mTerminalFileDescriptor = -1;
         }
 
         // Stop the reader and writer threads, and close the I/O streams
         mTerminalToProcessIOQueue.close();
         mProcessToTerminalIOQueue.close();
-        JNI.close(mTerminalFileDescriptor);
+        closeStream(mProcessInput);
+        closeStream(mProcessOutput);
+        mProcessInput = null;
+        mProcessOutput = null;
+        if (terminalFileDescriptor >= 0) JNI.close(terminalFileDescriptor);
+    }
+
+    private static void closeStream(Closeable stream) {
+        if (stream == null) return;
+        try {
+            stream.close();
+        } catch (IOException ignored) {
+            // The process may already have closed its end of the PTY.
+        }
     }
 
     @Override
     public void titleChanged(String oldTitle, String newTitle) {
         mClient.onTitleChanged(this);
+    }
+
+    @Override
+    public void workingDirectoryChanged(String workingDirectory) {
+        mClient.onWorkingDirectoryChanged(this, workingDirectory);
+    }
+
+    @Override
+    public void onMouseShapeChanged(int shape) {
+        mClient.onMouseShapeChanged(this, shape);
     }
 
     public synchronized boolean isRunning() {
@@ -380,7 +520,7 @@ public final class TerminalSession extends TerminalOutput {
             descriptorField.set(result, fileDescriptor);
         } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
             Logger.logStackTraceWithMessage(client, LOG_TAG, "Error accessing FileDescriptor#descriptor private field", e);
-            System.exit(1);
+            throw new IllegalStateException("Could not access terminal file descriptor", e);
         }
         return result;
     }
@@ -388,17 +528,25 @@ public final class TerminalSession extends TerminalOutput {
     @SuppressLint("HandlerLeak")
     class MainThreadHandler extends Handler {
 
-        final byte[] mReceiveBuffer = new byte[4 * 1024];
+        final byte[] mReceiveBuffer = new byte[PROCESS_INPUT_BUFFER_SIZE];
 
         @Override
         public void handleMessage(Message msg) {
+            if (mProcessExitHandled) return;
+            GhosttyTerminal terminal = mTerminal;
             int bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false);
-            if (bytesRead > 0) {
-                mEmulator.append(mReceiveBuffer, bytesRead);
+            if (terminal != null && bytesRead > 0) {
+                terminal.feed(mReceiveBuffer, 0, bytesRead);
                 notifyScreenUpdate();
             }
 
+            mProcessInputPending.set(false);
+            if (mProcessToTerminalIOQueue.hasReadableBytes() &&
+                mProcessInputPending.compareAndSet(false, true))
+                sendEmptyMessage(MSG_NEW_INPUT);
+
             if (msg.what == MSG_PROCESS_EXITED) {
+                mProcessExitHandled = true;
                 int exitCode = (Integer) msg.obj;
                 cleanupResources(exitCode);
 
@@ -412,11 +560,16 @@ public final class TerminalSession extends TerminalOutput {
                 }
                 exitDescription += " - press Enter]";
 
-                byte[] bytesToWrite = exitDescription.getBytes(StandardCharsets.UTF_8);
-                mEmulator.append(bytesToWrite, bytesToWrite.length);
-                notifyScreenUpdate();
-
-                mClient.onSessionFinished(TerminalSession.this);
+                try {
+                    if (terminal != null) {
+                        byte[] bytesToWrite = exitDescription.getBytes(StandardCharsets.UTF_8);
+                        terminal.feed(bytesToWrite, 0, bytesToWrite.length);
+                        notifyScreenUpdate();
+                    }
+                    mClient.onSessionFinished(TerminalSession.this);
+                } finally {
+                    closeTerminalIfRequested();
+                }
             }
         }
 

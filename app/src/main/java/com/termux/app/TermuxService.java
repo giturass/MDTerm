@@ -668,6 +668,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 TermuxPluginUtils.processPluginExecutionCommandResult(this, LOG_TAG, executionCommand);
 
             mShellManager.mTermuxSessions.remove(termuxSession);
+            termuxSession.getTerminalSession().close();
 
             // Notify the drawer adapter that sessions list has been updated if
             // activity in is foreground
