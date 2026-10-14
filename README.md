@@ -3,7 +3,7 @@
 [![Release APK](https://github.com/giturass/MDTerm/actions/workflows/release.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/release.yml)
 [![Unit tests](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml)
 
-MDTerm 是基于 [Termux](https://github.com/termux/termux-app) 的 Android 终端应用，面向 **Android 12 及以上的 ARM64 设备**，在保留 Termux 原生运行环境的基础上，重新设计界面、配色和日常操作。
+MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3) 的 Android 终端应用，面向 **Android 12 及以上的 ARM64 设备**，在保留 Termux 原生运行环境的基础上，重新设计界面、配色和日常操作。
 
 这是独立维护的衍生项目。应用使用原版包名 `com.termux`，会替代原版 Termux，不能与其共存。安装前请阅读下方的[安装与迁移](#安装与迁移)。
 
@@ -11,7 +11,7 @@ MDTerm 是基于 [Termux](https://github.com/termux/termux-app) 的 Android 终�
 
 ## 与上游 Termux 的区别
 
-以下对照以本项目沿用的上游实现为基础；上游后续版本可能继续变化。
+以下对照以上游 `v0.119.0-beta.3` 为基础，保留 MDTerm 的界面、书签及输入法定制。此基线不包含后来上游 `master` 加入的位图、Sixel 和 iTerm 图像支持。
 
 | 方面 | 上游 Termux | MDTerm 当前实现 |
 | --- | --- | --- |
@@ -34,8 +34,12 @@ MDTerm 继续使用 Termux 的终端模拟器、会话与软件包运行方式�
 - Android 包名为 `com.termux`。
 - 软件包前缀为 `/data/data/com.termux/files/usr`，主目录为 `/data/data/com.termux/files/home`。
 - 官方 Termux 软件包直接在应用自身的运行环境中执行，使用 `pkg` / `apt` 管理。
-- 首次初始化使用官方 bootstrap；构建时下载并校验其 SHA-256。
+- 首次初始化使用该版本的官方 bootstrap `2025.03.28-r1+apt-android-7` 及第二阶段初始化流程；构建时下载并校验其 SHA-256。
 - 不内置 PRoot 兼容层，不进行路径翻译或 Intent 重写。
+
+基线之外还保留上游的外部命令结果文件权限检查（[3b66f879](https://github.com/termux/termux-app/commit/3b66f8799635a4dba4a206563048ff0e6792c487)）、JNI 工作目录字符串释放（[084d709f](https://github.com/termux/termux-app/commit/084d709f)）及 `TermuxOpenReceiver` 无路径 URI 处理（[b4a2c32c](https://github.com/termux/termux-app/commit/b4a2c32c)）修复。
+
+构建工具与界面依赖保留 MDTerm 定制，继续使用 Gradle 9.2.1、AGP 8.13.2 和 Material Components 1.12.0，详见[构建说明](docs/mdterm-runtime.md#building)。
 
 因此，MDTerm 的主要变化在应用界面与交互层，并未建立独立的软件包仓库。软件包相关资料仍可参考 [Termux 软件包项目](https://github.com/termux/termux-packages)和[包管理文档](https://github.com/termux/termux-packages/wiki/Package-Management)。
 

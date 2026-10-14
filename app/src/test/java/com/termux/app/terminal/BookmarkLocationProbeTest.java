@@ -4,6 +4,8 @@ import android.app.Application;
 import android.os.Looper;
 import android.util.Base64;
 
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;
@@ -22,7 +24,8 @@ import static org.junit.Assert.*;
 @Config(sdk = 31, application = Application.class)
 public class BookmarkLocationProbeTest {
     private TerminalSession session() {
-        TerminalSession session = new TerminalSession("sh", "/", new String[0], new String[0], 100, null);
+        TerminalSession session = new TerminalSession("sh", "/", new String[0], new String[0], 100,
+            new TermuxTerminalSessionClientBase());
         ReflectionHelpers.setField(session, "mShellPid", 123);
         return session;
     }
@@ -73,6 +76,51 @@ public class BookmarkLocationProbeTest {
         session.onBookmarkLocation(reply(session, "/first"));
         assertEquals("/first", first.path);
         assertNull(second.path);
+    }
+
+    @Test public void belTerminatedBookmarkReplyIsParsedFromFragmentedTerminalOutput() {
+        assertFragmentedBookmarkReply("\007");
+    }
+
+    @Test public void stTerminatedBookmarkReplyIsParsedFromFragmentedTerminalOutput() {
+        assertFragmentedBookmarkReply("\033\\");
+    }
+
+    private void assertFragmentedBookmarkReply(String terminator) {
+        TerminalSession session = session();
+        TerminalEmulator emulator = new TerminalEmulator(session, 40, 4, 10, 20, 100, null);
+        Result result = new Result();
+        session.requestBookmarkLocation(result);
+
+        append(emulator, "before\033]777;mdterm;wrong-nonce;L3RtcAo=" + terminator);
+        assertNull(result.path);
+        assertEquals(0, result.successes);
+        assertEquals(0, result.failures);
+
+        String path = "/目录/😀/a\nb\n";
+        String sequence = "\033]777;" + reply(session, path) + terminator;
+        byte[] bytes = sequence.getBytes(StandardCharsets.UTF_8);
+        // Split every boundary, including ESC + ] and the ESC + backslash terminator.
+        for (int i = 0; i < bytes.length - 1; i++) {
+            emulator.append(new byte[]{bytes[i]}, 1);
+            assertNull(result.path);
+            assertEquals(0, result.successes);
+        }
+        emulator.append(new byte[]{bytes[bytes.length - 1]}, 1);
+        assertEquals(path, result.path);
+        assertEquals(1, result.successes);
+
+        // A repeated reply is ignored, and ordinary output resumes after the OSC sequence.
+        append(emulator, sequence + "after");
+        assertEquals("beforeafter", emulator.getScreen().getTranscriptText());
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(6));
+        assertEquals(1, result.successes);
+        assertEquals(0, result.failures);
+    }
+
+    private void append(TerminalEmulator emulator, String output) {
+        byte[] bytes = output.getBytes(StandardCharsets.UTF_8);
+        emulator.append(bytes, bytes.length);
     }
 
     private static final class Result implements TerminalSession.BookmarkLocationCallback {

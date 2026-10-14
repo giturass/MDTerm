@@ -4,7 +4,7 @@ buildscript {
         google()
     }
     dependencies {
-        classpath "com.android.tools.build:gradle:4.2.2"
+        classpath "com.android.tools.build:gradle:8.13.2"
     }
 }
 
@@ -14,10 +14,6 @@ allprojects {
         mavenCentral()
         maven { url "https://jitpack.io" }
     }
-}
-
-task clean(type: Delete) {
-    delete rootProject.buildDir
 }
 
 // Restrict both native compilation and APK/bootstrap contents when building for one device.

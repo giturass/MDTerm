@@ -263,10 +263,7 @@ public final class TerminalRenderer {
         final boolean reverseVideo = mEmulator.isReverseVideo();
         // Use the style of the cell at the cursor (the style newly typed text inherits) and force
         // the underline effect so the composing state is always visually marked.
-        final long cellStyle = mEmulator.getScreen().getStyleAt(cursorRow, cursorCol);
-        // Bitmap cells encode image IDs and coordinates in place of colors. Never decode those
-        // values as palette indices when the IME preview is drawn over an inline image.
-        final long style = (TextStyle.isTerminalBitmap(cellStyle) ? TextStyle.NORMAL : cellStyle)
+        final long style = mEmulator.getScreen().getStyleAt(cursorRow, cursorCol)
             | TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE;
         final int effect = TextStyle.decodeEffect(style);
 

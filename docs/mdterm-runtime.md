@@ -1,5 +1,17 @@
 # MDTerm native runtime
 
+The upstream source baseline is [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3),
+commit `e634d8f981f48b6b89202cf0e04533f0889e03b3`. MDTerm retains its Material
+interface, terminal bookmarks, and IME composing preview from upstream
+[PR #5242](https://github.com/termux/termux-app/pull/5242). Bitmap, Sixel, and
+iTerm image support added later on upstream `master` is outside this baseline.
+
+Three later upstream fixes are retained:
+
+- [3b66f879](https://github.com/termux/termux-app/commit/3b66f8799635a4dba4a206563048ff0e6792c487): `RunCommandService` does not write to request-specified result files before verifying that `allow-external-apps` is enabled.
+- [084d709f](https://github.com/termux/termux-app/commit/084d709f): JNI releases the working-directory string with the matching `cwd` reference.
+- [b4a2c32c](https://github.com/termux/termux-app/commit/b4a2c32c): `TermuxOpenReceiver.ContentProvider.getType()` handles URIs without a path segment without a null-pointer exception.
+
 MDTerm uses `com.termux` for its Android application ID, Java namespace and
 shared user ID. Its app name and Material Design interface remain MDTerm.
 The application replaces the original Termux instead of installing alongside it.
@@ -13,15 +25,17 @@ failsafe follow the upstream Termux implementation.
 
 There is no bundled PRoot runtime, path translation, command wrapper or Intent
 rewriting. Package commands such as `termux-open` and `termux-setup-storage`
-target `com.termux` directly. The upstream `termux-am` socket is at
-`/data/data/com.termux/files/apps/com.termux/termux-am/am.sock`.
+target `com.termux` directly.
 
 ## Building
 
-The existing `downloadBootstraps` task supplies the checksum-verified official
-bootstrap before native compilation. The build targets Android 12+ and arm64,
-with `apt-android-7` packages. No Python runtime preparation or additional
-PRoot package downloads are required.
+The `downloadBootstraps` task supplies the baseline's official bootstrap,
+`2025.03.28-r1+apt-android-7`, verified by SHA-256 before native compilation.
+First installation uses the baseline's second-stage initialization as well.
+MDTerm's build and UI dependencies remain downstream customizations: Android
+12+ and arm64 targets, Java 17, Gradle 9.2.1, AGP 8.13.2, SDK 36,
+NDK 29.0.14206865, and Material Components 1.12.0.
+No Python runtime preparation or additional PRoot package downloads are required.
 
 ```sh
 ./gradlew :app:assembleDebug testDebugUnitTest

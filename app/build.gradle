@@ -14,10 +14,11 @@ ext {
     bootstrapMinRelease = packageVariant == "apt-android-5" ? "5.0" : "7.0"
     bootstrapMaxSdk = packageVariant == "apt-android-5" ? 23 : null
     bootstrapMaxRelease = packageVariant == "apt-android-5" ? "6.0" : null
-
 }
 
 android {
+    namespace "com.termux"
+
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
     def appVersionName = System.getenv("TERMUX_APP_VERSION_NAME") ?: ""
@@ -37,6 +38,7 @@ android {
         implementation "io.noties.markwon:ext-strikethrough:$markwonVersion"
         implementation "io.noties.markwon:linkify:$markwonVersion"
         implementation "io.noties.markwon:recycler:$markwonVersion"
+        implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
 
         implementation project(":terminal-view")
         implementation project(":termux-shared")
@@ -135,7 +137,7 @@ android {
         }
     }
 
-    lintOptions {
+    lint {
         disable 'ProtectedPermissions'
     }
 
@@ -169,6 +171,9 @@ android {
         }
     }
 
+    buildFeatures {
+        buildConfig true
+    }
 }
 
 dependencies {

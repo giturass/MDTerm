@@ -10,7 +10,6 @@ import android.view.inputmethod.InputConnection;
 
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalOutput;
-import com.termux.terminal.TextStyle;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -19,6 +18,7 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -68,11 +68,12 @@ public class TerminalComposingPreviewTest {
     }
 
     @Test
-    public void composingOverInlineImageUsesTextColorsWithoutDecodingImageId() {
+    public void composingPreviewInheritsTextCellColorsAndEffectsWithoutChangingTheScreen() {
         TerminalEmulator emulator = createEmulator();
-        // Image ID 259 would be out of bounds if decoded as a color palette index.
-        long bitmapStyle = TextStyle.encodeTerminalBitmap(259, 1, 0);
-        emulator.getScreen().setChar(0, 0, ' ', bitmapStyle);
+        // Put bold italic red text on a blue background, then return to that cell.
+        byte[] output = "\033[1;3;31;44mX\033[D".getBytes(StandardCharsets.UTF_8);
+        emulator.append(output, output.length);
+        long cellStyle = emulator.getScreen().getStyleAt(0, 0);
         TerminalRenderer renderer = new TerminalRenderer(20, Typeface.MONOSPACE);
         RecordingCanvas canvas = new RecordingCanvas();
 
@@ -80,9 +81,14 @@ public class TerminalComposingPreviewTest {
 
         assertEquals(1, canvas.textRuns.size());
         assertEquals("你", canvas.textRuns.get(0));
-        assertEquals(emulator.mColors.mCurrentColors[TextStyle.COLOR_INDEX_FOREGROUND], canvas.textColor);
+        // Robolectric 4.10's legacy ShadowPaint does not implement setFakeBoldText().
+        // Verify the bold effect through its bright foreground color instead.
+        assertEquals(emulator.mColors.mCurrentColors[9], canvas.textColor);
+        assertEquals(emulator.mColors.mCurrentColors[4], canvas.backgroundColor);
+        assertTrue(canvas.textSkewX < 0);
         assertTrue(canvas.textUnderlined);
-        assertEquals(bitmapStyle, emulator.getScreen().getStyleAt(0, 0));
+        assertEquals(cellStyle, emulator.getScreen().getStyleAt(0, 0));
+        assertEquals("X", emulator.getScreen().getTranscriptText());
     }
 
     private static TerminalEmulator createEmulator() {
@@ -100,13 +106,21 @@ public class TerminalComposingPreviewTest {
     private static class RecordingCanvas extends Canvas {
         final List<String> textRuns = new ArrayList<>();
         int textColor;
+        int backgroundColor;
+        float textSkewX;
         boolean textUnderlined;
+
+        @Override
+        public void drawRect(float left, float top, float right, float bottom, Paint paint) {
+            backgroundColor = paint.getColor();
+        }
 
         @Override
         public void drawTextRun(char[] text, int index, int count, int contextIndex, int contextCount,
                                 float x, float y, boolean isRtl, Paint paint) {
             textRuns.add(new String(text, index, count));
             textColor = paint.getColor();
+            textSkewX = paint.getTextSkewX();
             textUnderlined = paint.isUnderlineText();
         }
     }
