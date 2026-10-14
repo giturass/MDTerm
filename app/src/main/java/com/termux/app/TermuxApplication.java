@@ -59,14 +59,13 @@ public class TermuxApplication extends Application {
         if (isTermuxFilesDirectoryAccessible) {
             Logger.logInfo(LOG_TAG, "Termux files directory is accessible");
             GhosttyTerminfoInstaller.installIfNeeded(this);
+            TermuxInstaller.setupDefaultMotd(context);
             /*
             error = TermuxFileUtils.isAppsTermuxAppDirectoryAccessible(true, true);
             if (error != null) {
                 Logger.logErrorExtended(LOG_TAG, "Create apps/termux-app directory failed\n" + error);
                 return;
             }
-
-            TermuxInstaller.setupDefaultMotd(context);
 
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
