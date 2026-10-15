@@ -39,7 +39,7 @@ program-status UI from the reference fork is not included.
 
 | Dependency | Commit |
 | --- | --- |
-| Ghostty | `7ec9e26a29399b30ef78f06985fc75045b3cecb6` |
+| Ghostty | `22fa134a07f5749edd9e92c6bc17d8aaf61843be` |
 | FreeType | `0a0221a1347e2f1e07c395263540026e9a0aa7c7` |
 | HarfBuzz | `36cb489cb02ce4b92099669ba9f9bea348eff93f` |
 | libpng | `3061454d980de7d53608f594194cfac722721d2a` |
@@ -50,6 +50,20 @@ The JNI bridge, renderer and Android patch originate from reference commit
 callback, native cursor state used by its IME overlay, and CJK glyph width
 adaptation. Keep the C API, Android patch, JNI bridge and terminfo in sync when
 updating the Ghostty pin.
+
+The following later changes from the reference fork are adapted to MDTerm:
+
+- [371ab33](https://github.com/XYenon/termux-app-ghostty/commit/371ab334cc26b04f02a430a6080757f7dac012b9):
+  the updated Ghostty pin and prompt-group navigation through JNI, the Material
+  terminal actions menu, and keyboard shortcuts. Its OSC 7501 status UI changes
+  do not apply to MDTerm's session drawer.
+- [9b21d12](https://github.com/XYenon/termux-app-ghostty/commit/9b21d12a44fb0bfb32f5aad78f180965556fd55c):
+  bundled shell integrations and system startup hooks, with MDTerm preserving
+  existing rc permissions and symlinks and avoiding automatic Nushell wrappers.
+- [9a4051a](https://github.com/XYenon/termux-app-ghostty/commit/9a4051a7f0f3849823938007f51f8c5ced07f84c):
+  standard Material message dialogs and a themed bootstrap progress dialog.
+  MDTerm already uses Material input dialogs and its own dynamic palette; the
+  reference's terminal-search UI is not included.
 
 The build uses Java 17, Gradle 9.2.1, AGP 8.13.2, SDK 36, NDK 29.0.14206865,
 CMake 3.22.1, Zig 0.16.0, Git, Bash and ncurses `tic`. The GitHub workflows
@@ -89,6 +103,40 @@ extra gaps when the primary Latin font and the CJK fallback have different
 width proportions. Glyph height, baseline, and terminal grid positions remain
 unchanged. Color fonts, emoji, and bitmap-only fonts retain their existing sizing.
 
+## Prompt navigation and shell integration
+
+The terminal actions menu offers **Previous prompt** and **Next prompt**.
+`Ctrl+Alt+PageUp` / `Ctrl+Alt+PageDown` perform the same navigation unless
+`disable-hardware-keyboard-shortcuts` is enabled. Navigation stops a pending
+fling, clears text selection, and preserves uncommitted IME text. It changes
+only the viewport, without sending keys or mouse events to the running program.
+Ghostty groups OSC 133 prompt markers, including continuation prompts, and
+handles history boundaries and alternate screens. History without markers
+cannot be navigated retroactively.
+
+The APK bundles shell integrations from the same Ghostty revision. On startup
+and after bootstrap installation, the app installs or repairs them under
+`$PREFIX/share/ghostty/shell-integration` and installs these startup hooks:
+
+- Bash and Zsh source the integration from existing regular
+  `$PREFIX/etc/bash.bashrc` and `$PREFIX/etc/zshrc` files. Existing content and
+  permissions are preserved, and repeated installation does not duplicate hooks.
+- Fish loads through `$PREFIX/etc/fish/conf.d/termux-ghostty.fish`.
+- Elvish discovers its module under `$PREFIX/share/elvish/lib`; activate it with
+  `use ghostty-integration` as required by upstream.
+- Nushell already emits OSC 133 natively. Its upstream module is available in
+  the resource directory but is not automatically imported, since its `ssh`
+  and `sudo` wrappers are unnecessary for prompt navigation.
+
+HOME configuration and `ZDOTDIR` remain untouched. Absent shell-package rc files
+and custom rc symlinks are left alone; users of the latter can explicitly source
+the corresponding script from their own configuration. Normal sessions receive
+`GHOSTTY_RESOURCES_DIR` and an empty `GHOSTTY_SHELL_FEATURES`, enabling prompt/cwd
+reporting without desktop CLI wrappers or title/cursor changes. Failsafe sessions
+retain their existing environment. Restart the app and open a new session after
+upgrading or installing a shell. Disabling system startup files or replacing
+prompt hooks in a theme can prevent prompt reporting.
+
 ## Validation
 
 All compilation, tests that require compilation, and APK builds run in GitHub
@@ -107,7 +155,7 @@ marks, and unchanged glyphs outside the CJK fitting path.
 The [debug](../.github/workflows/debug_build.yml) and
 [release](../.github/workflows/release.yml) workflows build APKs and verify their
 ARM64 library, every Ghostty JNI export, Vulkan linkage, 16 KiB load-segment
-alignment, compiled terminfo and dependency licenses. Test reports and native
+alignment, compiled terminfo, shell integration assets and dependency licenses. Test reports and native
 build diagnostics are uploaded as workflow artifacts. Check the workflow run
 for the tested commit before treating the integration as validated.
 
@@ -115,6 +163,10 @@ The legacy Java emulator remains available for its parser regression suite and
 as a Robolectric test fixture. It is not the runtime terminal backend. UI tests
 exercise MDTerm's input, gestures, selection and session behavior through a
 shadow of the native terminal; they do not establish Vulkan driver compatibility.
+Prompt regressions cover menu/shortcut dispatch, disabled shortcuts, pending
+flings, text selection and uncommitted IME text. Resource tests cover repeated
+installation, repair, failures, system rc preservation and shell environments.
+The native C API tests cover prompt grouping and navigation boundaries.
 
 Use a CI-built APK on a compatible Android device to check Kitty images and
 animation, IME preview, custom fonts, theme reload, rotation, session switching,

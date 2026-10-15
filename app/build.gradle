@@ -17,11 +17,13 @@ ext {
 }
 
 def ghosttyTerminfoAssets = layout.buildDirectory.dir("generated/ghosttyTerminfo/assets").get().asFile
+def ghosttyShellAssets = layout.buildDirectory.dir("generated/ghosttyShellIntegration/assets").get().asFile
 def ghosttySrc = new File(rootProject.ext.nativeSourcesDir, "ghostty")
 
 android {
     namespace "com.termux"
     sourceSets.main.assets.srcDir ghosttyTerminfoAssets
+    sourceSets.main.assets.srcDir ghosttyShellAssets
 
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
@@ -211,11 +213,23 @@ tasks.register("buildGhosttyTerminfo", Exec) {
         "ghostty/terminfo/x/xterm-ghostty")
 }
 
+tasks.register("copyGhosttyShellIntegration", Sync) {
+    dependsOn rootProject.tasks.named("prepareNativeSources")
+    from(new File(ghosttySrc, "src/shell-integration")) {
+        include "bash/**", "zsh/**", "fish/**", "elvish/**", "nushell/**"
+        // Android's asset merger excludes dotfiles. Restore the name on install.
+        rename { name -> name == ".zshenv" ? "zshenv" : name }
+    }
+    from("src/main/shell-integration")
+    into new File(ghosttyShellAssets, "ghostty/shell-integration")
+}
+
 tasks.matching { task ->
     (task.name.startsWith("merge") && task.name.endsWith("Assets")) ||
         (task.name.contains("Release") && task.name.toLowerCase().contains("lint"))
 }.configureEach {
     dependsOn tasks.named("buildGhosttyTerminfo")
+    dependsOn tasks.named("copyGhosttyShellIntegration")
 }
 
 task versionName {

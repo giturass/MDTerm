@@ -829,6 +829,18 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         }
     }
 
+    /** Jump through shell prompt groups without sending input to the PTY. */
+    public void scrollToPrompt(int count) {
+        if (mTerminal == null) return;
+        mScroller.abortAnimation();
+        mScrollRemainder = 0;
+        stopTextSelectionMode();
+        mTerminal.scrollToPrompt(count);
+        awakenScrollBars();
+        requestRender();
+        if (mAccessibilityEnabled) setContentDescription(getText());
+    }
+
     /** Overriding {@link View#onGenericMotionEvent(MotionEvent)}. */
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
@@ -1024,12 +1036,20 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
             ? GhosttyTerminal.KEY_ACTION_REPEAT
             : GhosttyTerminal.KEY_ACTION_PRESS;
         if (mTerminal == null) return true;
+        // Viewport navigation must not submit an unfinished IME composition.
+        // Let the client honor the shortcut setting before the normal input path.
+        boolean promptNavigationKey = event.isCtrlPressed() && event.isAltPressed()
+            && (keyCode == KeyEvent.KEYCODE_PAGE_UP || keyCode == KeyEvent.KEYCODE_PAGE_DOWN);
+        if (promptNavigationKey && mClient.onKeyDown(keyCode, event, mTermSession)) {
+            requestRender();
+            return true;
+        }
         if (!KeyEvent.isModifierKey(keyCode)) finalizeComposingIfActive();
         if (isSelectingText()) {
             stopTextSelectionMode();
         }
 
-        if (mClient.onKeyDown(keyCode, event, mTermSession)) {
+        if (!promptNavigationKey && mClient.onKeyDown(keyCode, event, mTermSession)) {
             requestRender();
             return true;
         } else if (event.isSystem() &&

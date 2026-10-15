@@ -2039,6 +2039,17 @@ Java_com_termux_terminal_GhosttyTerminal_nativeScrollViewport(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_termux_terminal_GhosttyTerminal_nativeScrollToPrompt(
+    JNIEnv *, jclass, jlong handle, jint count) {
+    auto *engine = termux_ghostty_engine_from_handle(handle);
+    GhosttyTerminalScrollViewport scroll{};
+    scroll.tag = GHOSTTY_SCROLL_VIEWPORT_DELTA_PROMPT;
+    scroll.value.delta_prompt = count;
+    ScopedEngineLock lock(engine);
+    ghostty_terminal_scroll_viewport(engine->terminal, scroll);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_termux_terminal_GhosttyTerminal_nativeScrollToBottom(
     JNIEnv *, jclass, jlong handle) {
     auto *engine = termux_ghostty_engine_from_handle(handle);

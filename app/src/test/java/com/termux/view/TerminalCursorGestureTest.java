@@ -12,6 +12,7 @@ import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.GhosttyTerminal;
 import com.termux.terminal.TerminalSession;
+import com.termux.test.ShadowGhosttyTerminal;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -19,6 +20,7 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
+import org.robolectric.shadow.api.Shadow;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
 import org.robolectric.util.ReflectionHelpers;
@@ -206,6 +208,27 @@ public class TerminalCursorGestureTest {
         activity.setContentView(view, new ViewGroup.LayoutParams(0, 0));
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue(view.isAttachedToWindow());
+    }
+
+    @Test
+    public void promptNavigationCancelsQueuedFlingWithoutSendingMouseEvents() {
+        TerminalView view = terminal(false);
+        attachForPostedCallbacks(view);
+        appendHistory(view);
+        byte[] mouseMode = "\u001b[?1000h".getBytes(StandardCharsets.UTF_8);
+        view.getTerminal().feed(mouseMode, 0, mouseMode.length);
+        MotionEvent event = startFling(view);
+        try {
+            view.scrollToPrompt(-1);
+            assertTrue(view.mScroller.isFinished());
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
+            assertEquals(java.util.Collections.singletonList(-1), terminal.getPromptScrollRequests());
+            assertEquals(0, takeOutput(view).length);
+        } finally {
+            view.attachSession(null);
+            event.recycle();
+        }
     }
 
     private static void appendHistory(TerminalView view) {

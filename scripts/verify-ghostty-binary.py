@@ -63,6 +63,15 @@ def verify_artifact(artifact, ndk):
         terminfo = apk.read("assets/ghostty/terminfo/x/xterm-ghostty")
         if terminfo[:2] not in (b"\x1a\x01", b"\x1e\x02") or b"xterm-ghostty" not in terminfo[:256]:
             raise ValueError("APK contains invalid Ghostty terminfo")
+        for integration in (
+            "bash/ghostty.bash", "bash/bash-preexec.sh",
+            "zsh/zshenv", "zsh/ghostty-integration",
+            "fish/vendor_conf.d/ghostty-shell-integration.fish",
+            "elvish/lib/ghostty-integration.elv",
+            "nushell/vendor/autoload/ghostty.nu", "termux-ghostty.fish",
+        ):
+            if not apk.read(f"assets/ghostty/shell-integration/{integration}").strip():
+                raise ValueError(f"APK is missing the {integration} shell integration")
         for dependency in ("ghostty", "freetype", "harfbuzz", "libpng"):
             if not apk.read(f"assets/licenses/{dependency}.txt").strip():
                 raise ValueError(f"APK is missing the {dependency} license")
@@ -70,7 +79,7 @@ def verify_artifact(artifact, ndk):
             library = Path(temporary) / "libtermux.so"
             library.write_bytes(apk.read("lib/arm64-v8a/libtermux.so"))
             verify_library(library, ndk)
-    print(f"Verified Ghostty terminfo and native licenses: {artifact}")
+    print(f"Verified Ghostty terminfo, shell integrations and native licenses: {artifact}")
 
 
 def main():

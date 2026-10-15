@@ -14,7 +14,9 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.util.ReflectionHelpers;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * In-memory terminal fixture for host-side UI tests, where the Android native
@@ -34,6 +36,8 @@ public class ShadowGhosttyTerminal {
     private int topRow;
     private int[] selection;
     private volatile boolean closed;
+    private final List<Integer> promptScrollRequests = new ArrayList<>();
+    private int keyEventCount;
 
     @Implementation
     protected static void __staticInitializer__() { }
@@ -265,6 +269,7 @@ public class ShadowGhosttyTerminal {
     @Implementation
     protected boolean sendKey(int key, int action, int modifiers, int consumedModifiers,
                               String text, int unshiftedCodePoint, boolean composing) {
+        keyEventCount++;
         // Basic fixture input only; native extended keyboard encoding is not exercised here.
         if (closed || action == GhosttyTerminal.KEY_ACTION_RELEASE || composing) return false;
         modifiers &= ~consumedModifiers;
@@ -338,6 +343,21 @@ public class ShadowGhosttyTerminal {
 
     @Implementation
     protected void scrollToBottom() { topRow = 0; }
+
+    @Implementation
+    protected void scrollToPrompt(int count) {
+        if (!closed) promptScrollRequests.add(count);
+    }
+
+    /** Record UI dispatch only; prompt grouping is covered by Ghostty's native tests. */
+    public List<Integer> getPromptScrollRequests() {
+        return new ArrayList<>(promptScrollRequests);
+    }
+
+    /** Includes releases even though this fixture does not encode release reports. */
+    public int getKeyEventCount() {
+        return keyEventCount;
+    }
 
     private void clampViewport() {
         topRow = Math.max(-getScrollbackRows(), Math.min(0, topRow));

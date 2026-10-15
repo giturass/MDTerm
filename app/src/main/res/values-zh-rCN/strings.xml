@@ -55,6 +55,8 @@
 
 
     <!-- Terminal Popup -->
+    <string name="action_previous_prompt">上一个提示符</string>
+    <string name="action_next_prompt">下一个提示符</string>
     <string name="action_select_url">选择链接</string>
     <string name="title_select_url_dialog">点按链接复制，长按打开</string>
     <string name="title_select_url_none_found">终端中未找到链接。</string>

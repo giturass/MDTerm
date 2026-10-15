@@ -1,13 +1,13 @@
 package com.termux.app;
 
 import android.app.Activity;
-import android.app.ProgressDialog;
 import android.content.Context;
 import android.os.Build;
 import android.os.Environment;
 import android.system.Os;
 import android.util.Pair;
 import android.view.WindowManager;
+import android.widget.ProgressBar;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -170,7 +170,7 @@ final class TermuxInstaller {
             if (TermuxFileUtils.isTermuxPrefixDirectoryEmpty()) {
                 Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" exists but is empty or only contains specific unimportant files.");
             } else {
-                GhosttyTerminfoInstaller.installIfNeeded(activity);
+                GhosttyResourcesInstaller.installIfNeeded(activity);
                 whenDone.run();
                 return;
             }
@@ -178,7 +178,7 @@ final class TermuxInstaller {
             Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" does not exist but another file exists at its destination.");
         }
 
-        final ProgressDialog progress = ProgressDialog.show(activity, null, activity.getString(R.string.bootstrap_installer_body), true, false);
+        final AlertDialog progress = showBootstrapProgressDialog(activity);
         new Thread() {
             @Override
             public void run() {
@@ -312,10 +312,11 @@ final class TermuxInstaller {
 
                     Logger.logInfo(LOG_TAG, "Bootstrap packages installed successfully.");
 
+                    GhosttyResourcesInstaller.installIfNeeded(activity);
+
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 
-                    GhosttyTerminfoInstaller.installIfNeeded(activity);
                     activity.runOnUiThread(whenDone);
 
                 } catch (final Exception e) {
@@ -332,6 +333,17 @@ final class TermuxInstaller {
                 }
             }
         }.start();
+    }
+
+    static AlertDialog showBootstrapProgressDialog(Activity activity) {
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity);
+        ProgressBar spinner = new ProgressBar(builder.getContext());
+        int padding = Math.round(24 * activity.getResources().getDisplayMetrics().density);
+        spinner.setPadding(padding, padding, padding, padding);
+        return builder.setMessage(R.string.bootstrap_installer_body)
+            .setView(spinner)
+            .setCancelable(false)
+            .show();
     }
 
     public static boolean checkIfMinOrMaxSdkVersionIsIncompatible(Activity activity,

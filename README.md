@@ -50,6 +50,8 @@ MDTerm 的变化覆盖终端核心、渲染、应用界面与交互层，并未�
 
 应用会自动安装匹配的 `xterm-ghostty` terminfo，新建普通会话的 `$TERM` 为 `xterm-ghostty`。若安装失败或进入故障安全会话，则使用 `xterm-256color`。远程主机如不认识 `xterm-ghostty`，需要在远端安装对应 terminfo，或为该 SSH 会话使用 `TERM=xterm-256color`。
 
+终端操作菜单中的“上一个提示符”和“下一个提示符”，以及 `Ctrl+Alt+PageUp` / `Ctrl+Alt+PageDown`，可在带有 OSC 133 标记的命令提示符之间跳转。应用为 Bash、Zsh、Fish 安装对应的 shell 集成，不修改 HOME 配置；Elvish 需执行 `use ghostty-integration`，Nushell 使用原生标记。升级或安装新 shell 后，请重启应用并新建会话；没有标记的旧输出无法回溯跳转。自定义启动配置及其他限制见 [shell 集成说明](docs/ghostty.md#prompt-navigation-and-shell-integration)。
+
 字体仍可通过 `~/.termux/font.ttf` 覆盖；`~/.termux/fonts/` 内的 `.ttf`、`.otf`、`.ttc` 文件按文件名顺序作为后备字体。配色、复制粘贴、光标手势和可选的中文组合文本预览仍使用 MDTerm 的设置。
 
 移植来源、固定版本、构建依赖与验证方法见 [Ghostty 接入说明](docs/ghostty.md)。

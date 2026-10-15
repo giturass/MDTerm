@@ -27,12 +27,12 @@ if (termuxAppAbis.any { !supportedAbis.contains(it) }) {
 
 ext {
     nativeSourcesDir = new File(rootProject.projectDir, "build/native-sources")
-    // Pins used by XYenon/termux-app-ghostty at 9bdfe0b. Keep the Android patch
-    // and JNI bridge in sync when updating Ghostty's C API.
+    // Ghostty pin reviewed in XYenon/termux-app-ghostty at 371ab33; font and PNG
+    // pins remain from 9bdfe0b. Keep the Android patch and JNI C API in sync.
     nativeSourceRevisions = [
         ghostty: [
             repository: "https://github.com/ghostty-org/ghostty.git",
-            revision: "7ec9e26a29399b30ef78f06985fc75045b3cecb6"],
+            revision: "22fa134a07f5749edd9e92c6bc17d8aaf61843be"],
         freetype: [
             repository: "https://github.com/freetype/freetype.git",
             revision: "0a0221a1347e2f1e07c395263540026e9a0aa7c7"],

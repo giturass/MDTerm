@@ -206,6 +206,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_SELECT_TEXT_ID = 100;
     private static final int CONTEXT_MENU_PASTE_ID = 101;
     private static final int CONTEXT_MENU_SAVE_BOOKMARK_ID = 102;
+    private static final int CONTEXT_MENU_PREVIOUS_PROMPT = 103;
+    private static final int CONTEXT_MENU_NEXT_PROMPT = 104;
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
     private static final int CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1;
     private static final int CONTEXT_MENU_SHARE_SELECTED_TEXT = 10;
@@ -845,6 +847,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         menu.add(Menu.NONE, CONTEXT_MENU_SAVE_BOOKMARK_ID, Menu.NONE, R.string.action_save_bookmark)
             .setIcon(R.drawable.ic_folder).setEnabled(currentSession.isRunning() && !mSavingBookmark);
 
+        menu.add(Menu.NONE, CONTEXT_MENU_PREVIOUS_PROMPT, Menu.NONE, R.string.action_previous_prompt)
+            .setIcon(R.drawable.ic_action_previous_prompt).setEnabled(currentSession.getTerminal() != null);
+        menu.add(Menu.NONE, CONTEXT_MENU_NEXT_PROMPT, Menu.NONE, R.string.action_next_prompt)
+            .setIcon(R.drawable.ic_action_next_prompt).setEnabled(currentSession.getTerminal() != null);
         menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url);
         if (!DataUtils.isNullOrEmpty(mTerminalView.getStoredSelectedText()))
             menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text);
@@ -882,6 +888,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         switch (item.getItemId()) {
             case CONTEXT_MENU_SAVE_BOOKMARK_ID:
                 saveCurrentBookmark(session);
+                return true;
+            case CONTEXT_MENU_PREVIOUS_PROMPT:
+                mTerminalView.scrollToPrompt(-1);
+                return true;
+            case CONTEXT_MENU_NEXT_PROMPT:
+                mTerminalView.scrollToPrompt(1);
                 return true;
             case CONTEXT_MENU_SELECT_URL_ID:
                 mTermuxTerminalViewClient.showUrlSelection();

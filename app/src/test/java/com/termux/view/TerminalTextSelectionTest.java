@@ -9,6 +9,7 @@ import android.os.SystemClock;
 import android.view.ActionMode;
 import android.view.Gravity;
 import android.view.InputDevice;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -18,6 +19,8 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.PopupMenu;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 
 import androidx.drawerlayout.widget.DrawerLayout;
 
@@ -27,9 +30,11 @@ import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.GhosttyTerminal;
 import com.termux.terminal.TerminalSession;
+import com.termux.test.ShadowGhosttyTerminal;
 
 import org.junit.After;
 import org.junit.Before;
@@ -41,12 +46,16 @@ import org.robolectric.Shadows;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
+import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -322,6 +331,103 @@ public class TerminalTextSelectionTest {
         select(75, 10);
         host.mode.click(view.getTextSelectionCursorController().ACTION_MORE);
         assertEquals("beta", contextText[0]);
+    }
+
+    @Test
+    public void promptNavigationClearsSelectionAndUnlocksDrawerWithoutMouseInput() {
+        append("alpha beta\u001b[?1000h");
+        select(15, 10);
+        RecordingActionMode mode = host.mode;
+        view.mScrollRemainder = 7;
+
+        view.scrollToPrompt(-1);
+
+        assertFalse(view.isSelectingText());
+        assertTrue(mode.finished);
+        assertNull(view.getSelectedText());
+        assertEquals(DrawerLayout.LOCK_MODE_UNLOCKED, drawer.getDrawerLockMode(Gravity.START));
+        assertEquals(0, view.mScrollRemainder, 0);
+        ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
+        assertEquals(Collections.singletonList(-1), terminal.getPromptScrollRequests());
+        assertEquals("", takeOutput());
+    }
+
+    @Test
+    @Config(qualifiers = "zh-rCN-w400dp-h640dp-mdpi")
+    public void terminalMenuDispatchesBothPromptDirections() {
+        Menu menu = new PopupMenu(activity, view).getMenu();
+        ReflectionHelpers.callInstanceMethod(activity, "populateTerminalActions",
+            ClassParameter.from(Menu.class, menu));
+        int[] labels = {R.string.action_previous_prompt, R.string.action_next_prompt};
+        for (int label : labels) {
+            MenuItem action = null;
+            for (int i = 0; i < menu.size(); i++) {
+                MenuItem item = menu.getItem(i);
+                if (activity.getString(label).contentEquals(item.getTitle())) {
+                    assertNull("A prompt action must appear once", action);
+                    action = item;
+                }
+            }
+            assertNotNull(action);
+            assertTrue(action.isEnabled());
+            assertNotNull(action.getIcon());
+            assertTrue(activity.onContextItemSelected(action));
+        }
+        ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
+        assertEquals(Arrays.asList(-1, 1), terminal.getPromptScrollRequests());
+        assertEquals("", takeOutput());
+    }
+
+    @Test
+    public void promptShortcutsPreserveCompositionAndHonorDisabledShortcuts() {
+        Object shared = ReflectionHelpers.getField(activity.getProperties(), "mSharedProperties");
+        Map<String, Object> values = ReflectionHelpers.getField(shared, "mMap");
+        String setting = TermuxPropertyConstants.KEY_DISABLE_HARDWARE_KEYBOARD_SHORTCUTS;
+        Object original = values.put(setting, false);
+        int[] keyDownCalls = {0};
+        view.setTerminalViewClient(new TermuxTerminalViewClient(activity, null) {
+            @Override public boolean shouldEnableImeComposing() { return true; }
+            @Override public boolean onKeyDown(int keyCode, KeyEvent event, TerminalSession session) {
+                keyDownCalls[0]++;
+                return super.onKeyDown(keyCode, event, session);
+            }
+        });
+        try {
+            InputConnection input = view.onCreateInputConnection(new EditorInfo());
+            assertTrue(input.setComposingText("你好", 1));
+            for (int keyCode : new int[]{KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN}) {
+                promptKey(keyCode);
+                assertEquals("你好", input.getTextBeforeCursor(10, 0).toString());
+                CharSequence preview = ReflectionHelpers.getField(view, "mComposingText");
+                assertEquals("你好", preview.toString());
+                assertEquals("", takeOutput());
+            }
+            ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
+            assertEquals(Arrays.asList(-1, 1), terminal.getPromptScrollRequests());
+            assertEquals(2, keyDownCalls[0]);
+            assertEquals("Navigation must not forward presses or releases", 0, terminal.getKeyEventCount());
+
+            values.put(setting, true);
+            promptKey(KeyEvent.KEYCODE_PAGE_UP);
+            assertEquals(Arrays.asList(-1, 1), terminal.getPromptScrollRequests());
+            assertEquals(3, keyDownCalls[0]);
+            String output = takeOutput();
+            assertTrue(output.startsWith("你好"));
+            assertTrue("A disabled shortcut must reach the terminal", output.length() > "你好".length());
+            assertEquals("", input.getTextBeforeCursor(10, 0).toString());
+        } finally {
+            if (original == null) values.remove(setting);
+            else values.put(setting, original);
+        }
+    }
+
+    private void promptKey(int keyCode) {
+        long now = SystemClock.uptimeMillis();
+        int modifiers = KeyEvent.META_CTRL_ON | KeyEvent.META_ALT_ON;
+        assertTrue(view.onKeyDown(keyCode, new KeyEvent(now, now,
+            KeyEvent.ACTION_DOWN, keyCode, 0, modifiers)));
+        assertTrue(view.onKeyUp(keyCode, new KeyEvent(now, now,
+            KeyEvent.ACTION_UP, keyCode, 0, modifiers)));
     }
 
     private void append(String text) {
