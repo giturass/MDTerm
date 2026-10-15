@@ -329,16 +329,19 @@ void origins_and_graphemes(FT_Library library, const char *primary_path,
     CHECK(zero.pixels !=
           fractional.pixels); // Subpixel origins reach the rasterizer.
 
-    // Canonical composition and a non-composing kana + handakuten grapheme.
+    // Canonical composition and the fixture's ka + handakuten GSUB ligature.
+    // A + handakuten has neither a precomposed scalar nor a ligature in the
+    // pinned Mplus font, so it also exercises a real multi-glyph grapheme.
     same_run(shape(fallback, {0x304b, 0x3099}), shape(fallback, {0x304c}));
     for (const Codepoints &cp :
-         {Codepoints{0x304b, 0x3099}, Codepoints{0x304b, 0x309a}}) {
+         {Codepoints{0x304b, 0x3099}, Codepoints{0x304b, 0x309a},
+          Codepoints{0x3042, 0x309a}}) {
         const Run run = shape(fallback, cp);
         const FT_Fixed scale = scale_for(cp, width, run);
         CHECK(scale > 0 && scale != identity);
         CHECK(std::abs(static_cast<double>(run.advance()) * scale / identity -
                        width * 128.0) <= 1.0);
-        if (cp.back() == 0x309a) {
+        if (cp.front() == 0x3042) {
             CHECK(run.glyphs.size() >= 2);
             // This fixture's mark can have its own advance. Fit the complete
             // shaped run rather than assuming every combining glyph is
