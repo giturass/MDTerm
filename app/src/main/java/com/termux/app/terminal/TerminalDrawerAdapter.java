@@ -302,9 +302,18 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         if (!TextUtils.equals(card.summary.getText(), row.summary)) card.summary.setText(row.summary);
         card.summary.setVisibility(TextUtils.isEmpty(row.summary) ? View.GONE : View.VISIBLE);
         if (!TextUtils.equals(card.status.getText(), row.programStatus)) card.status.setText(row.programStatus);
-        card.status.setVisibility(TextUtils.isEmpty(row.programStatus) ? View.GONE : View.VISIBLE);
-        card.status.setContentDescription(TextUtils.isEmpty(row.programStatus) ? null
+        boolean hasProgramStatus = !TextUtils.isEmpty(row.programStatus);
+        card.status.setVisibility(hasProgramStatus ? View.VISIBLE : View.GONE);
+        card.status.setContentDescription(!hasProgramStatus ? null
             : activity.getString(R.string.program_status_details, row.number) + ": " + row.programStatus);
+        // Ordinary sessions and bookmarks keep the same height, including after status removal
+        // or recycling a card that previously displayed task details.
+        ViewGroup.LayoutParams layoutParams = card.itemView.getLayoutParams();
+        int height = hasProgramStatus ? ViewGroup.LayoutParams.WRAP_CONTENT : card.defaultHeight;
+        if (layoutParams.height != height) {
+            layoutParams.height = height;
+            card.itemView.setLayoutParams(layoutParams);
+        }
     }
 
     @Override
@@ -444,10 +453,12 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         final TextView summary;
         final TextView status;
         final View menu;
+        final int defaultHeight;
         long boundId = RecyclerView.NO_ID;
 
         CardHolder(View view) {
             super(view);
+            defaultHeight = view.getLayoutParams().height;
             number = view.findViewById(R.id.session_number);
             name = view.findViewById(R.id.session_name);
             summary = view.findViewById(R.id.session_title);

@@ -60,7 +60,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     private static final int MAX_SESSIONS = 8;
 
-    private static final int MAX_OSC_NOTIFICATION_CHARS = 4096;
+    // Android 12 Notification.safeCharSequence truncates title/text/bigText at
+    // 1024 UTF-16 units. Apply that limit before the builder can split a pair.
+    private static final int MAX_OSC_NOTIFICATION_CHARS = 1024;
     private static final long OSC_NOTIFICATION_MIN_INTERVAL_MS = 1000;
     private static final long OSC_NOTIFICATION_DUPLICATE_INTERVAL_MS = 5000;
     private static final long OSC_PROGRESS_TIMEOUT_MS = 15000;

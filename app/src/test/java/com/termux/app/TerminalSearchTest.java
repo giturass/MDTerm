@@ -324,7 +324,7 @@ public class TerminalSearchTest {
     }
 
     @Test
-    @Config(qualifiers = "zh-rCN-w320dp-h640dp-mdpi-night")
+    @Config(qualifiers = "zh-rCN-w320dp-h640dp-night-mdpi")
     public void compactNightThemeKeepsAllActionsReachable() {
         client.showTerminalSearch();
         AlertDialog dialog = dialog();

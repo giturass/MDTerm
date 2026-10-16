@@ -140,7 +140,8 @@ OSC 9 and OSC 777 notification sequences create Android notifications for the
 currently visible session. Tapping a notification opens the app.
 Android notification permissions and channel settings still apply. Requests
 are limited to one per second, with identical notifications suppressed for
-five seconds. For example:
+five seconds. Title and body are limited to 1024 UTF-16 code units, keeping
+each Unicode code point intact. For example:
 
 ```sh
 printf '\033]9;Build finished\007'

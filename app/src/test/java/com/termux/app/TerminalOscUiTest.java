@@ -128,11 +128,28 @@ public class TerminalOscUiTest {
 
     @Test
     public void notificationLimitsKeepUnicodeCodePointsWhole() {
-        String prefix = String.join("", java.util.Collections.nCopies(4095, "x"));
+        // Android 12 caps each field at 1024 UTF-16 units. The emoji cannot
+        // fit in the final unit and must be removed before Android truncates.
+        String prefix = String.join("", java.util.Collections.nCopies(1023, "x"));
         current.onDesktopNotification(prefix + "😀", prefix + "😀");
         Notification notification = notifications.getAllNotifications().get(0);
         assertEquals(prefix, notification.extras.getString(Notification.EXTRA_TITLE));
         assertEquals(prefix, notification.extras.getString(Notification.EXTRA_TEXT));
+        assertEquals(prefix, notification.extras.getString(Notification.EXTRA_BIG_TEXT));
+    }
+
+    @Test
+    public void notificationLimitRetainsFittingEmojiAndThrottlesIdenticalDisplayedText() {
+        String displayed = String.join("", java.util.Collections.nCopies(1022, "x")) + "😀";
+        current.onDesktopNotification(displayed + "first tail", displayed + "first tail");
+        Notification notification = notifications.getAllNotifications().get(0);
+        assertEquals(displayed, notification.extras.getString(Notification.EXTRA_TITLE));
+        assertEquals(displayed, notification.extras.getString(Notification.EXTRA_TEXT));
+        assertEquals(displayed, notification.extras.getString(Notification.EXTRA_BIG_TEXT));
+
+        advance(1000);
+        current.onDesktopNotification(displayed + "different tail", displayed + "different tail");
+        assertEquals(1, notifications.getAllNotifications().size());
     }
 
     @Test

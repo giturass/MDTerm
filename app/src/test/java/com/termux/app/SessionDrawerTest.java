@@ -6,6 +6,7 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -18,6 +19,7 @@ import com.termux.app.terminal.TerminalDrawerRecyclerView;
 import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.ProgramStatusStore;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;
@@ -158,6 +160,53 @@ public class SessionDrawerTest {
     }
 
     @Test
+    public void taskStatusCardsReturnToNormalHeightWhenClearedOrRecycled() {
+        TermuxActivity activity = host(true, 2);
+        TerminalDrawerAdapter adapter = adapter(activity);
+        TerminalDrawerRecyclerView list = list(activity);
+        RecyclerView.ViewHolder holder = adapter.createViewHolder(list, adapter.getItemViewType(2));
+        adapter.bindViewHolder(holder, 2);
+        ViewGroup card = (ViewGroup) holder.itemView;
+        TerminalSession session = (TerminalSession) card.getTag();
+        TextView status = card.findViewById(R.id.session_program_status);
+        measureCard(card, 240);
+        assertEquals(dp(card, 64), card.getHeight());
+        assertEquals(View.GONE, status.getVisibility());
+
+        session.onProgramStatusReport(ProgramStatusStore.WORKING, ProgramStatusStore.KIND_NONE,
+            25, "build", "cargo", "Compile packages", "Preparing dependencies and compiling the application");
+        adapter.refreshSessions();
+        adapter.bindViewHolder(holder, 2);
+        measureCard(card, 240);
+        assertEquals(View.VISIBLE, status.getVisibility());
+        assertTrue(card.getHeight() > dp(card, 64));
+        Rect statusBounds = bounds(card, status);
+        assertTrue(statusBounds.height() > 0);
+        assertTrue(statusBounds.bottom <= card.getHeight());
+        assertFalse(Rect.intersects(statusBounds, bounds(card, card.findViewById(R.id.session_menu_button))));
+
+        session.onProgramStatusPrompt();
+        adapter.refreshSessions();
+        adapter.bindViewHolder(holder, 2);
+        measureCard(card, 240);
+        assertEquals(View.GONE, status.getVisibility());
+        assertEquals(dp(card, 64), card.getHeight());
+
+        session.onProgramStatusReport(ProgramStatusStore.WORKING, ProgramStatusStore.KIND_NONE,
+            50, "build", "cargo", "Compile packages", "Building the remaining packages");
+        adapter.refreshSessions();
+        adapter.bindViewHolder(holder, 2);
+        measureCard(card, 240);
+        assertTrue(card.getHeight() > dp(card, 64));
+        adapter.onViewRecycled(holder);
+        adapter.bindViewHolder(holder, 3);
+        measureCard(card, 240);
+        assertNotSame(session, card.getTag());
+        assertEquals(View.GONE, status.getVisibility());
+        assertEquals(dp(card, 64), card.getHeight());
+    }
+
+    @Test
     public void sectionTitlesKeepTheSameGapAndCardDividersFollowInsertionsAndDeletions() {
         TermuxActivity activity = host(true, 1);
         addBookmarks(activity, 1);
@@ -279,6 +328,14 @@ public class SessionDrawerTest {
         measureOnce(view, widthDp, heightDp);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         measureOnce(view, widthDp, heightDp);
+    }
+
+    private static void measureCard(View view, int widthDp) {
+        int height = view.getLayoutParams().height;
+        view.measure(View.MeasureSpec.makeMeasureSpec(dp(view, widthDp), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(Math.max(0, height),
+                height >= 0 ? View.MeasureSpec.EXACTLY : View.MeasureSpec.UNSPECIFIED));
+        view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
     }
 
     private static void measureOnce(View view, int widthDp, int heightDp) {
