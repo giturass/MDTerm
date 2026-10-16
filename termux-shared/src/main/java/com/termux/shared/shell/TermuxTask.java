@@ -66,12 +66,19 @@ public final class TermuxTask {
                                      final TermuxTaskClient termuxTaskClient,
                                      @NonNull final ShellEnvironmentClient shellEnvironmentClient,
                                      final boolean isSynchronous) {
+        if (executionCommand.executable == null || executionCommand.executable.isEmpty()) {
+            executionCommand.setStateFailed(Errno.ERRNO_FAILED.getCode(),
+                context.getString(R.string.error_executable_unset, executionCommand.getCommandIdAndLabelLogString()));
+            TermuxTask.processTermuxTaskResult(null, executionCommand);
+            return null;
+        }
+
         if (executionCommand.workingDirectory == null || executionCommand.workingDirectory.isEmpty())
             executionCommand.workingDirectory = shellEnvironmentClient.getDefaultWorkingDirectoryPath();
         if (executionCommand.workingDirectory.isEmpty())
             executionCommand.workingDirectory = "/";
 
-        String[] env = shellEnvironmentClient.buildEnvironment(context, false, executionCommand.workingDirectory);
+        String[] env = shellEnvironmentClient.buildEnvironment(context, executionCommand.isFailsafe, executionCommand.workingDirectory);
 
         final String[] commandArray = shellEnvironmentClient.setupProcessArgs(executionCommand.executable, executionCommand.arguments);
 

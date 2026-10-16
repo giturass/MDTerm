@@ -74,6 +74,8 @@ public class KeyHandlerTest extends TestCase {
 		assertKeysEquals("\033[F", KeyHandler.getCodeFromTermcap("K4", false, false));
 		assertKeysEquals("\033OF", KeyHandler.getCodeFromTermcap("K4", true, false));
 		assertKeysEquals("\033[6~", KeyHandler.getCodeFromTermcap("K5", false, false));
+		assertKeysEquals("\033[5~", KeyHandler.getCodeFromTermcap("kP", false, false));
+		assertKeysEquals("\033[6~", KeyHandler.getCodeFromTermcap("kN", false, false));
 
 		// Function keys F1-F12:
 		assertKeysEquals("\033OP", KeyHandler.getCodeFromTermcap("k1", false, false));
@@ -101,6 +103,29 @@ public class KeyHandlerTest extends TestCase {
 		assertKeysEquals("\033[21;2~", KeyHandler.getCodeFromTermcap("FC", false, false));
 		assertKeysEquals("\033[23;2~", KeyHandler.getCodeFromTermcap("FD", false, false));
 		assertKeysEquals("\033[24;2~", KeyHandler.getCodeFromTermcap("FE", false, false));
+	}
+
+	public void testPageKeysRespectModifiers() {
+		// xterm encodes Shift/Alt/Ctrl combinations as modifier parameters 2 through 8.
+		int[] modifiers = {
+			0,
+			KeyHandler.KEYMOD_SHIFT,
+			KeyHandler.KEYMOD_ALT,
+			KeyHandler.KEYMOD_SHIFT | KeyHandler.KEYMOD_ALT,
+			KeyHandler.KEYMOD_CTRL,
+			KeyHandler.KEYMOD_SHIFT | KeyHandler.KEYMOD_CTRL,
+			KeyHandler.KEYMOD_ALT | KeyHandler.KEYMOD_CTRL,
+			KeyHandler.KEYMOD_SHIFT | KeyHandler.KEYMOD_ALT | KeyHandler.KEYMOD_CTRL
+		};
+		String[] suffixes = {"~", ";2~", ";3~", ";4~", ";5~", ";6~", ";7~", ";8~"};
+		for (boolean applicationMode : new boolean[]{false, true}) {
+			for (int i = 0; i < modifiers.length; i++) {
+				assertKeysEquals("\033[5" + suffixes[i],
+					KeyHandler.getCode(KeyEvent.KEYCODE_PAGE_UP, modifiers[i], applicationMode, applicationMode));
+				assertKeysEquals("\033[6" + suffixes[i],
+					KeyHandler.getCode(KeyEvent.KEYCODE_PAGE_DOWN, modifiers[i], applicationMode, applicationMode));
+			}
+		}
 	}
 
 	public void testKeyCodes() {

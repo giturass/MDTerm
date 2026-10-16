@@ -93,6 +93,7 @@ public final class TerminalEmulator {
 
     /** Needs to be large enough to contain reasonable OSC 52 pastes. */
     private static final int MAX_OSC_STRING_LENGTH = 8192;
+    private static final int INITIAL_OSC_STRING_CAPACITY = 16;
 
     /** DECSET 1 - application cursor keys. */
     private static final int DECSET_BIT_APPLICATION_CURSOR_KEYS = 1;
@@ -186,7 +187,9 @@ public final class TerminalEmulator {
     private int mArgsSubParamsBitSet = 0;
 
     /** Holds OSC and device control arguments, which can be strings. */
-    private final StringBuilder mOSCOrDeviceControlArgs = new StringBuilder();
+    private StringBuilder mOSCOrDeviceControlArgs = new StringBuilder(INITIAL_OSC_STRING_CAPACITY);
+    /** Whether an ESC was received while parsing a device control string. */
+    private boolean mDcsEscape;
 
     /**
      * True if the current escape sequence should continue, false if the current escape sequence should be terminated.
@@ -631,6 +634,7 @@ public final class TerminalEmulator {
                 // Starts an escape sequence unless we're parsing a string
                 if (mEscapeState == ESC_P) {
                     // XXX: Ignore escape when reading device control sequence, since it may be part of string terminator.
+                    mDcsEscape = true;
                     return;
                 } else if (mEscapeState != ESC_OSC) {
                     startEscapeSequence();
@@ -916,6 +920,12 @@ public final class TerminalEmulator {
         switch (b) {
             case (byte) '\\': // End of ESC \ string Terminator
             {
+                // DCS data is terminated by ST (ESC \), not by a bare backslash.
+                // https://vt100.net/docs/vt220-rm/chapter2.html#S2.5.3
+                if (!mDcsEscape) {
+                    collectOSCArgs(b);
+                    return;
+                }
                 String dcs = mOSCOrDeviceControlArgs.toString();
                 // DCS $ q P t ST. Request Status String (DECRQSS)
                 if (dcs.startsWith("$q")) {
@@ -1019,18 +1029,14 @@ public final class TerminalEmulator {
                     if (LOG_ESCAPE_SEQUENCES)
                         Logger.logError(mClient, LOG_TAG, "Unrecognized device control string: " + dcs);
                 }
+                clearOSCArgs();
+                mDcsEscape = false;
                 finishSequence();
             }
             break;
             default:
-                if (mOSCOrDeviceControlArgs.length() > MAX_OSC_STRING_LENGTH) {
-                    // Too long.
-                    mOSCOrDeviceControlArgs.setLength(0);
-                    finishSequence();
-                } else {
-                    mOSCOrDeviceControlArgs.appendCodePoint(b);
-                    continueSequence(mEscapeState);
-                }
+                mDcsEscape = false;
+                collectOSCArgs(b);
         }
     }
 
@@ -1469,7 +1475,8 @@ public final class TerminalEmulator {
             case '0': // SS3, ignore.
                 break;
             case 'P': // Device control string
-                mOSCOrDeviceControlArgs.setLength(0);
+                clearOSCArgs();
+                mDcsEscape = false;
                 continueSequence(ESC_P);
                 break;
             case '[':
@@ -1479,7 +1486,7 @@ public final class TerminalEmulator {
                 setDecsetinternalBit(DECSET_BIT_APPLICATION_KEYPAD, true);
                 break;
             case ']': // OSC
-                mOSCOrDeviceControlArgs.setLength(0);
+                clearOSCArgs();
                 continueSequence(ESC_OSC);
                 break;
             case '>': // DECKPNM
@@ -2000,8 +2007,8 @@ public final class TerminalEmulator {
             default:
                 // The ESC character was not followed by a \, so insert the ESC and
                 // the current character in arg buffer.
-                collectOSCArgs(27);
-                collectOSCArgs(b);
+                if (!collectOSCArgs(27)) return;
+                if (!collectOSCArgs(b)) return;
                 continueSequence(ESC_OSC);
                 break;
         }
@@ -2107,10 +2114,10 @@ public final class TerminalEmulator {
             case 52: // Manipulate Selection Data. Skip the optional first selection parameter(s).
                 int startIndex = textParameter.indexOf(";") + 1;
                 try {
-                    String clipboardText = new String(Base64.decode(textParameter.substring(startIndex), 0), StandardCharsets.UTF_8);
+                    String clipboardText = new String(Base64.decode(textParameter.substring(startIndex), Base64.DEFAULT), StandardCharsets.UTF_8);
                     mSession.onCopyTextToClipboard(clipboardText);
                 } catch (Exception e) {
-                    Logger.logError(mClient, LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "");
+                    Logger.logError(mClient, LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "'");
                 }
                 break;
             case 104:
@@ -2282,12 +2289,25 @@ public final class TerminalEmulator {
         return result;
     }
 
-    private void collectOSCArgs(int b) {
+    private boolean collectOSCArgs(int b) {
         if (mOSCOrDeviceControlArgs.length() < MAX_OSC_STRING_LENGTH) {
             mOSCOrDeviceControlArgs.appendCodePoint(b);
             continueSequence(mEscapeState);
+            return true;
         } else {
             unknownSequence(b);
+            clearOSCArgs();
+            return false;
+        }
+    }
+
+    /** Release excess capacity when discarding OSC or device control arguments. */
+    private void clearOSCArgs() {
+        if (mOSCOrDeviceControlArgs.capacity() <= INITIAL_OSC_STRING_CAPACITY) {
+            mOSCOrDeviceControlArgs.setLength(0);
+        } else {
+            // setLength(0) alone retains the largest buffer allocated by a previous command.
+            mOSCOrDeviceControlArgs = new StringBuilder(INITIAL_OSC_STRING_CAPACITY);
         }
     }
 
@@ -2556,6 +2576,8 @@ public final class TerminalEmulator {
 
         mColors.reset();
         mSession.onColorsChanged();
+        clearOSCArgs();
+        mDcsEscape = false;
     }
 
     public String getSelectedText(int x1, int y1, int x2, int y2) {

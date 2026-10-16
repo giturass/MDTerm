@@ -184,7 +184,7 @@ public class Error implements Serializable {
 
         logString.append(error.getCodeString());
         logString.append("\n").append(error.getTypeAndMessageLogString());
-        if (error.throwablesList != null)
+        if (error.throwablesList != null && !error.throwablesList.isEmpty())
             logString.append("\n").append(error.geStackTracesLogString());
 
         return logString.toString();
@@ -237,7 +237,8 @@ public class Error implements Serializable {
 
         markdownString.append(MarkdownUtils.getSingleLineMarkdownStringEntry("Error Code", error.getCode(), "-"));
         markdownString.append("\n").append(MarkdownUtils.getMultiLineMarkdownStringEntry((Errno.TYPE.equals(error.getType()) ? "Error Message" : "Error Message (" + error.getType() + ")"), error.message, "-"));
-        markdownString.append("\n\n").append(error.geStackTracesMarkdownString());
+        if (error.throwablesList != null && !error.throwablesList.isEmpty())
+            markdownString.append("\n\n").append(error.geStackTracesMarkdownString());
 
         return markdownString.toString();
     }

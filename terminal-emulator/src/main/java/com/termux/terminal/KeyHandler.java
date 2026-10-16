@@ -120,8 +120,8 @@ public final class KeyHandler {
         TERMCAP_TO_KEYCODE.put("kDN", KEYMOD_SHIFT | KEYCODE_DPAD_DOWN); // non-standard shifted arrow down
         TERMCAP_TO_KEYCODE.put("kF", KEYMOD_SHIFT | KEYCODE_DPAD_DOWN); // terminfo=kind, scroll-forward key
         TERMCAP_TO_KEYCODE.put("kI", KEYCODE_INSERT);
-        TERMCAP_TO_KEYCODE.put("kN", KEYCODE_PAGE_UP);
-        TERMCAP_TO_KEYCODE.put("kP", KEYCODE_PAGE_DOWN);
+        TERMCAP_TO_KEYCODE.put("kP", KEYCODE_PAGE_UP);
+        TERMCAP_TO_KEYCODE.put("kN", KEYCODE_PAGE_DOWN);
         TERMCAP_TO_KEYCODE.put("kR", KEYMOD_SHIFT | KEYCODE_DPAD_UP); // terminfo=kri, scroll-backward key
         TERMCAP_TO_KEYCODE.put("kUP", KEYMOD_SHIFT | KEYCODE_DPAD_UP); // non-standard shifted up
 
@@ -227,9 +227,9 @@ public final class KeyHandler {
                 return transformForModifiers("\033[3", keyMode, '~');
 
             case KEYCODE_PAGE_UP:
-                return "\033[5~";
+                return transformForModifiers("\033[5", keyMode, '~');
             case KEYCODE_PAGE_DOWN:
-                return "\033[6~";
+                return transformForModifiers("\033[6", keyMode, '~');
             case KEYCODE_DEL:
                 String prefix = ((keyMode & KEYMOD_ALT) == 0) ? "" : "\033";
                 // Just do what xterm and gnome-terminal does:

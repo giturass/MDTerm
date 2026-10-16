@@ -39,7 +39,6 @@
         android:name="com.termux.app.TermuxApplication"
         android:allowBackup="false"
         android:banner="@drawable/banner"
-        android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/application_name"
         android:roundIcon="@mipmap/ic_launcher_round"

@@ -24,6 +24,29 @@ public class ScreenBufferTest extends TerminalTestCase {
 		assertEquals("XX\nXYY\n YY", screen.getTranscriptText());
 	}
 
+	public void testErasingLineEndClearsOldWrap() {
+		withTerminalSized(5, 3).enterString("ABCDEFGHIJ").assertLineWraps(true, false, false);
+		enterString("\033[1;3H\033[K")
+			.assertLinesAre("AB   ", "FGHIJ", "     ")
+			.assertLineWraps(false, false, false);
+		assertEquals("AB\nFGHIJ", mTerminal.getSelectedText(0, 0, 4, 1));
+	}
+
+	public void testErasingDisplayClearsOldWraps() {
+		withTerminalSized(5, 3).enterString("ABCDEFGHIJK").assertLineWraps(true, true, false);
+		enterString("\033[2J\033[Hone\r\ntwo")
+			.assertLinesAre("one  ", "two  ", "     ")
+			.assertLineWraps(false, false, false);
+		assertEquals("one\ntwo", mTerminal.getSelectedText(0, 0, 4, 1));
+	}
+
+	public void testErasingLineStartPreservesWrap() {
+		withTerminalSized(5, 3).enterString("ABCDEFGHIJ").assertLineWraps(true, false, false);
+		enterString("\033[1;2H\033[1K")
+			.assertLinesAre("  CDE", "FGHIJ", "     ")
+			.assertLineWraps(true, false, false);
+	}
+
 	public void testGetSelectedText() {
 		withTerminalSized(5, 3).enterString("ABCDEFGHIJ").assertLinesAre("ABCDE", "FGHIJ", "     ");
 		assertEquals("AB", mTerminal.getSelectedText(0, 0, 1, 0));

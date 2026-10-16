@@ -183,7 +183,7 @@ def validateVersionName(String versionName) {
 }
 
 def downloadBootstrap(String arch, String expectedChecksum, String version) {
-    def bootstrapAbis = [aarch64: "arm64-v8a", arm: "armeabi-v7a", i686: "x86", x86_64: "x86_64"]
+    def bootstrapAbis = [aarch64: "arm64-v8a"]
     if (!rootProject.ext.termuxAppAbis.contains(bootstrapAbis[arch])) return
 
     def digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -238,11 +238,9 @@ clean {
 
 task downloadBootstraps() {
     doLast {
-        def version = "2025.03.28-r1+apt-android-7"
-        downloadBootstrap("aarch64", "c8d702b6f742935001c37cda81b8ac69504a95d5cf28f2899532dd8cd4b057eb", version)
-        downloadBootstrap("arm",     "f3bb9d1b32552b34fff41861dbf193ec5ba2848d67d779ac1c7256da6640f85d", version)
-        downloadBootstrap("i686",    "36db3e1ac3547f9a174fd763bd9a484fa1a3449cdd81e1cf2408ff0454f839c6", version)
-        downloadBootstrap("x86_64",  "1c124ec2396ee70a51b0b0a574f29aa659526aa2b9f558f993b2fb05d1e51855", version)
+        // The official release tag spells this package variant as apt.android-7.
+        def version = "2026.02.12-r1%2Bapt.android-7"
+        downloadBootstrap("aarch64", "ea2aeba8819e517db711f8c32369e89e7c52cee73e07930ff91185e1ab93f4f3", version)
     }
 }
 

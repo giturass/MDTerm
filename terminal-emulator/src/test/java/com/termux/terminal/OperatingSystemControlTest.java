@@ -67,6 +67,20 @@ public class OperatingSystemControlTest extends TerminalTestCase {
 		assertEquals(expectedTitleChanges, mOutput.titleChanges);
 	}
 
+	public void testOverflowAfterEscapeDoesNotResumeDiscardedCommand() {
+		// Exercise overflow while reinserting either ESC or the following non-ST character.
+		for (int argsLength : new int[]{8191, 8192}) {
+			withTerminalSized(3, 3);
+			StringBuilder input = new StringBuilder("\033]0;");
+			for (int i = 2; i < argsLength; i++) input.append('a');
+			input.append("\033xOK");
+			enterString(input.toString()).assertLinesAre("OK ", "   ", "   ");
+			assertNull(mTerminal.getTitle());
+			enterString("\033]0;next\007");
+			assertEquals("next", mTerminal.getTitle());
+		}
+	}
+
 	public void testTitleStack() throws Exception {
 		// echo -ne '\e]0;BEFORE\007' # set title
 		// echo -ne '\e[22t' # push to stack

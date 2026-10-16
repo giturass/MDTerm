@@ -27,6 +27,7 @@ import com.termux.app.settings.properties.TermuxAppSharedProperties;
 import com.termux.app.terminal.TermuxTerminalSessionClient;
 import com.termux.app.utils.PluginUtils;
 import com.termux.shared.data.IntentUtils;
+import com.termux.shared.data.UriUtils;
 import com.termux.shared.models.errors.Errno;
 import com.termux.shared.shell.ShellUtils;
 import com.termux.shared.shell.TermuxShellEnvironmentClient;
@@ -364,7 +365,7 @@ public final class TermuxService extends Service implements TermuxTask.TermuxTas
         executionCommand.inBackground = intent.getBooleanExtra(TERMUX_SERVICE.EXTRA_BACKGROUND, false);
 
         if (executionCommand.executableUri != null) {
-            executionCommand.executable = executionCommand.executableUri.getPath();
+            executionCommand.executable = UriUtils.getUriFilePathWithFragment(executionCommand.executableUri);
             executionCommand.arguments = IntentUtils.getStringArrayExtraIfSet(intent, TERMUX_SERVICE.EXTRA_ARGUMENTS, null);
             if (executionCommand.inBackground)
                 executionCommand.stdin = IntentUtils.getStringExtraIfSet(intent, TERMUX_SERVICE.EXTRA_STDIN, null);

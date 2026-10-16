@@ -14,7 +14,9 @@ import android.provider.MediaStore;
 import android.webkit.MimeTypeMap;
 
 import com.termux.app.utils.PluginUtils;
+import com.termux.shared.data.DataUtils;
 import com.termux.shared.data.IntentUtils;
+import com.termux.shared.data.UriUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants;
 
@@ -38,7 +40,6 @@ public class TermuxOpenReceiver extends BroadcastReceiver {
 
         Logger.logVerbose(LOG_TAG, "Intent Received:\n" + IntentUtils.getIntentString(intent));
 
-        final String filePath = data.getPath();
         final String contentTypeExtra = intent.getStringExtra("content-type");
         final boolean useChooser = intent.getBooleanExtra("chooser", false);
         final String intentAction = intent.getAction() == null ? Intent.ACTION_VIEW : intent.getAction();
@@ -70,6 +71,12 @@ public class TermuxOpenReceiver extends BroadcastReceiver {
             return;
         }
 
+        String filePath = UriUtils.getUriFilePathWithFragment(data);
+        if (DataUtils.isNullOrEmpty(filePath)) {
+            Logger.logError(LOG_TAG, "filePath is null or empty");
+            return;
+        }
+
         final File fileToShare = new File(filePath);
         if (!(fileToShare.isFile() && fileToShare.canRead())) {
             Logger.logError(LOG_TAG, "termux-open: Not a readable file: '" + fileToShare.getAbsolutePath() + "'");
@@ -93,7 +100,7 @@ public class TermuxOpenReceiver extends BroadcastReceiver {
             contentTypeToUse = contentTypeExtra;
         }
 
-        Uri uriToShare = Uri.parse("content://" + TermuxConstants.TERMUX_FILE_SHARE_URI_AUTHORITY + fileToShare.getAbsolutePath());
+        Uri uriToShare = UriUtils.getContentUri(TermuxConstants.TERMUX_FILE_SHARE_URI_AUTHORITY, fileToShare.getAbsolutePath());
 
         if (Intent.ACTION_SEND.equals(intentAction)) {
             sendIntent.putExtra(Intent.EXTRA_STREAM, uriToShare);
@@ -161,11 +168,13 @@ public class TermuxOpenReceiver extends BroadcastReceiver {
 
         @Override
         public String getType(@NonNull Uri uri) {
-            String path = uri.getLastPathSegment();
-            int extIndex = path.lastIndexOf('.') + 1;
+            String pathComponent = uri.getLastPathSegment();
+            if (pathComponent == null || pathComponent.isEmpty()) return null;
+
+            int extIndex = pathComponent.lastIndexOf('.') + 1;
             if (extIndex > 0) {
                 MimeTypeMap mimeMap = MimeTypeMap.getSingleton();
-                String ext = path.substring(extIndex).toLowerCase();
+                String ext = pathComponent.substring(extIndex).toLowerCase();
                 return mimeMap.getMimeTypeFromExtension(ext);
             }
             return null;

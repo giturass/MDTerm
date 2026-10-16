@@ -24,8 +24,10 @@ target `com.termux` directly.
 ## Building
 
 The existing `downloadBootstraps` task supplies the checksum-verified official
-bootstrap before native compilation. The build targets Android 12+ and arm64,
-with `apt-android-7` packages. No Python runtime preparation or additional
+bootstrap before native compilation. It uses the `aarch64` archive from
+[`2026.02.12-r1+apt.android-7`](https://github.com/termux/termux-packages/releases/tag/bootstrap-2026.02.12-r1%2Bapt.android-7).
+The build targets Android 12+ and arm64, with only `apt-android-7` packages.
+No Python runtime preparation or additional
 PRoot package downloads are required. The build uses JDK 17 or newer, Gradle
 9.2.1, Android Gradle Plugin 8.13.2, Android SDK 36 and NDK 29.0.14206865.
 These build tools support the MDTerm interface dependencies independently of

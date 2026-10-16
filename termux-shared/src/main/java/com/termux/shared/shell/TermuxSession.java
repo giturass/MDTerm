@@ -66,6 +66,8 @@ public class TermuxSession {
                                         @NonNull final TerminalSessionClient terminalSessionClient, final TermuxSessionClient termuxSessionClient,
                                         @NonNull final ShellEnvironmentClient shellEnvironmentClient,
                                         final String sessionName, final boolean setStdoutOnExit) {
+        if (executionCommand.executable != null && executionCommand.executable.isEmpty())
+            executionCommand.executable = null;
         if (executionCommand.workingDirectory == null || executionCommand.workingDirectory.isEmpty())
             executionCommand.workingDirectory = shellEnvironmentClient.getDefaultWorkingDirectoryPath();
         if (executionCommand.workingDirectory.isEmpty())

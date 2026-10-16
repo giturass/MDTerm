@@ -37,6 +37,26 @@ public class DeviceControlStringTest extends TerminalTestCase {
 	public void testReportKeys() {
 		withTerminalSized(3, 3);
 		assertCapabilityResponse("kB", "\033[Z");
+		assertCapabilityResponse("kP", "\033[5~");
+		assertCapabilityResponse("kN", "\033[6~");
+	}
+
+	public void testBareBackslashDoesNotTerminateDeviceControlString() {
+		// Only ST (ESC \) terminates DCS; a backslash in data must stay inside the command.
+		for (String data : new String[]{"ignored\\still ignored", "ignored\033x\\still ignored"}) {
+			withTerminalSized(3, 3).enterString("A\033P" + data);
+			assertLinesAre("A  ", "   ", "   ");
+			enterString("\033");
+			enterString("\\B").assertLinesAre("AB ", "   ", "   ");
+			assertEquals("", mOutput.getOutputAndClear());
+		}
+	}
+
+	public void testStatusRequestWithSplitStringTerminator() {
+		withTerminalSized(3, 3).enterString("\033P$q\"p\033");
+		assertEquals("", mOutput.getOutputAndClear());
+		assertEnteringStringGivesResponse("\\", "\033P1$r64;1\"p\033\\");
+		enterString("OK").assertLinesAre("OK ", "   ", "   ");
 	}
 
 	public void testReallyLongDeviceControlString() {

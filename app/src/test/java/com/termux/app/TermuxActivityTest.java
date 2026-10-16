@@ -29,4 +29,11 @@ public class TermuxActivityTest {
             "https://example.com/#bar", "https://example.com/foo#bar");
     }
 
+    @Test
+    public void testExtractUrlsWithNumericAndPunycodeDomainSuffixes() {
+        assertUrlsAre("https://example.xn--p1ai/path", "https://example.xn--p1ai/path");
+        assertUrlsAre("https://server.example2:8080/path#anchor", "https://server.example2:8080/path#anchor");
+        assertUrlsAre("https://host.local-domain/file", "https://host.local-domain/file");
+    }
+
 }

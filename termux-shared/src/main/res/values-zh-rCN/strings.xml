@@ -50,6 +50,7 @@
 
     <!-- Shell -->
     <string name="error_sending_sigkill_to_process">因用户请求或 Android 正在终止执行服务，向进程发送 SIGKILL 信号</string>
+    <string name="error_executable_unset">Shell 命令“%1$s”未设置可执行文件</string>
     <string name="error_execution_cancelled">执行服务正在被终止，已取消执行</string>
     <string name="error_failed_to_execute_termux_session_command">无法执行 &TERMUX_APP_NAME; 会话命令“%1$s”</string>
     <string name="error_failed_to_execute_termux_task_command">无法执行 &TERMUX_APP_NAME; 后台任务命令“%1$s”</string>

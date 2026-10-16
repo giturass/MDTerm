@@ -10,6 +10,7 @@ import android.util.Patterns;
 import com.termux.R;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.data.IntentUtils;
+import com.termux.shared.data.UriUtils;
 import com.termux.shared.interact.MessageDialogUtils;
 import com.termux.shared.interact.TextInputDialogUtils;
 import com.termux.shared.termux.TermuxConstants;
@@ -94,8 +95,8 @@ public class TermuxFileReceiverActivity extends Activity {
             if ("content".equals(scheme)) {
                 handleContentUri(dataUri, sharedTitle);
             } else if ("file".equals(scheme)) {
-                // When e.g. clicking on a downloaded apk:
-                String path = dataUri.getPath();
+                // Paths supplied by tools such as am may contain an unescaped '#'.
+                String path = UriUtils.getUriFilePathWithFragment(dataUri);
                 if (DataUtils.isNullOrEmpty(path)) {
                     showErrorDialogAndQuit("File path from data uri is null, empty or invalid.");
                     return;
@@ -136,6 +137,7 @@ public class TermuxFileReceiverActivity extends Activity {
             }
 
             if (attachmentFileName == null) attachmentFileName = subjectFromIntent;
+            if (attachmentFileName == null) attachmentFileName = UriUtils.getUriFileBasename(uri, true);
 
             InputStream in = getContentResolver().openInputStream(uri);
             promptNameAndSave(in, attachmentFileName);

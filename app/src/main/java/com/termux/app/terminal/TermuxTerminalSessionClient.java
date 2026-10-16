@@ -91,7 +91,7 @@ public class TermuxTerminalSessionClient extends TermuxTerminalSessionClientBase
         // Just initialize the mBellSoundPool and load the sound, otherwise bell might not run
         // the first time bell key is pressed and play() is called, since sound may not be loaded
         // quickly enough before the call to play(). https://stackoverflow.com/questions/35435625
-        getBellSoundPool();
+        loadBellSoundPool();
     }
 
     /**
@@ -221,7 +221,9 @@ public class TermuxTerminalSessionClient extends TermuxTerminalSessionClientBase
                 BellHandler.getInstance(mActivity).doBell();
                 break;
             case TermuxPropertyConstants.IVALUE_BELL_BEHAVIOUR_BEEP:
-                getBellSoundPool().play(mBellSoundId, 1.f, 1.f, 1, 0, 1.f);
+                loadBellSoundPool();
+                if (mBellSoundPool != null)
+                    mBellSoundPool.play(mBellSoundId, 1.f, 1.f, 1, 0, 1.f);
                 break;
             case TermuxPropertyConstants.IVALUE_BELL_BEHAVIOUR_IGNORE:
                 // Ignore the bell character.
@@ -266,17 +268,19 @@ public class TermuxTerminalSessionClient extends TermuxTerminalSessionClientBase
 
 
 
-    /** Initialize and get mBellSoundPool */
-    private synchronized SoundPool getBellSoundPool() {
+    /** Load mBellSoundPool */
+    private synchronized void loadBellSoundPool() {
         if (mBellSoundPool == null) {
             mBellSoundPool = new SoundPool.Builder().setMaxStreams(1).setAudioAttributes(
                 new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).build()).build();
 
-            mBellSoundId = mBellSoundPool.load(mActivity, com.termux.shared.R.raw.bell, 1);
+            try {
+                mBellSoundId = mBellSoundPool.load(mActivity, com.termux.shared.R.raw.bell, 1);
+            } catch (Exception e) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Failed to load bell sound pool", e);
+            }
         }
-
-        return mBellSoundPool;
     }
 
     /** Release mBellSoundPool resources */

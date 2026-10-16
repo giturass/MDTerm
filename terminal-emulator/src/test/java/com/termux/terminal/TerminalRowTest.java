@@ -59,6 +59,34 @@ public class TerminalRowTest extends TestCase {
 		assertLineStartsWith(' ', DIARESIS_CODEPOINT, DIARESIS_CODEPOINT, ' ');
 	}
 
+	public void testRowsWiderThanShortMaxValue() {
+		int columns = Short.MAX_VALUE + 1;
+		row = new TerminalRow(columns, TextStyle.NORMAL);
+		assertEquals(columns, row.getSpaceUsed());
+		row.setChar(columns - 1, 'X', TextStyle.NORMAL);
+		assertEquals('X', row.mText[row.findStartOfColumn(columns - 1)]);
+		assertEquals(columns, row.findStartOfColumn(columns));
+		row.clear(TextStyle.NORMAL);
+		assertEquals(columns, row.getSpaceUsed());
+		assertTrue(row.isBlank());
+	}
+
+	public void testUnicodeExpansionBeyondShortMaxValue() {
+		int columns = Short.MAX_VALUE;
+		row = new TerminalRow(columns, TextStyle.NORMAL);
+		row.setChar(0, TWO_JAVA_CHARS_DISPLAY_WIDTH_ONE_1, TextStyle.NORMAL);
+		row.setChar(1, DIARESIS_CODEPOINT, TextStyle.NORMAL);
+		assertEquals(columns + 2, row.getSpaceUsed());
+		assertLineStartsWith(TWO_JAVA_CHARS_DISPLAY_WIDTH_ONE_1, ' ', DIARESIS_CODEPOINT, ' ');
+
+		// A wide character at the end truncates the row, but the UTF-16 length still exceeds 32767.
+		row.setChar(columns - 2, ONE_JAVA_CHAR_DISPLAY_WIDTH_TWO_1, TextStyle.NORMAL);
+		assertEquals(columns + 1, row.getSpaceUsed());
+		assertEquals(columns + 1, row.findStartOfColumn(columns));
+		assertEquals(row.findStartOfColumn(columns - 2), row.findStartOfColumn(columns - 1));
+		assertEquals(ONE_JAVA_CHAR_DISPLAY_WIDTH_TWO_1, row.mText[row.findStartOfColumn(columns - 2)]);
+	}
+
 	public void testStaticConstants() {
 		assertEquals(1, Character.charCount(ONE_JAVA_CHAR_DISPLAY_WIDTH_TWO_1));
 		assertEquals(1, Character.charCount(ONE_JAVA_CHAR_DISPLAY_WIDTH_TWO_2));

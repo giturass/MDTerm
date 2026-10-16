@@ -64,10 +64,11 @@ public class PermissionUtils {
             if (result != PackageManager.PERMISSION_GRANTED) {
                 Logger.logDebug(LOG_TAG, "Requesting Permissions: " + Arrays.toString(permissions));
                 try {
-                    activity.requestPermissions(new String[]{permission}, requestCode);
+                    activity.requestPermissions(permissions, requestCode);
                 } catch (Exception e) {
                     Logger.logStackTraceWithMessage(LOG_TAG, "Failed to request permissions with request code " + requestCode + ": " + Arrays.toString(permissions), e);
                 }
+                break;
             }
         }
     }
