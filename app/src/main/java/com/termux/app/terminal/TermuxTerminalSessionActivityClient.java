@@ -2,14 +2,22 @@ package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
+import android.content.res.ColorStateList;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.text.TextUtils;
+import android.view.View;
+import android.widget.ProgressBar;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -21,6 +29,8 @@ import com.google.android.material.color.MaterialColors;
 
 import com.termux.R;
 import com.termux.shared.interact.ShareUtils;
+import com.termux.shared.notification.NotificationUtils;
+import com.termux.shared.termux.notification.TermuxNotificationUtils;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
 import com.termux.app.TermuxActivity;
@@ -50,6 +60,17 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     private static final int MAX_SESSIONS = 8;
 
+    private static final int MAX_OSC_NOTIFICATION_CHARS = 4096;
+    private static final long OSC_NOTIFICATION_MIN_INTERVAL_MS = 1000;
+    private static final long OSC_NOTIFICATION_DUPLICATE_INTERVAL_MS = 5000;
+    private static final long OSC_PROGRESS_TIMEOUT_MS = 15000;
+    private static final String OSC_NOTIFICATION_CHANNEL_ID = "termux_osc_notification_channel";
+    private long mLastOscNotificationTime;
+    private String mLastOscNotificationTitle;
+    private String mLastOscNotificationBody;
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mHideProgressRunnable;
+
     private SoundPool mBellSoundPool;
 
     private int mBellSoundId;
@@ -62,6 +83,10 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     public TermuxTerminalSessionActivityClient(TermuxActivity activity) {
         this.mActivity = activity;
+        mHideProgressRunnable = () -> {
+            ProgressBar progress = mActivity.findViewById(R.id.terminal_progress_bar);
+            if (progress != null) progress.setVisibility(View.GONE);
+        };
     }
 
     /**
@@ -108,6 +133,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // Store current session in shared preferences so that it can be restored later in
         // {@link #onStart} if needed.
         setCurrentStoredSession();
+        resetProgress();
 
         // Release mBellSoundPool resources, specially to prevent exceptions like the following to be thrown
         // java.util.concurrent.TimeoutException: android.media.SoundPool.finalize() timed out after 10 seconds
@@ -168,7 +194,110 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     }
 
     @Override
+    public void onProgramStatusChanged(@NonNull TerminalSession session) {
+        if (mActivity.isVisible()) termuxSessionListNotifyUpdated();
+    }
+
+    /** OSC 9/777 follows upstream: only the visible, current session may notify. */
+    @Override
+    public void onDesktopNotification(@NonNull TerminalSession session,
+                                      @Nullable String title, @Nullable String body) {
+        if (!mActivity.isVisible() || mActivity.getCurrentSession() != session) return;
+        title = sanitizeOscNotificationText(title);
+        body = sanitizeOscNotificationText(body);
+        if (TextUtils.isEmpty(title)) title = sanitizeOscNotificationText(session.getTitle());
+        if (TextUtils.isEmpty(title)) title = TermuxConstants.TERMUX_APP_NAME;
+        if (TextUtils.isEmpty(body)) return;
+
+        long now = SystemClock.elapsedRealtime();
+        if (mLastOscNotificationBody != null &&
+            (now - mLastOscNotificationTime < OSC_NOTIFICATION_MIN_INTERVAL_MS ||
+             (TextUtils.equals(title, mLastOscNotificationTitle) &&
+              TextUtils.equals(body, mLastOscNotificationBody) &&
+              now - mLastOscNotificationTime < OSC_NOTIFICATION_DUPLICATE_INTERVAL_MS))) return;
+
+        NotificationUtils.setupNotificationChannel(mActivity, OSC_NOTIFICATION_CHANNEL_ID,
+            mActivity.getString(R.string.terminal_notification_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT);
+        PendingIntent intent = PendingIntent.getActivity(mActivity, 0,
+            TermuxActivity.newInstance(mActivity),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder builder = NotificationUtils.geNotificationBuilder(mActivity,
+            OSC_NOTIFICATION_CHANNEL_ID, Notification.PRIORITY_DEFAULT,
+            title, body, body, intent, null, NotificationUtils.NOTIFICATION_MODE_SILENT);
+        NotificationManager manager = NotificationUtils.getNotificationManager(mActivity);
+        if (builder != null && manager != null) {
+            builder.setSmallIcon(R.drawable.ic_service_notification)
+                .setAutoCancel(true).setShowWhen(true);
+            manager.notify(TermuxNotificationUtils.getNextNotificationId(mActivity), builder.build());
+            mLastOscNotificationTime = now;
+            mLastOscNotificationTitle = title;
+            mLastOscNotificationBody = body;
+        }
+    }
+
+    @Override
+    public void onProgressReport(@NonNull TerminalSession session, int state, int value) {
+        if (!mActivity.isVisible() || mActivity.getCurrentSession() != session || state < 0 || state > 4)
+            return;
+        ProgressBar progress = mActivity.findViewById(R.id.terminal_progress_bar);
+        if (progress == null) return;
+        if (state == 0) {
+            resetProgress();
+            return;
+        }
+        hideProgress();
+        progress.setVisibility(View.VISIBLE);
+        ColorStateList tint = ColorStateList.valueOf(MaterialColors.getColor(progress,
+            state == 2 ? com.google.android.material.R.attr.colorError
+                : com.google.android.material.R.attr.colorPrimary));
+        progress.setProgressTintList(tint);
+        progress.setIndeterminateTintList(tint);
+        boolean indeterminate = state == 3 || ((state == 1 || state == 2) && value < 0);
+        progress.setIndeterminate(indeterminate);
+        if (!indeterminate && value >= 0) progress.setProgress(Math.max(0, Math.min(100, value)));
+        String stateText = mActivity.getResources().getStringArray(R.array.terminal_progress_states)[state];
+        progress.setContentDescription(indeterminate
+            ? mActivity.getString(R.string.terminal_progress_description_indeterminate, stateText)
+            : mActivity.getString(R.string.terminal_progress_description, stateText, progress.getProgress()));
+        mMainHandler.postDelayed(mHideProgressRunnable, OSC_PROGRESS_TIMEOUT_MS);
+    }
+
+    private void hideProgress() {
+        mMainHandler.removeCallbacks(mHideProgressRunnable);
+        mHideProgressRunnable.run();
+    }
+
+    /** A later session must not inherit a percentage from this progress bar. */
+    private void resetProgress() {
+        hideProgress();
+        ProgressBar progress = mActivity.findViewById(R.id.terminal_progress_bar);
+        if (progress != null) {
+            // ProgressBar ignores setProgress while it is indeterminate.
+            progress.setIndeterminate(false);
+            progress.setProgress(0);
+            progress.setContentDescription(null);
+        }
+    }
+
+    static String sanitizeOscNotificationText(@Nullable String value) {
+        if (value == null) return null;
+        StringBuilder clean = new StringBuilder(Math.min(value.length(), MAX_OSC_NOTIFICATION_CHARS));
+        for (int i = 0; i < value.length();) {
+            int codePoint = value.codePointAt(i);
+            int charCount = Character.charCount(codePoint);
+            i += charCount;
+            if (clean.length() + charCount > MAX_OSC_NOTIFICATION_CHARS) break;
+            if (codePoint == '\n' || codePoint == '\t' ||
+                (codePoint >= 0x20 && (codePoint < 0x7f || codePoint > 0x9f)))
+                clean.appendCodePoint(codePoint);
+        }
+        return clean.toString();
+    }
+
+    @Override
     public void onSessionFinished(@NonNull TerminalSession finishedSession) {
+        if (mActivity.getCurrentSession() == finishedSession) resetProgress();
         TermuxService service = mActivity.getTermuxService();
 
         if (service == null || service.wantsToStop()) {
@@ -331,6 +460,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
         if (mActivity.getTerminalView().attachSession(session)) {
             mCursorStateTerminal = null;
+            resetProgress();
             notifyOfSessionChange();
             termuxSessionListNotifyUpdated();
         }
@@ -585,10 +715,6 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             mPendingColorReload |= !Arrays.equals(previousColors, TerminalColors.COLOR_SCHEME.mDefaultColors);
             applyPendingColorChanges();
 
-            final Typeface newTypeface = (fontFile.exists() && fontFile.length() > 0)
-                ? Typeface.createFromFile(fontFile)
-                : mActivity.getResources().getFont(R.font.terminal_default);
-            mActivity.getTerminalView().setTypeface(newTypeface);
             mActivity.getTerminalView().setFontFiles(TerminalFontFiles.resolve(mActivity, fontFile));
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Error in checkForFontAndColors()", e);

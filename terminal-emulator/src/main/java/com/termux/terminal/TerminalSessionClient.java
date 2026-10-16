@@ -19,6 +19,13 @@ public interface TerminalSessionClient {
 
     default void onMouseShapeChanged(@NonNull TerminalSession changedSession, int shape) {}
 
+    default void onDesktopNotification(@NonNull TerminalSession session,
+                                       @Nullable String title, @Nullable String body) {}
+
+    default void onProgressReport(@NonNull TerminalSession session, int state, int progress) {}
+
+    default void onProgramStatusChanged(@NonNull TerminalSession session) {}
+
     void onSessionFinished(@NonNull TerminalSession finishedSession);
 
     void onCopyTextToClipboard(@NonNull TerminalSession session, String text);

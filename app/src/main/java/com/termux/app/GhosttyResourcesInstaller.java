@@ -63,10 +63,10 @@ final class GhosttyResourcesInstaller {
 
         installed &= installAsset(context, "ghostty/shell-integration/termux-ghostty.fish",
             new File(prefix, "etc/fish/conf.d/termux-ghostty.fish"));
+        installed &= installAsset(context, "ghostty/shell-integration/termux-ghostty.nu",
+            new File(prefix, "share/nushell/vendor/autoload/termux-ghostty.nu"));
         installed &= installAsset(context, "ghostty/shell-integration/elvish/lib/ghostty-integration.elv",
             new File(prefix, "share/elvish/lib/ghostty-integration.elv"));
-        // Nushell already emits OSC 133 natively. Its upstream module only adds
-        // desktop CLI wrappers, so keep it available without importing those wrappers.
         installed &= installRcLoader(new File(prefix, "etc/bash.bashrc"), "bash/ghostty.bash");
         installed &= installRcLoader(new File(prefix, "etc/zshrc"), "zsh/ghostty-integration");
         return installed;

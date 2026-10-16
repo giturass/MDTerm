@@ -17,12 +17,6 @@
             app:title="@string/termux_soft_keyboard_enabled_only_if_no_hardware_title" />
 
         <com.termux.app.fragments.settings.MaterialSwitchPreference
-            app:key="ime_composing_enabled"
-            app:summaryOff="@string/termux_ime_composing_enabled_off"
-            app:summaryOn="@string/termux_ime_composing_enabled_on"
-            app:title="@string/termux_ime_composing_enabled_title" />
-
-        <com.termux.app.fragments.settings.MaterialSwitchPreference
             app:key="cursor_gestures_enabled"
             app:defaultValue="true"
             app:summaryOff="@string/mdterm_cursor_gestures_off"

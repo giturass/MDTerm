@@ -2,8 +2,8 @@
 
 The upstream source baseline is [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3),
 commit `e634d8f981f48b6b89202cf0e04533f0889e03b3`. MDTerm retains its Material
-interface, terminal bookmarks, and IME composing preview from upstream
-[PR #5242](https://github.com/termux/termux-app/pull/5242). The terminal core now uses Ghostty `libghostty-vt` and the Vulkan renderer
+interface, terminal bookmarks and cursor gestures. Normal IME composition is
+enabled by default through `enable-ime-input`. The terminal core uses Ghostty `libghostty-vt` and the Vulkan renderer
 adapted from XYenon/termux-app-ghostty, including Kitty images and animations.
 The later upstream Termux Sixel/iTerm renderer is not included. See
 [Ghostty integration](ghostty.md) for pinned revisions and native build details.
@@ -118,14 +118,18 @@ After a successful edit, returning to the terminal reloads its properties and
 recreates the activity while preserving sessions. Scrollback size applies to
 new sessions. The default directory applies when no current session exists;
 otherwise new sessions inherit the current directory. Startup keyboard hiding
-applies at the next app start. Character-based input takes priority over the
-composing preview without changing the saved preview preference.
+applies at the next app start. Normal input-method composition uses
+`enable-ime-input`, enabled by default. It takes priority over
+`enforce-char-based-input`; turn it off before enabling that keyboard workaround.
+The previous app-only composing-preview preference is no longer used. Composing
+text stays in the input method's editable buffer until committed or finished;
+there is no separate terminal-cursor preview.
 
 Fullscreen uses the upstream `fullscreen` property. An explicit old
 `terminal_fullscreen` app preference migrates once when there is no explicit
 file value; the file wins if both exist. Terminal bells follow `bell-character`.
 The separate haptic-feedback setting controls toolbar and gesture feedback.
-Android-only preferences such as soft-keyboard enablement, composing preview,
+Android-only preferences such as soft-keyboard enablement,
 notifications, and diagnostics retain their existing preference storage.
 
 ## Terminal bookmarks

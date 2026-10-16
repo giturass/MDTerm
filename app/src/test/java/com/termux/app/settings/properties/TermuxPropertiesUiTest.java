@@ -61,7 +61,7 @@ public class TermuxPropertiesUiTest {
         "terminal-cursor-style", "extra-keys", "extra-keys-style", "extra-keys-text-all-caps", "night-mode",
         "disable-hardware-keyboard-shortcuts", "shortcut.create-session", "shortcut.next-session",
         "shortcut.previous-session", "shortcut.rename-session", "bell-character", "back-key",
-        "enforce-char-based-input", "ctrl-space-workaround", "terminal-margin-horizontal",
+        "enable-ime-input", "enforce-char-based-input", "ctrl-space-workaround", "terminal-margin-horizontal",
         "terminal-margin-vertical", "terminal-toolbar-height"
     };
 
@@ -81,7 +81,8 @@ public class TermuxPropertiesUiTest {
                 assertTrue(key, preference.isEnabled());
                 assertSame(key, screen.fragment.getPreferenceScreen(), preference.getParent().getParent());
             }
-            assertEquals(27, PROPERTY_KEYS.length);
+            assertEquals(28, PROPERTY_KEYS.length);
+            assertNull(screen.fragment.findPreference("ime_composing_enabled"));
             assertNull(screen.fragment.findPreference("termux_properties_information"));
             assertSame(screen.fragment.findPreference("property_integration"),
                 screen.fragment.getPreferenceScreen().getPreference(0));
@@ -99,6 +100,29 @@ public class TermuxPropertiesUiTest {
             assertNotNull(screen.fragment.findPreference("log_level"));
             assertTrue(new TermuxPropertiesFile(screen.primary).read().getProperty("extra-keys")
                 .contains("'ESC','CTRL','ALT'"));
+        }
+    }
+
+    @Test
+    public void imeInputToggleUsesThePropertiesFileAndRestoresAfterReopening() throws Exception {
+        try (Screen screen = new Screen(ORIGINAL)) {
+            screen.open("input");
+            MaterialSwitchPreference ime = screen.fragment.findPreference("enable-ime-input");
+            assertNotNull(ime);
+            assertTrue(ime.isChecked());
+            assertFalse(ime.isPersistent());
+            click(screen.fragment, ime);
+            assertFalse(ime.isChecked());
+            assertEquals("false", new TermuxPropertiesFile(screen.primary).read().getProperty("enable-ime-input"));
+            assertTrue(new String(Files.readAllBytes(screen.primary.toPath()), StandardCharsets.UTF_8)
+                .contains("custom-option = keep me"));
+
+            screen.activity.recreate();
+            screen.bindTemporarySettings();
+            ime = screen.fragment.findPreference("enable-ime-input");
+            assertNotNull(ime);
+            assertFalse(ime.isChecked());
+            assertNull(screen.fragment.findPreference("ime_composing_enabled"));
         }
     }
 

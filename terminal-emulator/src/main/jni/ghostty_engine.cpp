@@ -465,6 +465,8 @@ void terminal_reset(GhosttyTerminal, void *userdata) {
     engine->pending_desktop_notification = false;
     engine->pending_notification_title.clear();
     engine->pending_notification_body.clear();
+    // RIS already queued a REMOVE progress report before this callback.
+    // Keep that reset in the current feed's coalesced progress batch.
 }
 
 void desktop_notification(
@@ -505,9 +507,7 @@ void progress_report(GhosttyTerminal, void *userdata,
                      const GhosttyTerminalProgressReport *report) {
     auto *engine = static_cast<TermuxGhosttyEngine *>(userdata);
     if (!report) return;
-    engine->pending_progress_report = true;
-    engine->pending_progress_state = static_cast<int>(report->state);
-    engine->pending_progress_value = static_cast<int>(report->progress);
+    engine->pending_progress.add(report->state, static_cast<int>(report->progress));
 }
 
 void notify_string_changed(TermuxGhosttyEngine *engine, jmethodID method,
@@ -1398,9 +1398,7 @@ Java_com_termux_terminal_GhosttyTerminal_nativeFeed(
         bool has_notification;
         std::string notification_title;
         std::string notification_body;
-        bool has_progress;
-        int progress_state;
-        int progress_value;
+        termux::TerminalProgressDispatch progress_reports;
         std::vector<TermuxGhosttyEngine::ProgramStatusEvent> program_events;
         std::vector<std::string> bookmark_locations;
         std::vector<uint8_t> pty_replies;
@@ -1419,7 +1417,7 @@ Java_com_termux_terminal_GhosttyTerminal_nativeFeed(
             if (env->ExceptionCheck()) return;
             old_mouse_shape = engine->mouse_shape;
             engine->pending_desktop_notification = false;
-            engine->pending_progress_report = false;
+            engine->pending_progress.clear();
             engine->callback_allocation_failed = false;
             engine->pending_pty_writes_overflow = false;
             engine->clipboard_read_bytes_remaining = 64 * 1024 * 1024;
@@ -1453,9 +1451,7 @@ Java_com_termux_terminal_GhosttyTerminal_nativeFeed(
                 notification_body.swap(engine->pending_notification_body);
                 engine->pending_desktop_notification = false;
             }
-            has_progress = engine->pending_progress_report;
-            progress_state = engine->pending_progress_state;
-            progress_value = engine->pending_progress_value;
+            progress_reports = engine->pending_progress.finish();
             callback_allocation_failed = engine->callback_allocation_failed;
             pty_replies_overflow = engine->pending_pty_writes_overflow;
         }
@@ -1485,8 +1481,9 @@ Java_com_termux_terminal_GhosttyTerminal_nativeFeed(
                                    notification_title, notification_body,
                                    "desktop notification callback");
         }
-        if (has_progress) {
-            notify_progress_report(engine, progress_state, progress_value);
+        for (size_t i = 0; i < progress_reports.count; ++i) {
+            const auto &report = progress_reports.reports[i];
+            notify_progress_report(engine, static_cast<int>(report.state), report.value);
         }
         for (const auto &event : program_events) {
             notify_program_status(env, engine, event);
@@ -1539,6 +1536,9 @@ Java_com_termux_terminal_GhosttyTerminal_nativeReset(
             had_before = read_background(engine->terminal, &before);
             ghostty_terminal_reset(engine->terminal);
             terminal_reset(engine->terminal, engine);
+            // This API reset publishes REMOVE directly after releasing the
+            // lock, rather than through a PTY feed.
+            engine->pending_progress.clear();
             has_after = read_background(engine->terminal, &after);
             old_mouse_shape = engine->mouse_shape;
             engine->mouse_shape = GHOSTTY_MOUSE_SHAPE_TEXT;
@@ -1600,96 +1600,6 @@ Java_com_termux_terminal_GhosttyTerminal_nativeGetBackgroundColor(
     return static_cast<jint>(0xff000000u |
         (static_cast<uint32_t>(color.r) << 16u) |
         (static_cast<uint32_t>(color.g) << 8u) | color.b);
-}
-
-extern "C" JNIEXPORT jintArray JNICALL
-Java_com_termux_terminal_GhosttyTerminal_nativeGetCursorState(
-    JNIEnv *env, jclass, jlong handle) {
-    auto *engine = termux_ghostty_engine_from_handle(handle);
-    if (!engine) return nullptr;
-    ScopedEngineLock lock(engine);
-    // Share the renderer's snapshot so an IME preview cannot consume dirty
-    // state independently or expose updates hidden by synchronized output.
-    if (!engine->render_held &&
-        ghostty_render_state_update(engine->render_state, engine->terminal) !=
-            GHOSTTY_SUCCESS) return nullptr;
-
-    bool has_position = false;
-    if (ghostty_render_state_get(
-            engine->render_state,
-            GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_HAS_VALUE,
-            &has_position) != GHOSTTY_SUCCESS || !has_position) return nullptr;
-
-    uint16_t column = 0, row = 0;
-    bool wide_tail = false;
-    GhosttyRenderStateColors colors{};
-    colors.size = sizeof(colors);
-    if (ghostty_render_state_get(
-            engine->render_state, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_X,
-            &column) != GHOSTTY_SUCCESS ||
-        ghostty_render_state_get(
-            engine->render_state, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_Y,
-            &row) != GHOSTTY_SUCCESS ||
-        ghostty_render_state_get(
-            engine->render_state,
-            GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_WIDE_TAIL,
-            &wide_tail) != GHOSTTY_SUCCESS ||
-        ghostty_render_state_get(
-            engine->render_state, GHOSTTY_RENDER_STATE_DATA_COLORS,
-            &colors) != GHOSTTY_SUCCESS ||
-        ghostty_render_state_get(
-            engine->render_state, GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR,
-            &engine->row_iterator) != GHOSTTY_SUCCESS) return nullptr;
-    if (wide_tail && column > 0) --column;
-
-    for (uint32_t index = 0; index <= row; ++index) {
-        if (!ghostty_render_state_row_iterator_next(engine->row_iterator))
-            return nullptr;
-    }
-    if (ghostty_render_state_row_get(
-            engine->row_iterator, GHOSTTY_RENDER_STATE_ROW_DATA_CELLS,
-            &engine->row_cells) != GHOSTTY_SUCCESS ||
-        ghostty_render_state_row_cells_select(engine->row_cells, column) !=
-            GHOSTTY_SUCCESS) return nullptr;
-
-    GhosttyStyle style{};
-    style.size = sizeof(style);
-    if (ghostty_render_state_row_cells_get(
-            engine->row_cells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE,
-            &style) != GHOSTTY_SUCCESS) return nullptr;
-    GhosttyColorRgb foreground = colors.foreground;
-    GhosttyColorRgb background = colors.background;
-    if (ghostty_render_state_row_cells_get(
-            engine->row_cells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_FG_COLOR,
-            &foreground) != GHOSTTY_SUCCESS) foreground = colors.foreground;
-    if (ghostty_render_state_row_cells_get(
-            engine->row_cells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_BG_COLOR,
-            &background) != GHOSTTY_SUCCESS) background = colors.background;
-    // Render-state defaults already account for global reverse video. Resolve
-    // cell inversion here, while leaving faint colors for the Java overlay.
-    if (style.inverse) std::swap(foreground, background);
-
-    // Keep these flags aligned with com.termux.terminal.TextStyle. INVERSE is
-    // omitted because the returned colors already incorporate it.
-    jint effects = 0;
-    if (style.bold) effects |= 1;
-    if (style.italic) effects |= 1 << 1;
-    if (style.underline != GHOSTTY_SGR_UNDERLINE_NONE) effects |= 1 << 2;
-    if (style.blink) effects |= 1 << 3;
-    if (style.invisible) effects |= 1 << 5;
-    if (style.strikethrough) effects |= 1 << 6;
-    if (style.faint) effects |= 1 << 8;
-    auto argb = [](GhosttyColorRgb color) -> jint {
-        return static_cast<jint>(0xff000000u |
-            (static_cast<uint32_t>(color.r) << 16u) |
-            (static_cast<uint32_t>(color.g) << 8u) | color.b);
-    };
-    const jint values[] = {
-        static_cast<jint>(column), static_cast<jint>(row),
-        argb(foreground), argb(background), effects,
-    };
-    lock.unlock();
-    return new_int_array(env, values);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -2070,7 +1980,13 @@ Java_com_termux_terminal_GhosttyTerminal_nativeSearch(
     }
 
     const jsize query_length = env->GetArrayLength(query);
-    std::vector<uint8_t> query_bytes(static_cast<size_t>(query_length));
+    std::vector<uint8_t> query_bytes;
+    try {
+        query_bytes.resize(static_cast<size_t>(query_length));
+    } catch (const std::bad_alloc &) {
+        throw_illegal_state(env, "Out of memory searching terminal");
+        return nullptr;
+    }
     env->GetByteArrayRegion(query, 0, query_length,
                             reinterpret_cast<jbyte *>(query_bytes.data()));
     if (env->ExceptionCheck()) return nullptr;

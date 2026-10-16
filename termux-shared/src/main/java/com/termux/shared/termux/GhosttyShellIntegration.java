@@ -19,8 +19,8 @@ public final class GhosttyShellIntegration {
         // Keep prompt/cwd reporting; desktop wrappers need the Ghostty CLI.
         environment.put("GHOSTTY_SHELL_FEATURES", "");
 
-        // Elvish module discovery uses the Termux system share directory. Keep
-        // existing data directories without accumulating entries on repeated setup.
+        // Nushell vendor autoload and Elvish module discovery use the Termux
+        // system share directory. Keep existing directories without duplicates.
         String data = resources.getAbsoluteFile().getParentFile().getAbsolutePath();
         String previous = environment.get("XDG_DATA_DIRS");
         if (previous == null || previous.isEmpty())

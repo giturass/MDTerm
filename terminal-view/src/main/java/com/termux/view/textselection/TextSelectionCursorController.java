@@ -146,8 +146,7 @@ public class TextSelectionCursorController implements CursorController {
                         mStoredSelectedText = getSelectedText();
                         // The text selection needs to be stopped before showing context menu,
                         // otherwise handles will show above popup
-                        terminalView.stopTextSelectionMode();
-                        terminalView.showContextMenu();
+                        terminalView.showContextMenuFromSelection();
                         break;
                 }
 

@@ -11,7 +11,7 @@ MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/t
 
 ## 与上游 Termux 的区别
 
-应用运行环境以上游 `v0.119.0-beta.3` 为基础，终端核心和 Vulkan 渲染移植自 [termux-app-ghostty](https://github.com/XYenon/termux-app-ghostty)。MDTerm 的界面、书签、光标手势和输入法组合文本预览继续保留。
+应用运行环境以上游 `v0.119.0-beta.3` 为基础，终端核心和 Vulkan 渲染移植自 [termux-app-ghostty](https://github.com/XYenon/termux-app-ghostty)。保留 MDTerm 的界面、书签和光标手势，并接入普通输入法组合输入、终端搜索和程序任务状态。
 
 | 方面 | 上游 Termux | MDTerm 当前实现 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/t
 | 配色 | 使用原有主题与终端颜色配置 | 支持壁纸动态配色，统一终端、控件与设置颜色，并调整浅色模式下默认 ANSI 颜色的可读性 |
 | 会话与终端操作 | 原有会话和终端操作入口 | 提供会话卡片、活动指示、长按改名、光标滑动手势、横向滚动工具栏和 MD3 操作菜单 |
 | 设置组织 | 原有多层偏好设置 | 将终端设置集中到一级设置页，按显示、键盘与输入等类别组织 |
-| 输入法预编辑 | 取决于上游版本是否包含相关改动 | 已纳入上游 [PR #5242](https://github.com/termux/termux-app/pull/5242) 的可选组合文本预览，默认关闭 |
+| 输入法组合输入 | 取决于上游版本是否包含相关改动 | 支持普通输入法组合输入，可配置 `enable-ime-input`，默认开启 |
 | APK 发布 | 由各上游分发渠道构建和签名 | 本仓库 Actions 构建，发布版使用独立 MDTerm 签名，并提供 SHA-256 校验文件 |
 
 界面跟随系统语言，包含简体中文。已有的 `~/.termux/colors.properties` 显式颜色配置优先于动态配色提供的默认值。
@@ -48,11 +48,15 @@ MDTerm 的变化覆盖终端核心、渲染、应用界面与交互层，并未�
 
 应用默认使用 Ghostty 核心，并通过 Vulkan 呈现终端文字和 Kitty 协议图片。支持滚动历史、备用屏幕、原生键盘与鼠标编码、同步输出，以及 Kitty 图片和动画。主屏幕和备用屏幕的图片存储上限各为 64 MiB；显示效果也取决于终端程序是否使用 Kitty 图像协议。Sixel 和 iTerm 图像协议不在此次移植范围内。
 
+收到 Android 内存压力通知时，应用会在后台分批压缩滚动历史，优先处理占用较大的会话。历史内容保留，访问时自动解压，无需配置。
+
+支持 OSC 9／777 Android 通知、OSC 9;4 进度条，以及 OSC 7501 程序任务状态。通知和进度只响应应用当前可见的会话；任务状态保存在对应会话中，并显示在侧栏会话卡片上。点击当前会话卡片可查看任务详情、清除已完成项。协议示例见 [Ghostty 接入说明](docs/ghostty.md#notifications-progress-and-task-status)。
+
 应用会自动安装匹配的 `xterm-ghostty` terminfo，新建普通会话的 `$TERM` 为 `xterm-ghostty`。若安装失败或进入故障安全会话，则使用 `xterm-256color`。远程主机如不认识 `xterm-ghostty`，需要在远端安装对应 terminfo，或为该 SSH 会话使用 `TERM=xterm-256color`。
 
-终端操作菜单中的“上一个提示符”和“下一个提示符”，以及 `Ctrl+Alt+PageUp` / `Ctrl+Alt+PageDown`，可在带有 OSC 133 标记的命令提示符之间跳转。应用为 Bash、Zsh、Fish 安装对应的 shell 集成，不修改 HOME 配置；Elvish 需执行 `use ghostty-integration`，Nushell 使用原生标记。升级或安装新 shell 后，请重启应用并新建会话；没有标记的旧输出无法回溯跳转。自定义启动配置及其他限制见 [shell 集成说明](docs/ghostty.md#prompt-navigation-and-shell-integration)。
+终端操作菜单中的“上一个提示符”和“下一个提示符”，以及 `Ctrl+Alt+PageUp` / `Ctrl+Alt+PageDown`，可在带有 OSC 133 标记的命令提示符之间跳转。应用为 Bash、Zsh、Fish、Nushell 安装自动加载的 Ghostty 集成，不修改 HOME 配置；Elvish 需执行 `use ghostty-integration`。升级或安装新 shell 后，请重启应用并新建会话；没有标记的旧输出无法回溯跳转。自定义启动配置及其他限制见 [shell 集成说明](docs/ghostty.md#prompt-navigation-and-shell-integration)。
 
-字体仍可通过 `~/.termux/font.ttf` 覆盖；`~/.termux/fonts/` 内的 `.ttf`、`.otf`、`.ttc` 文件按文件名顺序作为后备字体。配色、复制粘贴、光标手势和可选的中文组合文本预览仍使用 MDTerm 的设置。
+字体仍可通过 `~/.termux/font.ttf` 覆盖；`~/.termux/fonts/` 内的 `.ttf`、`.otf`、`.ttc` 文件按文件名顺序作为后备字体。配色、复制粘贴、光标手势和输入法选项可在 MDTerm 设置中调整。
 
 移植来源、固定版本、构建依赖与验证方法见 [Ghostty 接入说明](docs/ghostty.md)。
 
@@ -98,8 +102,10 @@ Termux 插件仍需满足 Android 的签名及共享用户 ID 要求；包名相
 - **纵向光标操作**：手势控制开启时，点击工具栏中的上下箭头＋锁头图标（“纵向光标手势”）启用后，在终端内容区域上下滑动会发送上、下方向键；在 Shell 中通常用于切换历史命令，在编辑器中按程序规则移动光标。再次点击图标关闭，恢复普通纵向滚动。此开关会保持启用，不会因按下其他按键自动关闭。
 - **工具栏滚动**：在工具栏区域横向滑动，可查看未显示的快捷键；光标手势在终端内容区域操作。
 - **文本选择与复制粘贴**：双击或长按终端文字可直接选词，拖动两端选择手柄调整范围，再点击浮动工具栏中的“复制”或“粘贴”；点击“更多”可打开终端操作菜单。单击终端仍可呼出键盘；终端程序启用鼠标跟踪时，使用长按选择文字。
+- **超链接操作**：选中终端程序通过 OSC 8 输出的超链接后，点击“更多 → 打开链接／复制链接”；鼠标右键也可直接打开对应链接的菜单。
+- **终端搜索**：在终端操作菜单中选择“查找终端内容”，或按 `Ctrl+Alt+F`。输入文字后按搜索／回车，用上、下按钮浏览较早、较新的匹配结果；关闭搜索会清除高亮。
 - **终端偏好**：打开设置，在一级页面中调整显示、键盘与输入等选项。
-- **输入法组合文本预览**：在“设置 → 键盘与输入”中启用“输入法组合文本预览”，即可在光标处预览中文等输入法尚未提交的文字。该功能默认关闭。
+- **输入法组合输入**：“设置 → 键盘与输入”中的“输入法组合输入”默认开启，也可在 `~/.termux/termux.properties` 中设置 `enable-ime-input=false` 关闭。未提交的文字由输入法管理，提交后发送到终端。需要“按字符输入”兼容处理时，先关闭此选项；返回终端后生效。
 - **自定义终端颜色**：编辑 `~/.termux/colors.properties`；显式设置的颜色优先。
 
 光标手势模拟方向键，具体效果由当前终端程序决定；文本选择模式下不触发光标滑动手势。
@@ -119,4 +125,4 @@ MDTerm 的界面、交互、安装及构建问题，请提交到[本仓库 Issue
 
 ## 许可与致谢
 
-MDTerm 基于 Termux 及其贡献者的工作，沿用项目的 **GPLv3-only** 许可及相关组件的许可例外，详见 [LICENSE.md](LICENSE.md) 和 [termux-shared/LICENSE.md](termux-shared/LICENSE.md)。输入法组合文本预览相关贡献来源见上游 [PR #5242](https://github.com/termux/termux-app/pull/5242)。Ghostty Android 适配和 Vulkan 渲染基于 [XYenon/termux-app-ghostty](https://github.com/XYenon/termux-app-ghostty)，并使用 Ghostty、FreeType、HarfBuzz 和 libpng；相应许可证随 APK 一同提供。
+MDTerm 基于 Termux 及其贡献者的工作，沿用项目的 **GPLv3-only** 许可及相关组件的许可例外，详见 [LICENSE.md](LICENSE.md) 和 [termux-shared/LICENSE.md](termux-shared/LICENSE.md)。Ghostty Android 适配、Vulkan 渲染和终端辅助功能基于 [XYenon/termux-app-ghostty](https://github.com/XYenon/termux-app-ghostty)，并使用 Ghostty、FreeType、HarfBuzz 和 libpng；相应许可证随 APK 一同提供。

@@ -132,29 +132,34 @@ public class MaterialTerminalControlsTest {
     }
 
     @Test
-    public void characterInputPropertyOverridesComposingWithoutLosingItsPreference() {
+    public void normalImeInputTakesPriorityUntilExplicitlyDisabled() {
         TermuxActivity activity = drawerActivity(true);
-        activity.getPreferences().setImeComposingEnabled(true);
-        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
-        EditorInfo composing = new EditorInfo();
-        assertNotNull(activity.getTerminalView().onCreateInputConnection(composing));
-        assertEquals(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL
-            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, composing.inputType);
-        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
-
         setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "true");
+        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, null);
+        EditorInfo normal = new EditorInfo();
+        assertNotNull(activity.getTerminalView().onCreateInputConnection(normal));
+        assertEquals(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL, normal.inputType);
+        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeInput());
+
+        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, "false");
         EditorInfo characterInput = new EditorInfo();
         assertNotNull(activity.getTerminalView().onCreateInputConnection(characterInput));
         assertEquals(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
             | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, characterInput.inputType);
-        assertFalse(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
-        assertTrue(activity.getPreferences().isImeComposingEnabled());
+        assertFalse(activity.getTermuxTerminalViewClient().shouldEnableImeInput());
+        assertTrue(activity.getProperties().isEnforcingCharBasedInput());
 
-        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
+        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, "true");
         EditorInfo restored = new EditorInfo();
         activity.getTerminalView().onCreateInputConnection(restored);
-        assertEquals(composing.inputType, restored.inputType);
-        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
+        assertEquals(normal.inputType, restored.inputType);
+        assertTrue(activity.getProperties().isEnforcingCharBasedInput());
+
+        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, "false");
+        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
+        EditorInfo raw = new EditorInfo();
+        activity.getTerminalView().onCreateInputConnection(raw);
+        assertEquals(InputType.TYPE_NULL, raw.inputType);
     }
 
     @Test

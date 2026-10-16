@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(terminal_font_fit_tests LANGUAGES C CXX)
+project(terminal_native_tests LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
 get_filename_component(MDTERM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
+set(GHOSTTY_SRC "${MDTERM_ROOT}/build/native-sources/ghostty" CACHE PATH
+    "Pinned Ghostty checkout prepared by Gradle")
+if(NOT EXISTS "${GHOSTTY_SRC}/include/ghostty/vt/terminal.h")
+    message(FATAL_ERROR "GHOSTTY_SRC must point to the prepared native sources")
+endif()
 set(FREETYPE_SRC "${MDTERM_ROOT}/build/native-sources/freetype" CACHE PATH
     "Pinned FreeType checkout prepared by Gradle")
 set(HARFBUZZ_SRC "${MDTERM_ROOT}/build/native-sources/harfbuzz" CACHE PATH
@@ -45,9 +50,16 @@ target_include_directories(terminal_font_fit_test PRIVATE "../../main/jni")
 target_compile_options(terminal_font_fit_test PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(terminal_font_fit_test PRIVATE freetype harfbuzz)
 
+add_executable(terminal_progress_test terminal_progress_test.cpp)
+target_include_directories(terminal_progress_test PRIVATE
+    "../../main/jni" "${GHOSTTY_SRC}/include")
+target_compile_definitions(terminal_progress_test PRIVATE GHOSTTY_STATIC)
+target_compile_options(terminal_progress_test PRIVATE -Wall -Wextra -Werror)
+
 # These fixtures already ship in the repository and pinned HarfBuzz checkout.
 enable_testing()
 add_test(NAME terminal_font_fit COMMAND terminal_font_fit_test
     "${MDTERM_ROOT}/app/src/main/res/font/terminal_default.ttf"
     "${HARFBUZZ_SRC}/test/api/fonts/SourceHanSans-Regular.41,3041,4C2E.otf"
     "${HARFBUZZ_SRC}/test/subset/data/fonts/Mplus1p-Regular.ttf")
+add_test(NAME terminal_progress COMMAND terminal_progress_test)

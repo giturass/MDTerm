@@ -1,7 +1,7 @@
 package com.termux.shared.termux.settings.preferences;
 
 /*
- * Version: v0.18.0
+ * Version: v0.19.0
  *
  * Changelog
  *
@@ -77,6 +77,9 @@ package com.termux.shared.termux.settings.preferences;
  * - 0.18.0 (2026-10-08)
  *      - Added following to `TERMUX_APP`:
  *          `KEY_CURSOR_GESTURES_ENABLED` and `DEFAULT_VALUE_KEY_CURSOR_GESTURES_ENABLED`.
+ *
+ * - 0.19.0 (2026-10-16)
+ *      - Removed the composing-preview preference in favor of the `enable-ime-input` property.
  */
 
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -125,14 +128,6 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_SOFT_KEYBOARD_ENABLED_ONLY_IF_NO_HARDWARE = "soft_keyboard_enabled_only_if_no_hardware";
         public static final boolean DEFAULT_VALUE_KEY_SOFT_KEYBOARD_ENABLED_ONLY_IF_NO_HARDWARE = false;
-
-        /**
-         * Defines the key for whether IME composing text (CJK, etc.) inline preview at the
-         * cursor is enabled. Default is false (InputType.TYPE_NULL behavior unchanged = no regression).
-         * Toggled from Settings -> Terminal I/O, not from termux.properties.
-         */
-        public static final String KEY_IME_COMPOSING_ENABLED = "ime_composing_enabled";
-        public static final boolean DEFAULT_VALUE_KEY_IME_COMPOSING_ENABLED = false;
 
         /**
          * Defines the key for whether swipes move the terminal cursor. When disabled,

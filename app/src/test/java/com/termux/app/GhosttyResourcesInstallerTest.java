@@ -77,6 +77,7 @@ public class GhosttyResourcesInstallerTest {
             {"nushell/vendor/autoload/ghostty.nu",
                 "share/ghostty/shell-integration/nushell/vendor/autoload/ghostty.nu"},
             {"termux-ghostty.fish", "etc/fish/conf.d/termux-ghostty.fish"},
+            {"termux-ghostty.nu", "share/nushell/vendor/autoload/termux-ghostty.nu"},
             {"elvish/lib/ghostty-integration.elv", "share/elvish/lib/ghostty-integration.elv"}
         };
         for (String[] file : installedFiles) {
@@ -104,8 +105,6 @@ public class GhosttyResourcesInstallerTest {
         assertFalse(new File(prefix, "etc/zshrc").exists());
         assertFalse(new File(prefix, "etc/bashrc.d").exists());
         assertFalse(new File(prefix, "etc/zshrc.d").exists());
-        // Nu reports OSC 133 natively; do not import desktop ssh/sudo wrappers.
-        assertFalse(new File(prefix, "share/nushell/vendor/autoload").exists());
     }
 
     @Test
@@ -177,6 +176,7 @@ public class GhosttyResourcesInstallerTest {
         assertArrayEquals(existing, Files.readAllBytes(rc.toPath()));
         assertArrayEquals(existing, Files.readAllBytes(keep));
         assertFalse(new File(prefix, "etc/fish/conf.d/termux-ghostty.fish").exists());
+        assertFalse(new File(prefix, "share/nushell/vendor/autoload/termux-ghostty.nu").exists());
         assertNoTemporaryFiles(conflict.getParentFile());
 
         Files.delete(keep);
@@ -186,6 +186,39 @@ public class GhosttyResourcesInstallerTest {
             Files.readAllBytes(conflict.toPath()));
         assertTrue(new String(Files.readAllBytes(rc.toPath()), StandardCharsets.UTF_8)
             .contains("$GHOSTTY_RESOURCES_DIR/shell-integration/bash/ghostty.bash"));
+    }
+
+    @Test
+    public void nushellAutoloadWaitsForTheModuleAndPreservesOtherStartupFiles() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        File prefix = temporary.newFolder("prefix");
+        File autoload = new File(prefix, "share/nushell/vendor/autoload");
+        assertTrue(autoload.mkdirs());
+        File customLoader = new File(autoload, "custom.nu");
+        byte[] custom = "# package startup\n$env.CUSTOM_LOADER = true\n".getBytes(StandardCharsets.UTF_8);
+        Files.write(customLoader.toPath(), custom);
+        File module = new File(prefix,
+            "share/ghostty/shell-integration/nushell/vendor/autoload/ghostty.nu");
+        assertTrue(module.mkdirs());
+        File conflict = new File(module, "keep");
+        Files.write(conflict.toPath(), custom);
+        File loader = new File(autoload, "termux-ghostty.nu");
+
+        assertFalse(GhosttyResourcesInstaller.installShellIntegration(context, prefix));
+        assertFalse(loader.exists());
+        assertArrayEquals(custom, Files.readAllBytes(customLoader.toPath()));
+        assertArrayEquals(custom, Files.readAllBytes(conflict.toPath()));
+
+        Files.delete(conflict.toPath());
+        Files.delete(module.toPath());
+        assertTrue(GhosttyResourcesInstaller.installShellIntegration(context, prefix));
+        assertArrayEquals(asset(context, "ghostty/shell-integration/nushell/vendor/autoload/ghostty.nu"),
+            Files.readAllBytes(module.toPath()));
+        assertArrayEquals(asset(context, "ghostty/shell-integration/termux-ghostty.nu"),
+            Files.readAllBytes(loader.toPath()));
+        assertArrayEquals(custom, Files.readAllBytes(customLoader.toPath()));
+        assertNoTemporaryFiles(autoload);
+        assertNoTemporaryFiles(module.getParentFile());
     }
 
     private static void assertNoTemporaryFiles(File directory) throws Exception {

@@ -18,10 +18,12 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ListAdapter;
 import android.widget.PopupMenu;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.R;
@@ -45,6 +47,8 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
 import org.robolectric.annotation.LooperMode;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
@@ -320,6 +324,7 @@ public class TerminalTextSelectionTest {
     }
 
     @Test
+    @Config(shadows = HyperlinkTerminal.class)
     public void moreActionPreservesSelectedTextAndExitsBeforeOpeningContextMenu() {
         append("alpha beta");
         String[] contextText = {null};
@@ -327,10 +332,110 @@ public class TerminalTextSelectionTest {
             assertFalse(view.isSelectingText());
             assertEquals(DrawerLayout.LOCK_MODE_UNLOCKED, drawer.getDrawerLockMode(Gravity.START));
             contextText[0] = view.getStoredSelectedText();
+            assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
         });
         select(75, 10);
+        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
         host.mode.click(view.getTextSelectionCursorController().ACTION_MORE);
         assertEquals("beta", contextText[0]);
+        view.onContextMenuClosed(null);
+        assertNull(view.getContextHyperlink());
+        assertNull(view.getStoredSelectedText());
+    }
+
+    @Test
+    @Config(shadows = HyperlinkTerminal.class)
+    public void selectingTextFromTheActionsMenuKeepsTheLinkAfterQueuedDismissal() {
+        append("alpha beta");
+        view.setContextMenuAction(() -> assertTrue(activity.showTerminalActions(75, 10)));
+        assertTrue(view.showContextMenu(75, 10));
+        AlertDialog actions = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull(actions);
+
+        clickTerminalAction(actions, R.string.action_select_text);
+        assertFalse(actions.isShowing());
+        assertFalse(view.isSelectingText());
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+        assertTrue(view.isSelectingText());
+        assertEquals("beta", view.getSelectedText());
+        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
+        host.mode.click(view.getTextSelectionCursorController().ACTION_MORE);
+        AlertDialog links = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotSame(actions, links);
+        assertTrue(links.isShowing());
+
+        clickTerminalAction(links, R.string.action_copy_link);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(HyperlinkTerminal.LINK,
+            clipboard.getPrimaryClip().getItemAt(0).getText().toString());
+        assertFalse(view.isSelectingText());
+        assertFalse(links.isShowing());
+        assertNull(view.getContextHyperlink());
+        assertEquals("", takeOutput());
+    }
+
+    @Test
+    @Config(shadows = HyperlinkTerminal.class)
+    public void copyingOrCancellingSelectionAndChangingSessionClearTheLinkTarget() {
+        append("alpha beta");
+        select(75, 10);
+        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
+        host.mode.click(view.getTextSelectionCursorController().ACTION_COPY);
+        assertEquals("beta", clipboard.getPrimaryClip().getItemAt(0).getText().toString());
+        assertNull(view.getContextHyperlink());
+
+        select(75, 10);
+        host.mode.finish();
+        assertNull(view.getContextHyperlink());
+
+        view.setContextMenuAction(() -> { });
+        assertTrue(view.showContextMenu(75, 10));
+        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
+        view.attachSession(null);
+        assertNull(view.getContextHyperlink());
+    }
+
+    @Test
+    @Config(shadows = HyperlinkTerminal.class)
+    public void mouseContextMenuTargetsTheClickedCellAndClearsUnrelatedSelection() {
+        append("alpha beta\u001b[?1000h");
+        String[] contextLink = {null};
+        view.setContextMenuAction(() -> {
+            assertFalse(view.isSelectingText());
+            contextLink[0] = view.getContextHyperlink();
+        });
+        select(15, 10);
+        MotionEvent.PointerProperties pointer = new MotionEvent.PointerProperties();
+        pointer.id = 0;
+        pointer.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+        MotionEvent.PointerCoords coordinates = new MotionEvent.PointerCoords();
+        coordinates.x = 75;
+        coordinates.y = 10;
+        long now = SystemClock.uptimeMillis();
+        MotionEvent click = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 1,
+            new MotionEvent.PointerProperties[]{pointer}, new MotionEvent.PointerCoords[]{coordinates},
+            0, MotionEvent.BUTTON_SECONDARY, 1, 1, 0, 0, InputDevice.SOURCE_MOUSE, 0);
+        try {
+            assertTrue(view.onTouchEvent(click));
+        } finally {
+            click.recycle();
+        }
+        MotionEvent release = MotionEvent.obtain(now, now + 1, MotionEvent.ACTION_UP, 1,
+            new MotionEvent.PointerProperties[]{pointer}, new MotionEvent.PointerCoords[]{coordinates},
+            0, 0, 1, 1, 0, 0, InputDevice.SOURCE_MOUSE, 0);
+        try {
+            assertTrue(view.onTouchEvent(release));
+        } finally {
+            release.recycle();
+        }
+        assertEquals(HyperlinkTerminal.LINK, contextLink[0]);
+        assertEquals("", takeOutput());
+
+        assertTrue(view.showContextMenu(15, 10));
+        assertNull(contextLink[0]);
+        assertTrue(view.showContextMenu(-1, 10));
+        assertNull(contextLink[0]);
     }
 
     @Test
@@ -386,7 +491,7 @@ public class TerminalTextSelectionTest {
         Object original = values.put(setting, false);
         int[] keyDownCalls = {0};
         view.setTerminalViewClient(new TermuxTerminalViewClient(activity, null) {
-            @Override public boolean shouldEnableImeComposing() { return true; }
+            @Override public boolean shouldEnableImeInput() { return true; }
             @Override public boolean onKeyDown(int keyCode, KeyEvent event, TerminalSession session) {
                 keyDownCalls[0]++;
                 return super.onKeyDown(keyCode, event, session);
@@ -398,8 +503,6 @@ public class TerminalTextSelectionTest {
             for (int keyCode : new int[]{KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN}) {
                 promptKey(keyCode);
                 assertEquals("你好", input.getTextBeforeCursor(10, 0).toString());
-                CharSequence preview = ReflectionHelpers.getField(view, "mComposingText");
-                assertEquals("你好", preview.toString());
                 assertEquals("", takeOutput());
             }
             ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
@@ -412,9 +515,11 @@ public class TerminalTextSelectionTest {
             assertEquals(Arrays.asList(-1, 1), terminal.getPromptScrollRequests());
             assertEquals(3, keyDownCalls[0]);
             String output = takeOutput();
-            assertTrue(output.startsWith("你好"));
-            assertTrue("A disabled shortcut must reach the terminal", output.length() > "你好".length());
-            assertEquals("", input.getTextBeforeCursor(10, 0).toString());
+            assertFalse(output.contains("你好"));
+            assertFalse("A disabled shortcut must reach the terminal", output.isEmpty());
+            assertEquals("你好", input.getTextBeforeCursor(10, 0).toString());
+            assertTrue(input.finishComposingText());
+            assertEquals("你好", takeOutput());
         } finally {
             if (original == null) values.remove(setting);
             else values.put(setting, original);
@@ -428,6 +533,20 @@ public class TerminalTextSelectionTest {
             KeyEvent.ACTION_DOWN, keyCode, 0, modifiers)));
         assertTrue(view.onKeyUp(keyCode, new KeyEvent(now, now,
             KeyEvent.ACTION_UP, keyCode, 0, modifiers)));
+    }
+
+    private void clickTerminalAction(AlertDialog dialog, int label) {
+        ListAdapter adapter = dialog.getListView().getAdapter();
+        for (int i = 0; i < adapter.getCount(); i++) {
+            MenuItem item = (MenuItem) adapter.getItem(i);
+            if (activity.getString(label).contentEquals(item.getTitle())) {
+                assertTrue(item.isEnabled());
+                dialog.getListView().performItemClick(
+                    adapter.getView(i, null, dialog.getListView()), i, adapter.getItemId(i));
+                return;
+            }
+        }
+        fail("Terminal action was missing: " + activity.getString(label));
     }
 
     private void append(String text) {
@@ -502,6 +621,18 @@ public class TerminalTextSelectionTest {
         @Override public void onSingleTapUp(MotionEvent event) { singleTaps++; }
         @Override public boolean shouldUseHorizontalCursorGestures() { return true; }
         @Override public boolean shouldUseVerticalCursorGestures() { return true; }
+    }
+
+    /** Inject a native OSC 8 lookup result without asking the legacy text fixture to parse it. */
+    @Implements(value = GhosttyTerminal.class, isInAndroidSdk = false)
+    public static class HyperlinkTerminal extends ShadowGhosttyTerminal {
+        static final String LINK = "https://example.org/path?q=hello%20world#section";
+
+        @Implementation
+        @Override
+        protected String getHyperlink(int column, int viewportRow) {
+            return column == 7 && viewportRow == 0 ? LINK : null;
+        }
     }
 
     private static final class SelectionHost extends FrameLayout {

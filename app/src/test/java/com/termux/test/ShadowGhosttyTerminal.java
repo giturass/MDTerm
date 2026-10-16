@@ -161,43 +161,6 @@ public class ShadowGhosttyTerminal {
         return closed ? 0 : 0xff000000 | emulator.mColors.mCurrentColors[TextStyle.COLOR_INDEX_BACKGROUND];
     }
 
-    @Implementation
-    protected int[] getCursorState() {
-        if (closed) return null;
-        clampViewport();
-        int row = emulator.getCursorRow();
-        int viewportRow = row - topRow;
-        if (viewportRow < 0 || viewportRow >= getRows()) return null;
-        int column = emulator.getCursorCol();
-        TerminalRow line = emulator.getScreen().allocateFullLineIfNecessary(
-            emulator.getScreen().externalToInternalRow(row));
-        if (column > 0 && line.findStartOfColumn(column) == line.findStartOfColumn(column - 1))
-            --column;
-        long style = emulator.getScreen().getStyleAt(row, column);
-        int effects = TextStyle.decodeEffect(style) & (TextStyle.CHARACTER_ATTRIBUTE_BOLD
-            | TextStyle.CHARACTER_ATTRIBUTE_ITALIC | TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE
-            | TextStyle.CHARACTER_ATTRIBUTE_BLINK | TextStyle.CHARACTER_ATTRIBUTE_INVERSE
-            | TextStyle.CHARACTER_ATTRIBUTE_INVISIBLE | TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH
-            | TextStyle.CHARACTER_ATTRIBUTE_DIM);
-        int foreground = resolveColor(TextStyle.decodeForeColor(style));
-        int background = resolveColor(TextStyle.decodeBackColor(style));
-        if ((effects & TextStyle.CHARACTER_ATTRIBUTE_INVERSE) != 0) {
-            int previousForeground = foreground;
-            foreground = background;
-            background = previousForeground;
-            effects &= ~TextStyle.CHARACTER_ATTRIBUTE_INVERSE;
-        }
-        return new int[]{column, viewportRow, foreground, background, effects};
-    }
-
-    private int resolveColor(int color) {
-        if ((color & 0xff000000) == 0xff000000) return color;
-        if (emulator.isReverseVideo()) {
-            if (color == TextStyle.COLOR_INDEX_FOREGROUND) color = TextStyle.COLOR_INDEX_BACKGROUND;
-            else if (color == TextStyle.COLOR_INDEX_BACKGROUND) color = TextStyle.COLOR_INDEX_FOREGROUND;
-        }
-        return 0xff000000 | emulator.mColors.mCurrentColors[color];
-    }
 
     @Implementation
     protected String getTitle() { return closed ? null : emulator.getTitle(); }

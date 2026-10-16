@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_find_in_terminal">Find in terminal</string>
+    <string name="action_close_terminal_search">Close terminal search</string>
+    <string name="action_find_previous">Previous match</string>
+    <string name="action_find_next">Next match</string>
+    <string name="terminal_search_submit">Press Search to find matches</string>
+    <string name="terminal_search_no_matches">No matches</string>
+    <string name="terminal_search_results_count">%1$d of %2$d</string>
+    <string name="terminal_search_failed">Could not search terminal</string>
+
+    <style name="Widget.MDTerm.TerminalSearch.IconButton" parent="Widget.Material3.Button.TextButton">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:minWidth">48dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="iconPadding">0dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconSize">24dp</item>
+        <item name="cornerRadius">24dp</item>
+    </style>
+</resources>

@@ -50,10 +50,33 @@ public class TermuxPropertiesSettingsTest {
         assertEquals(2000, settings.get("terminal-transcript-rows"));
         assertEquals("vibrate", settings.get("bell-character"));
         assertEquals(true, settings.get("extra-keys-text-all-caps"));
+        assertEquals(true, settings.get("enable-ime-input"));
+        assertEquals(false, settings.get("enforce-char-based-input"));
         assertEquals(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, settings.get("extra-keys"));
         assertEquals("", settings.get("shortcut.create-session"));
         assertFalse(primary.exists());
         assertFalse(secondary.exists());
+    }
+
+    @Test public void imeInputPersistsInPropertiesAndResetRestoresEnabledDefault() throws Exception {
+        write(primary, "# Keep the keyboard workaround\nenforce-char-based-input = true\ncustom-option = keep\n");
+        settings.reload();
+        assertEquals(true, settings.get("enable-ime-input"));
+
+        settings.set("enable-ime-input", false);
+        settings.reload();
+        assertEquals(false, settings.get("enable-ime-input"));
+        assertEquals("false", new TermuxPropertiesFile(primary).read().getProperty("enable-ime-input"));
+        assertEquals(true, settings.get("enforce-char-based-input"));
+
+        settings.set("enable-ime-input", "");
+        settings.reload();
+        assertEquals(true, settings.get("enable-ime-input"));
+        Properties saved = new TermuxPropertiesFile(primary).read();
+        assertFalse(saved.containsKey("enable-ime-input"));
+        assertEquals("true", saved.getProperty("enforce-char-based-input"));
+        assertEquals("keep", saved.getProperty("custom-option"));
+        assertTrue(read(primary).startsWith("# Keep the keyboard workaround\n"));
     }
 
     @Test public void secondaryConfigurationRemainsTheSingleSourceUntilPrimaryExists() throws Exception {
@@ -139,6 +162,7 @@ public class TermuxPropertiesSettingsTest {
             {"shortcut.create-session", "ctrl +"}, {"default-working-directory", "relative"},
             {"default-working-directory", new File(temporary.getRoot(), "absent").getAbsolutePath()},
             {"bell-character", "silent"}, {"extra-keys-style", "invalid"}, {"fullscreen", "yes"},
+            {"enable-ime-input", "yes"},
             {"extra-keys", "[['ESC']"}, {"extra-keys", "['ESC']"}, {"extra-keys", "[[42]]"},
             {"extra-keys", "[[{'display':'missing key'}]]"}};
         long revision = TermuxPropertiesSettings.getRevision();

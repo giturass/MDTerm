@@ -16,6 +16,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -57,6 +58,9 @@ public final class TerminalSession extends TerminalOutput implements AutoCloseab
     private boolean mCloseRequested;
     private boolean mClosed;
     private boolean mProcessExitHandled;
+    private final ProgramStatusStore mProgramStatuses = new ProgramStatusStore();
+    private boolean mProgramStatusFeedActive;
+    private boolean mProgramStatusChanged;
 
     /** Callback which gets notified when a session finishes or changes title. */
     TerminalSessionClient mClient;
@@ -452,6 +456,56 @@ public final class TerminalSession extends TerminalOutput implements AutoCloseab
         mClient.onMouseShapeChanged(this, shape);
     }
 
+    @Override
+    public void onDesktopNotification(String title, String body) {
+        mClient.onDesktopNotification(this, title, body);
+    }
+
+    @Override
+    public void onProgressReport(int state, int progress) {
+        mClient.onProgressReport(this, state, progress);
+    }
+
+    @Override
+    public void onProgramStatusReport(int state, int kind, int progress,
+                                      String id, String app, String title, String message) {
+        if (mProgramStatuses.update(new ProgramStatusStore.Record(
+                state, kind, progress, id, app, title, message)))
+            programStatusChanged();
+    }
+
+    @Override
+    public void onProgramStatusPrompt() {
+        if (mProgramStatuses.endActivity()) programStatusChanged();
+    }
+
+    public List<ProgramStatusStore.Record> getProgramStatuses() {
+        return mProgramStatuses.snapshot();
+    }
+
+    public void dismissFinishedProgramStatuses() {
+        if (mProgramStatuses.dismissFinished()) programStatusChanged();
+    }
+
+    private void programStatusChanged() {
+        if (mProgramStatusFeedActive) mProgramStatusChanged = true;
+        else mClient.onProgramStatusChanged(this);
+    }
+
+    /** Preserve native report order, but refresh the drawer only once per PTY read. */
+    private void feedTerminal(GhosttyTerminal terminal, byte[] data, int count) {
+        mProgramStatusFeedActive = true;
+        try {
+            terminal.feed(data, 0, count);
+        } finally {
+            mProgramStatusFeedActive = false;
+            if (mProgramStatusChanged) {
+                mProgramStatusChanged = false;
+                mClient.onProgramStatusChanged(this);
+            }
+        }
+    }
+
     public synchronized boolean isRunning() {
         return mShellPid != -1;
     }
@@ -536,7 +590,7 @@ public final class TerminalSession extends TerminalOutput implements AutoCloseab
             GhosttyTerminal terminal = mTerminal;
             int bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false);
             if (terminal != null && bytesRead > 0) {
-                terminal.feed(mReceiveBuffer, 0, bytesRead);
+                feedTerminal(terminal, mReceiveBuffer, bytesRead);
                 notifyScreenUpdate();
             }
 
@@ -549,6 +603,7 @@ public final class TerminalSession extends TerminalOutput implements AutoCloseab
                 mProcessExitHandled = true;
                 int exitCode = (Integer) msg.obj;
                 cleanupResources(exitCode);
+                onProgramStatusPrompt();
 
                 String exitDescription = "\r\n[Process completed";
                 if (exitCode > 0) {
@@ -563,7 +618,7 @@ public final class TerminalSession extends TerminalOutput implements AutoCloseab
                 try {
                     if (terminal != null) {
                         byte[] bytesToWrite = exitDescription.getBytes(StandardCharsets.UTF_8);
-                        terminal.feed(bytesToWrite, 0, bytesToWrite.length);
+                        feedTerminal(terminal, bytesToWrite, bytesToWrite.length);
                         notifyScreenUpdate();
                     }
                     mClient.onSessionFinished(TerminalSession.this);

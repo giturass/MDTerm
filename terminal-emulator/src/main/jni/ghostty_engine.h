@@ -14,6 +14,8 @@
 
 #include <ghostty/vt.h>
 
+#include "terminal_progress.h"
+
 struct TermuxGhosttyEngine {
     JavaVM *vm;
     jobject output;
@@ -62,9 +64,7 @@ struct TermuxGhosttyEngine {
     bool pending_pty_writes_overflow;
     size_t clipboard_read_bytes_remaining;
     size_t clipboard_read_requests_remaining;
-    bool pending_progress_report;
-    int pending_progress_state;
-    int pending_progress_value;
+    termux::TerminalProgressBatch pending_progress;
     struct ProgramStatusEvent {
         bool prompt = false;
         int state = GHOSTTY_PROGRAM_STATUS_STATE_CLEAR;

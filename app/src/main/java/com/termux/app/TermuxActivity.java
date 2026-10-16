@@ -49,6 +49,7 @@ import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.data.IntentUtils;
 import com.termux.shared.android.PermissionUtils;
 import com.termux.shared.data.DataUtils;
+import com.termux.shared.interact.ShareUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.termux.app.activities.HelpActivity;
@@ -208,6 +209,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_SAVE_BOOKMARK_ID = 102;
     private static final int CONTEXT_MENU_PREVIOUS_PROMPT = 103;
     private static final int CONTEXT_MENU_NEXT_PROMPT = 104;
+    private static final int CONTEXT_MENU_SEARCH_TERMINAL = 105;
+    private static final int CONTEXT_MENU_OPEN_HYPERLINK = 106;
+    private static final int CONTEXT_MENU_COPY_HYPERLINK = 107;
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
     private static final int CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1;
     private static final int CONTEXT_MENU_SHARE_SELECTED_TEXT = 10;
@@ -420,6 +424,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState) return;
 
         if (mActionsDialog != null) mActionsDialog.dismiss();
+        if (mTermuxTerminalViewClient != null) mTermuxTerminalViewClient.dismissTerminalSearch();
         if (mDrawerAdapter != null) mDrawerAdapter.dispose();
 
         if (mTermuxService != null) {
@@ -740,6 +745,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** Keep navigation available until there is a session to display. */
     public void updateSessionUi() {
+        if (mTermuxTerminalViewClient != null)
+            mTermuxTerminalViewClient.dismissTerminalSearchIfSessionChanged();
         if (mTermuxService != null)
             mIsWaitingForSession = mTermuxService.isTermuxSessionsEmpty();
 
@@ -818,23 +825,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         menu.add(Menu.NONE, CONTEXT_MENU_PASTE_ID, Menu.NONE, R.string.action_paste_text).setIcon(R.drawable.ic_action_paste)
             .setEnabled(session.isRunning() && clipboard != null && clipboard.hasPrimaryClip());
+        // Keep the link that opened this menu even if terminal output changes.
+        String hyperlink = mTerminalView.getContextHyperlink();
         populateTerminalActions(menu);
+        boolean[] selectTextAfterDismiss = {false};
         mActionsDialog = MaterialMenuDialog.show(this, getString(R.string.terminal_actions_title), menu, item -> {
             if (session != getCurrentSession()) return;
             if (item.getItemId() == CONTEXT_MENU_SELECT_TEXT_ID) {
-                mTerminalView.post(() -> {
-                    if (isFinishing() || session != getCurrentSession() || session.getTerminal() == null) return;
-                    long now = SystemClock.uptimeMillis();
-                    MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, selectionX, selectionY, 0);
-                    mTerminalView.startTextSelectionMode(event);
-                    event.recycle();
-                });
+                selectTextAfterDismiss[0] = true;
             } else if (item.getItemId() == CONTEXT_MENU_PASTE_ID) {
                 session.onPasteTextFromClipboard();
-            } else {
+            } else if (!handleHyperlinkAction(item, hyperlink)) {
                 onContextItemSelected(item);
             }
-        }, () -> mTerminalView.onContextMenuClosed(menu));
+        }, () -> {
+            mTerminalView.onContextMenuClosed(menu);
+            if (!selectTextAfterDismiss[0]) return;
+            selectTextAfterDismiss[0] = false;
+            // The old menu must clear its context before the new selection captures a link.
+            mTerminalView.post(() -> {
+                if (isFinishing() || session != getCurrentSession() || session.getTerminal() == null) return;
+                long now = SystemClock.uptimeMillis();
+                MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, selectionX, selectionY, 0);
+                mTerminalView.startTextSelectionMode(event);
+                event.recycle();
+            });
+        });
         return true;
     }
 
@@ -844,6 +860,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         boolean autoFillEnabled = mTerminalView.isAutoFillEnabled();
 
+        if (!DataUtils.isNullOrEmpty(mTerminalView.getContextHyperlink())) {
+            menu.add(Menu.NONE, CONTEXT_MENU_OPEN_HYPERLINK, Menu.NONE, R.string.action_open_link)
+                .setIcon(R.drawable.ic_action_link);
+            menu.add(Menu.NONE, CONTEXT_MENU_COPY_HYPERLINK, Menu.NONE, R.string.action_copy_link)
+                .setIcon(R.drawable.ic_action_copy);
+        }
+
         menu.add(Menu.NONE, CONTEXT_MENU_SAVE_BOOKMARK_ID, Menu.NONE, R.string.action_save_bookmark)
             .setIcon(R.drawable.ic_folder).setEnabled(currentSession.isRunning() && !mSavingBookmark);
 
@@ -851,6 +874,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             .setIcon(R.drawable.ic_action_previous_prompt).setEnabled(currentSession.getTerminal() != null);
         menu.add(Menu.NONE, CONTEXT_MENU_NEXT_PROMPT, Menu.NONE, R.string.action_next_prompt)
             .setIcon(R.drawable.ic_action_next_prompt).setEnabled(currentSession.getTerminal() != null);
+        menu.add(Menu.NONE, CONTEXT_MENU_SEARCH_TERMINAL, Menu.NONE, R.string.action_find_in_terminal)
+            .setIcon(R.drawable.ic_terminal_search).setEnabled(currentSession.getTerminal() != null);
         menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url);
         if (!DataUtils.isNullOrEmpty(mTerminalView.getStoredSelectedText()))
             menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text);
@@ -884,6 +909,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Override
     public boolean onContextItemSelected(MenuItem item) {
         TerminalSession session = getCurrentSession();
+        if (handleHyperlinkAction(item,
+            mTerminalView == null ? null : mTerminalView.getContextHyperlink())) return true;
 
         switch (item.getItemId()) {
             case CONTEXT_MENU_SAVE_BOOKMARK_ID:
@@ -894,6 +921,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return true;
             case CONTEXT_MENU_NEXT_PROMPT:
                 mTerminalView.scrollToPrompt(1);
+                return true;
+            case CONTEXT_MENU_SEARCH_TERMINAL:
+                mTermuxTerminalViewClient.showTerminalSearch();
                 return true;
             case CONTEXT_MENU_SELECT_URL_ID:
                 mTermuxTerminalViewClient.showUrlSelection();
@@ -931,6 +961,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             default:
                 return super.onContextItemSelected(item);
         }
+    }
+
+    private boolean handleHyperlinkAction(MenuItem item, @Nullable String hyperlink) {
+        if (item.getItemId() != CONTEXT_MENU_OPEN_HYPERLINK &&
+            item.getItemId() != CONTEXT_MENU_COPY_HYPERLINK) return false;
+        if (DataUtils.isNullOrEmpty(hyperlink)) return true;
+        if (item.getItemId() == CONTEXT_MENU_OPEN_HYPERLINK) {
+            ShareUtils.openUrl(this, hyperlink);
+        } else {
+            ShareUtils.copyTextToClipboard(this, hyperlink,
+                getString(R.string.msg_link_copied_to_clipboard));
+        }
+        return true;
     }
 
     @Override

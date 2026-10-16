@@ -68,7 +68,7 @@ def verify_artifact(artifact, ndk):
             "zsh/zshenv", "zsh/ghostty-integration",
             "fish/vendor_conf.d/ghostty-shell-integration.fish",
             "elvish/lib/ghostty-integration.elv",
-            "nushell/vendor/autoload/ghostty.nu", "termux-ghostty.fish",
+            "nushell/vendor/autoload/ghostty.nu", "termux-ghostty.fish", "termux-ghostty.nu",
         ):
             if not apk.read(f"assets/ghostty/shell-integration/{integration}").strip():
                 raise ValueError(f"APK is missing the {integration} shell integration")

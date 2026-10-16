@@ -8,13 +8,11 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.Editable;
-import android.text.Selection;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.AttributeSet;
@@ -37,7 +35,6 @@ import android.view.autofill.AutofillValue;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.Scroller;
 import android.view.SurfaceView;
 
@@ -81,6 +78,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     private boolean mSessionNeedsUpdate;
     private boolean mCursorVisible = true;
     private boolean mAutoScrollDisabled;
+    private boolean mSearchActive;
     private String mContextHyperlink;
     private int mMouseShape = GhosttyTerminal.MOUSE_SHAPE_TEXT;
 
@@ -102,15 +100,13 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     private int mMouseScrollStartX = -1, mMouseScrollStartY = -1;
     /** Keep track of the time when a touch event leading to sending mouse scroll events started. */
     private long mMouseStartDownTime = -1;
+    private boolean mMouseContextMenuGesture;
     // Lock touch drags to the axis and cursor mode chosen at their start.
     private int mTouchScrollAxis;
     private boolean mTouchScrollMovesCursor;
     private boolean mMultiTouchGesture;
     private float mCursorScrollRemainder;
-    private CharSequence mComposingText;
     private BaseInputConnection mInputConnection;
-    private Typeface mPreviewTypeface = Typeface.MONOSPACE;
-    private final TerminalComposingRenderer mComposingRenderer = new TerminalComposingRenderer();
     private String mRenderError;
     private final Paint mErrorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
@@ -350,9 +346,20 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
     @Override
     public boolean showContextMenu(float x, float y) {
+        stopTextSelectionMode();
+        mContextHyperlink = x >= 0 && y >= 0
+            ? getHyperlinkAt((int) (x / mCellWidth), (int) (y / mCellHeight)) : null;
         if (mContextMenuAction == null) return super.showContextMenu(x, y);
         mContextMenuAction.run();
         return true;
+    }
+
+    /** Keep the selected link available while handing the floating toolbar over to the menu. */
+    public boolean showContextMenuFromSelection() {
+        String hyperlink = mContextHyperlink;
+        stopTextSelectionMode();
+        mContextHyperlink = hyperlink;
+        return showContextMenu();
     }
 
     /**
@@ -381,9 +388,11 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
      */
     public boolean attachSession(TerminalSession session) {
         if (session == mTermSession) return false;
+        if (mSearchActive && mTerminal != null) mTerminal.clearSearch();
+        mSearchActive = false;
+        mContextHyperlink = null;
         mScroller.abortAnimation();
         stopTerminalCursorBlinker();
-        setComposingTextPreview(null);
         if (mInputConnection != null) mInputConnection.getEditable().clear();
 
         // Tear down any active text selection while the old terminal is still
@@ -492,11 +501,9 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         // initially started with the alternate view or if activity is returned to from another app
         // and the alternate view was the one selected the last time.
         if (mClient.isTerminalViewSelected()) {
-            if (mClient.shouldEnableImeComposing()) {
-                // General text input so the IME composes (setComposingText), e.g. CJK,
-                // with NO_SUGGESTIONS to suppress autocomplete where the IME respects it.
-                // VISIBLE_PASSWORD would suppress suggestions but disables composing (fatal for CJK).
-                outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
+            if (mClient.shouldEnableImeInput()) {
+                // Let ordinary input methods manage their composition and candidate UI.
+                outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL;
             } else if (mClient.shouldEnforceCharBasedInput()) {
                 // Some keyboards seems do not reset the internal state on TYPE_NULL.
                 // Affects mostly Samsung stock keyboards.
@@ -528,28 +535,11 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         BaseInputConnection connection = new BaseInputConnection(this, true) {
 
             @Override
-            public boolean setComposingText(CharSequence text, int newCursorPosition) {
-                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
-                    mClient.logInfo(LOG_TAG, "IME: setComposingText(\"" + text + "\", " + newCursorPosition + ")");
-                }
-                super.setComposingText(text, newCursorPosition);
-                // Show the in-progress composition (e.g. a CJK syllable being built) as a preview
-                // at the terminal cursor. The terminal only renders committed-and-echoed text, so
-                // without this the composing characters would never be visible until commit.
-                setComposingTextPreview(text);
-                return true;
-            }
-
-            @Override
             public boolean finishComposingText() {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
-                boolean hadComposing = mComposingText != null;
                 super.finishComposingText();
 
-                setComposingTextPreview(null);
-                if (hadComposing) {
-                    sendTextToTerminal(getEditable());
-                }
+                sendTextToTerminal(getEditable());
                 getEditable().clear();
                 return true;
             }
@@ -563,7 +553,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
                 if (mTerminal == null) return true;
 
-                setComposingTextPreview(null);
                 Editable content = getEditable();
                 sendTextToTerminal(content);
                 content.clear();
@@ -579,25 +568,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                 KeyEvent deleteKey = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL);
                 for (int i = 0; i < leftLength; i++) sendKeyEvent(deleteKey);
                 return super.deleteSurroundingText(leftLength, rightLength);
-            }
-
-            @Override
-            public boolean setSelection(int start, int end) {
-                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
-                    mClient.logInfo(LOG_TAG, "IME: setSelection(" + start + ", " + end + ")");
-                boolean result = super.setSelection(start, end);
-                // The IME moved the cursor within the (fake) Editable. Redraw so the pre-edit cursor
-                // (read from the Editable Selection/composing span) updates. Movement is the IME's job.
-                invalidate();
-                // If the IME moved the cursor OUTSIDE the composing region it is leaving the
-                // composition, so finalize (commit) at the current cursor before the move takes effect.
-                Editable editable = getEditable();
-                int composingStart = BaseInputConnection.getComposingSpanStart(editable);
-                int composingEnd = BaseInputConnection.getComposingSpanEnd(editable);
-                if (composingStart != -1 && composingEnd != -1 && (start < composingStart || end > composingEnd)) {
-                    finalizeComposingIfActive();
-                }
-                return result;
             }
 
             void sendTextToTerminal(CharSequence text) {
@@ -687,7 +657,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
     public void onScreenUpdated(boolean skipScrolling) {
         if (mTerminal == null) return;
-        if (!skipScrolling && !isSelectingText() && !mAutoScrollDisabled) {
+        if (!skipScrolling && !isSelectingText() && !mAutoScrollDisabled && !mSearchActive) {
             mTerminal.scrollToBottom();
         }
         requestRender();
@@ -784,7 +754,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         mCursorScrollRemainder -= count * step;
         if (count == 0) return;
 
-        finalizeComposingIfActive();
         setTopRow(0);
         int keyCode = horizontal
             ? (count > 0 ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_RIGHT)
@@ -829,6 +798,16 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         }
     }
 
+    /** Keep a find result visible while the host's search field owns input. */
+    public void setSearchActive(boolean active) {
+        mSearchActive = active;
+        if (active) {
+            mScroller.abortAnimation();
+            mScrollRemainder = 0;
+            stopTextSelectionMode();
+        }
+    }
+
     /** Jump through shell prompt groups without sending input to the PTY. */
     public void scrollToPrompt(int count) {
         if (mTerminal == null) return;
@@ -867,15 +846,24 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
             mTouchScrollMovesCursor = false;
         }
 
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            boolean secondary = event.isButtonPressed(MotionEvent.BUTTON_SECONDARY);
+            if (action == MotionEvent.ACTION_DOWN) mMouseContextMenuGesture = secondary;
+            if (mMouseContextMenuGesture || secondary) {
+                if (action == MotionEvent.ACTION_DOWN) showContextMenu(event.getX(), event.getY());
+                // Button state is already empty on UP; do not forward it as a left release.
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+                    mMouseContextMenuGesture = false;
+                return true;
+            }
+        }
+
         if (isSelectingText()) {
             updateFloatingToolbarVisibility(event);
             mGestureRecognizer.onTouchEvent(event);
             return true;
         } else if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-            if (event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)) {
-                if (action == MotionEvent.ACTION_DOWN) showContextMenu();
-                return true;
-            } else if (event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) {
+            if (event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) {
                 ClipboardManager clipboardManager = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
                 ClipData clipData = clipboardManager.getPrimaryClip();
                 if (clipData != null) {
@@ -932,7 +920,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     /**
      * Key presses in software keyboards will generally NOT trigger this listener, although some
      * may elect to do so in some situations. Do not rely on this to catch software key presses.
-     * Gboard calls this when shouldEnableImeComposing() and shouldEnforceCharBasedInput() are disabled
+     * Gboard calls this when shouldEnableImeInput() and shouldEnforceCharBasedInput() are disabled
      * (InputType.TYPE_NULL) instead of calling commitText(), with deviceId=-1. However, Hacker's
      * Keyboard, OpenBoard, LG Keyboard call commitText().
      *
@@ -1044,7 +1032,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
             requestRender();
             return true;
         }
-        if (!KeyEvent.isModifierKey(keyCode)) finalizeComposingIfActive();
         if (isSelectingText()) {
             stopTextSelectionMode();
         }
@@ -1163,7 +1150,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         }
 
         if (mTermSession == null) return;
-        finalizeComposingIfActive();
 
         if (!mCursorVisible) {
             mCursorVisible = true;
@@ -1264,7 +1250,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     /** Input the specified keyCode if applicable and return if the input was consumed. */
     public boolean handleKeyCode(int keyCode, int keyMod) {
         if (mTerminal == null) return false;
-        if (!KeyEvent.isModifierKey(keyCode)) finalizeComposingIfActive();
         return handleKeyCode(keyCode, GhosttyTerminal.KEY_ACTION_PRESS, keyMod,
             0, null, 0, false, null);
     }
@@ -1553,47 +1538,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         if (!mRenderExecutor.isShutdown()) mRenderExecutor.execute(task);
     }
 
-    /** Update the IME composing text preview shown at the cursor and request a redraw if it changed. */
-    private void setComposingTextPreview(CharSequence text) {
-        CharSequence newPreview = (text != null && text.length() > 0) ? text : null;
-        if (newPreview == null) {
-            if (mComposingText == null) return;
-            mComposingText = null;
-        } else {
-            mComposingText = newPreview;
-        }
-        invalidate();
-    }
-
-    /**
-     * Finalize (commit) any in-progress IME composing text through the InputConnection path.
-     * Called when input bypasses the IME (hardware keys / extra-keys literals via
-     * {@link #onKeyDown} / {@link #inputCodePoint}), which would otherwise leave the composing
-     * text uncommitted with the preview chasing the cursor once it moves.
-     *
-     * Some IMEs do not keep the composing text in the (fake) Editable, so {@code getEditable()}
-     * may be empty even though {@code mComposingText} has the in-progress composition; copy it in
-     * so {@code finishComposingText} sends it (no direct pty write).
-     *
-     * Afterwards {@code restartInput} is posted so the IME discards its own composing buffer
-     * (some IMEs keep committed text stale in it). Only after finalize — not every commit — so
-     * digit-only input is unaffected.
-     */
-    private void finalizeComposingIfActive() {
-        if (mComposingText == null) return;
-        if (mInputConnection != null) {
-            Editable e = mInputConnection.getEditable();
-            if (e.length() == 0 && mComposingText.length() > 0) {
-                e.append(mComposingText);
-            }
-            mInputConnection.finishComposingText();
-        }
-        post(() -> {
-            InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) imm.restartInput(TerminalView.this);
-        });
-    }
-
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -1603,26 +1547,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
             mErrorPaint.setTextSize(16 * getResources().getDisplayMetrics().scaledDensity);
             canvas.drawColor(0xff202020);
             canvas.drawText(mRenderError, 16, 48, mErrorPaint);
-            return;
         }
-        if (mTerminal == null || mClient == null || !mClient.shouldEnableImeComposing()
-            || TextUtils.isEmpty(mComposingText)) return;
-        int offset = -1;
-        if (mInputConnection != null) {
-            Editable editable = mInputConnection.getEditable();
-            int start = BaseInputConnection.getComposingSpanStart(editable);
-            int end = BaseInputConnection.getComposingSpanEnd(editable);
-            int selected = Selection.getSelectionStart(editable);
-            if (start >= 0 && selected >= start && selected <= end) offset = selected - start;
-        }
-        mComposingRenderer.render(canvas, mTerminal.getCursorState(), mComposingText,
-            offset, mTextSize, mPreviewTypeface, mCellWidth, mCellHeight);
-    }
-
-    /** Typeface used for the Android IME overlay; terminal fonts are supplied as files. */
-    public void setTypeface(Typeface typeface) {
-        mPreviewTypeface = typeface == null ? Typeface.MONOSPACE : typeface;
-        invalidate();
     }
 
     public GhosttyTerminal getTerminal() {
@@ -2141,6 +2066,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     public void stopTextSelectionMode() {
+        mContextHyperlink = null;
         if (hideTextSelectionCursors()) {
             mClient.copyModeChanged(isSelectingText());
             clearNativeSelection();

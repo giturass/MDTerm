@@ -74,12 +74,14 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     private GhosttyTerminal mCursorBlinkerTerminal;
 
     private List<KeyboardShortcut> mSessionShortcuts;
+    private final TerminalSearchDialog mTerminalSearch;
 
     private static final String LOG_TAG = "TermuxTerminalViewClient";
 
     public TermuxTerminalViewClient(TermuxActivity activity, TermuxTerminalSessionActivityClient termuxTerminalSessionActivityClient) {
         this.mActivity = activity;
         this.mTermuxTerminalSessionActivityClient = termuxTerminalSessionActivityClient;
+        mTerminalSearch = new TerminalSearchDialog(activity);
     }
 
     public TermuxActivity getActivity() {
@@ -133,6 +135,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * Should be called when mActivity.onStop() is called
      */
     public void onStop() {
+        dismissTerminalSearch();
         // Stop terminal cursor blinking if enabled
         setTerminalCursorBlinkerState(false);
     }
@@ -160,6 +163,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      */
     @Override
     public void onEmulatorSet() {
+        dismissTerminalSearchIfSessionChanged();
         if (!mTerminalCursorBlinkerStateAlreadySet ||
             mCursorBlinkerTerminal != mActivity.getTerminalView().getTerminal()) {
             // Start terminal cursor blinking if enabled
@@ -174,6 +178,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     public void onSessionDetached() {
+        dismissTerminalSearch();
         setTerminalCursorBlinkerState(false);
         mTerminalCursorBlinkerStateAlreadySet = false;
     }
@@ -229,9 +234,8 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     @Override
-    public boolean shouldEnableImeComposing() {
-        // The explicit keyboard workaround must take priority over the optional IME preview.
-        return !shouldEnforceCharBasedInput() && mActivity.getPreferences().isImeComposingEnabled();
+    public boolean shouldEnableImeInput() {
+        return mActivity.getProperties().isImeInputEnabled();
     }
 
     @Override
@@ -299,6 +303,8 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 mTermuxTerminalSessionActivityClient.addNewSession(false, null);
             } else if (unicodeChar == 'u' /* urls */) {
                 showUrlSelection();
+            } else if (unicodeChar == 'f' /* find */) {
+                showTerminalSearch();
             } else if (unicodeChar == 'v') {
                 doPaste();
             } else if (unicodeChar == '+' || e.getUnicodeChar(KeyEvent.META_SHIFT_ON) == '+') {
@@ -734,6 +740,18 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         if (DataUtils.isNullOrEmpty(selectedText)) return;
         ShareUtils.shareText(mActivity, mActivity.getString(R.string.title_share_selected_text),
             selectedText, mActivity.getString(R.string.title_share_selected_text_with));
+    }
+
+    public void showTerminalSearch() {
+        mTerminalSearch.show();
+    }
+
+    public void dismissTerminalSearch() {
+        mTerminalSearch.dismiss();
+    }
+
+    public void dismissTerminalSearchIfSessionChanged() {
+        mTerminalSearch.dismissIfSessionChanged();
     }
 
     public void showUrlSelection() {

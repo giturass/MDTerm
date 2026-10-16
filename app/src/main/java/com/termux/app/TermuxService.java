@@ -46,12 +46,18 @@ import com.termux.shared.data.DataUtils;
 import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.shell.command.ExecutionCommand.Runner;
 import com.termux.shared.shell.command.ExecutionCommand.ShellCreateMode;
+import com.termux.terminal.GhosttyTerminal;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A service holding a list of {@link TermuxSession} in {@link TermuxShellManager#mTermuxSessions} and background {@link AppShell}
@@ -76,6 +82,16 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     private final IBinder mBinder = new LocalBinder();
 
     private final Handler mHandler = new Handler();
+    private final ScheduledExecutorService mCompressionExecutor =
+        Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "TermuxScrollbackCompression");
+            thread.setDaemon(true);
+            return thread;
+        });
+    private final AtomicBoolean mCompressionQueued = new AtomicBoolean();
+    private final AtomicBoolean mServiceDestroyed = new AtomicBoolean();
+    private static final int COMPRESSION_STEPS_PER_TERMINAL = 2;
+    private static final int COMPRESSION_TERMINALS_PER_PASS = 4;
 
 
     /** The full implementation of the {@link TerminalSessionClient} interface to be used by {@link TerminalSession}
@@ -167,9 +183,98 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     }
 
     @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= TRIM_MEMORY_RUNNING_LOW) scheduleScrollbackCompression();
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        scheduleScrollbackCompression();
+    }
+
+    private void scheduleScrollbackCompression() {
+        if (mServiceDestroyed.get() ||
+            !mCompressionQueued.compareAndSet(false, true)) return;
+        if (!mHandler.post(() -> {
+            if (mServiceDestroyed.get() || mShellManager == null) {
+                mCompressionQueued.set(false);
+                return;
+            }
+            // Snapshot on the main thread, where the session list is mutated.
+            // Native memory queries and compression run only on the worker.
+            List<GhosttyTerminal> terminals = new ArrayList<>(mShellManager.mTermuxSessions.size());
+            for (TermuxSession session : mShellManager.mTermuxSessions) {
+                TerminalSession terminalSession = session.getTerminalSession();
+                GhosttyTerminal terminal = terminalSession == null
+                    ? null : terminalSession.getTerminal();
+                if (terminal != null) terminals.add(terminal);
+            }
+            try {
+                mCompressionExecutor.execute(() -> measureAndCompress(terminals));
+            } catch (RejectedExecutionException ignored) {
+                mCompressionQueued.set(false);
+            }
+        })) mCompressionQueued.set(false);
+    }
+
+    private void measureAndCompress(List<GhosttyTerminal> terminals) {
+        ScrollbackCompressionQueue<GhosttyTerminal> queue = new ScrollbackCompressionQueue<>();
+        try {
+            // This O(pages) query happens once per pressure event, off the main thread.
+            for (GhosttyTerminal terminal : terminals) {
+                if (mServiceDestroyed.get()) {
+                    mCompressionQueued.set(false);
+                    return;
+                }
+                long[] memory = terminal.getMemoryUsageForCompression();
+                if (memory != null && memory.length >= 2) {
+                    queue.add(terminal, memory[0], memory[1] != 0);
+                }
+            }
+            queue.sortLargestFirst();
+            compressNextBatch(queue);
+        } catch (RuntimeException e) {
+            Logger.logError(LOG_TAG, "Scrollback compression after memory pressure failed: " + e);
+            mCompressionQueued.set(false);
+        }
+    }
+
+    private void compressNextBatch(ScrollbackCompressionQueue<GhosttyTerminal> queue) {
+        if (mServiceDestroyed.get()) {
+            mCompressionQueued.set(false);
+            return;
+        }
+        try {
+            queue.processBatch(COMPRESSION_TERMINALS_PER_PASS,
+                COMPRESSION_STEPS_PER_TERMINAL, terminal -> mServiceDestroyed.get()
+                    ? 0 : terminal.compressScrollbackIncrementally());
+        } catch (RuntimeException e) {
+            Logger.logError(LOG_TAG, "Scrollback compression after memory pressure failed: " + e);
+            mCompressionQueued.set(false);
+            return;
+        }
+
+        if (queue.hasWork() && !mServiceDestroyed.get()) {
+            try {
+                mCompressionExecutor.schedule(() -> compressNextBatch(queue),
+                    100, TimeUnit.MILLISECONDS);
+                return;
+            } catch (RejectedExecutionException ignored) {
+                // Service is shutting down.
+            }
+        }
+        mCompressionQueued.set(false);
+    }
+
+    @Override
     public void onDestroy() {
         Logger.logVerbose(LOG_TAG, "onDestroy");
 
+        mServiceDestroyed.set(true);
+        mCompressionQueued.set(false);
+        mCompressionExecutor.shutdownNow();
         TermuxShellUtils.clearTermuxTMPDIR(true);
 
         actionReleaseWakeLock(false);

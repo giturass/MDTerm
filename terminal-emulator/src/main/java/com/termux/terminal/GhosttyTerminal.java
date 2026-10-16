@@ -249,12 +249,6 @@ public final class GhosttyTerminal implements AutoCloseable {
         return handle == 0 ? 0 : nativeGetBackgroundColor(handle);
     }
 
-    /** Cursor column, viewport row, foreground, background and TextStyle effects for IME preview. */
-    @Nullable
-    public synchronized int[] getCursorState() {
-        long handle = getHandleIfOpen();
-        return handle == 0 ? null : nativeGetCursorState(handle);
-    }
 
     @Nullable
     public synchronized String getTitle() {
@@ -616,7 +610,6 @@ public final class GhosttyTerminal implements AutoCloseable {
     private static native int nativeGetMouseShape(long handle);
     private static native boolean nativeGetBoolean(long handle, int data);
     private static native int nativeGetBackgroundColor(long handle);
-    private static native int[] nativeGetCursorState(long handle);
     private static native String nativeGetString(long handle, int data);
     private static native int nativeGetViewportOffset(long handle);
     private static native byte[] nativeFormatTranscript(long handle,
