@@ -22,8 +22,7 @@
     <!-- PackageUtils -->
     <string name="error_app_not_installed_or_disabled_warning">%1$s（%2$s）应用尚未安装或已被停用。</string>
     <string name="error_get_package_context_failed_title">无法获取应用上下文</string>
-    <string name="error_get_package_context_failed_message">无法获取“%1$s”应用包的上下文。该应用可能尚未安装，或其 APK 签名与当前应用不同。</string>
-    <string name="error_get_package_context_failed_help_url_message">详情请参阅 %1$s。</string>
+    <string name="error_get_package_context_failed_message">无法获取“%1$s”应用包的上下文。该应用可能尚未安装，或其 APK 签名与当前应用不同。详情请参阅 %2$s 中的安装说明。</string>
     <string name="error_get_component_state_failed">无法获取 %1$s/%2$s 组件的状态</string>
     <string name="error_enable_component_failed">无法启用 %1$s/%2$s 组件</string>
     <string name="error_disable_component_failed">无法停用 %1$s/%2$s 组件</string>
@@ -32,17 +31,6 @@
 
     <!-- PermissionUtils -->
     <string name="message_sudo_please_grant_permissions">请授予所请求的权限</string>
-    <string name="error_failed_to_request_permissions">请求权限失败，请求码为 %1$d：%2$s</string>
-    <string name="error_attempted_to_check_for_permissions_not_requested">尝试检查应用清单中未声明的权限：%1$s</string>
-    <string name="error_attempted_to_ask_for_permissions_not_requested">尝试请求应用清单中未声明的权限：%1$s</string>
-    <string name="error_has_not_requested_legacy_external_storage">“%1$s”应用包的 targetSdkVersion 为 %2$d，当前运行于 Android SDK %3$d，但未在应用清单中将 requestLegacyExternalStorage 设为 true</string>
-    <string name="msg_requires_dump_and_package_usage_stats_permissions">需要 `DUMP` 和 `PACKAGE_USAGE_STATS` 权限</string>
-    <string name="error_display_over_other_apps_permission_not_granted">在 Android 10 及更高版本上，%1$s 需要“显示在其他应用上层”权限才能从后台启动界面和服务。请前往“Android 设置 → 应用 → %1$s → 高级 → 显示在其他应用上层”授予此权限。不同设备上的权限名称可能不同，例如小米设备称为“后台弹出界面”。有关特定设备的问题，请参阅 https://dontkillmyapp.com。</string>
-
-
-
-    <!-- TermuxPluginUtils -->
-    <string name="error_allow_external_apps_ungranted">%1$s 需要在 `%2$s` 文件中将 `allow-external-apps` 属性设为 `true`。</string>
 
 
 
@@ -62,12 +50,11 @@
 
     <!-- Shell -->
     <string name="error_sending_sigkill_to_process">因用户请求或 Android 正在终止执行服务，向进程发送 SIGKILL 信号</string>
-    <string name="error_executable_unset">未为 shell 命令设置可执行程序“%1$s”</string>
     <string name="error_execution_cancelled">执行服务正在被终止，已取消执行</string>
     <string name="error_failed_to_execute_termux_session_command">无法执行 &TERMUX_APP_NAME; 会话命令“%1$s”</string>
-    <string name="error_failed_to_execute_app_shell_command">无法执行应用 shell 命令“%1$s”</string>
+    <string name="error_failed_to_execute_termux_task_command">无法执行 &TERMUX_APP_NAME; 后台任务命令“%1$s”</string>
     <string name="error_exception_received_while_executing_termux_session_command">执行 &TERMUX_APP_NAME; 会话命令“%1$s”时发生异常。\n异常：%2$s</string>
-    <string name="error_exception_received_while_executing_app_shell_command">执行应用 shell 命令“%1$s”时发生异常。\n异常：%2$s</string>
+    <string name="error_exception_received_while_executing_termux_task_command">执行 &TERMUX_APP_NAME; 后台任务命令“%1$s”时发生异常。\n异常：%2$s</string>
 
 
 
@@ -87,11 +74,6 @@
     <string name="action_share">分享</string>
     <string name="action_cancel">取消</string>
     <string name="action_save_to_file">保存到文件</string>
-
-    <string name="msg_storage_permission_granted_on_request">用户已授予所请求的存储权限</string>
-    <string name="msg_storage_permission_not_granted_on_request">用户未授予所请求的存储权限</string>
-
-
 
     <!-- Launcher Icons -->
     <string name="action_enable_launcher_icon">启用桌面图标</string>

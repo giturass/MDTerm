@@ -31,7 +31,6 @@
     <string name="bootstrap_error_abort">中止</string>
     <string name="bootstrap_error_try_again">重试</string>
     <string name="bootstrap_error_not_primary_user_message">&TERMUX_APP_NAME; 只能由设备主用户运行。\n为 &TERMUX_APP_NAME; 编译的基础程序内置了固定的 $PREFIX 路径，只能安装在以下位置：\n%1$s。</string>
-    <string name="bootstrap_error_installed_on_portable_sd">无法将 &TERMUX_APP_NAME; 安装在便携式、外置或可移除的 SD 卡上。\n为 &TERMUX_APP_NAME; 编译的基础程序内置了固定的 $PREFIX 路径，只能安装在以下位置：\n%1$s。</string>
 
 
 
@@ -97,17 +96,12 @@
 
 
     <!-- TermuxService -->
-    <string name="error_display_over_other_apps_permission_not_granted_to_start_terminal">在 Android 10 及更高版本上，&TERMUX_APP_NAME; 需要“显示在其他应用上层”权限才能从后台启动终端会话。请前往“设置 → 应用 → &TERMUX_APP_NAME; → 高级”授予此权限。</string>
-    <string name="error_termux_service_invalid_execution_command_runner">传给 TermuxService 的命令执行器无效：`%1$s`</string>
-    <string name="error_termux_service_unsupported_execution_command_runner">TermuxService 不支持此命令执行器：`%1$s`</string>
-    <string name="error_termux_service_unsupported_execution_command_shell_create_mode">TermuxService 不支持此命令 shell 创建模式：`%1$s`</string>
-    <string name="error_termux_service_execution_command_shell_name_unset">未设置 shell 名称，但传入了 `%1$s` shell 创建模式</string>
+    <string name="error_display_over_other_apps_permission_not_granted">在 Android 10 及更高版本上，&TERMUX_APP_NAME; 需要“显示在其他应用上层”权限才能从后台启动终端会话。请前往“设置 → 应用 → &TERMUX_APP_NAME; → 高级”授予此权限。</string>
 
 
 
     <!-- Termux RunCommandService -->
     <string name="error_run_command_service_invalid_intent_action">传给 RunCommandService 的 Intent 操作无效：`%1$s`</string>
-    <string name="error_run_command_service_invalid_execution_command_runner">传给 RunCommandService 的命令执行器无效：`%1$s`</string>
     <string name="error_run_command_service_mandatory_extra_missing">传给 RunCommandService 的 Intent 缺少必需的附加参数：“%1$s”</string>
     <string name="error_run_command_service_api_help">有关 RUN_COMMAND Intent 的用法，请访问 %1$s。</string>
 
@@ -121,8 +115,7 @@
 
 
     <!-- Miscellaneous -->
-    <string name="error_termux_service_start_failed_general">无法启动 TermuxService。请查看 logcat 中的异常信息。</string>
-    <string name="error_termux_service_start_failed_bg">由于 Android 的后台限制，无法在应用处于后台时启动 TermuxService。</string>
+    <string name="error_allow_external_apps_ungranted">使用 %1$s 前，需要在 `%2$s` 文件中将 `allow-external-apps` 设为 `true`。</string>
 
 
 
