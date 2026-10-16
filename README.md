@@ -50,7 +50,7 @@ MDTerm 的变化覆盖终端核心、渲染、应用界面与交互层，并未�
 
 收到 Android 内存压力通知时，应用会在后台分批压缩滚动历史，优先处理占用较大的会话。历史内容保留，访问时自动解压，无需配置。
 
-支持 OSC 9／777 Android 通知、OSC 9;4 进度条，以及 OSC 7501 程序任务状态。通知和进度只响应应用当前可见的会话；任务状态保存在对应会话中，并显示在侧栏会话卡片上。点击当前会话卡片可查看任务详情、清除已完成项。协议示例见 [Ghostty 接入说明](docs/ghostty.md#notifications-progress-and-task-status)。
+支持与上游一致的 OSC 9／777 Android 通知，以及 OSC 9;4 进度条。通知和进度只响应应用当前可见的会话；OSC 7501 程序任务状态数据保存在对应会话中，会话卡片保留原有样式与交互。协议示例见 [Ghostty 接入说明](docs/ghostty.md#notifications-progress-and-task-status)。
 
 应用会自动安装匹配的 `xterm-ghostty` terminfo，新建普通会话的 `$TERM` 为 `xterm-ghostty`。若安装失败或进入故障安全会话，则使用 `xterm-256color`。远程主机如不认识 `xterm-ghostty`，需要在远端安装对应 terminfo，或为该 SSH 会话使用 `TERM=xterm-256color`。
 

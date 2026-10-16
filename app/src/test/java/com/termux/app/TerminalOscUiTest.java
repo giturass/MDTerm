@@ -2,28 +2,21 @@ package com.termux.app;
 
 import android.app.Application;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Looper;
 import android.view.View;
 import android.widget.ProgressBar;
-import android.widget.TextView;
-
-import androidx.appcompat.app.AlertDialog;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.color.MaterialColors;
 import com.termux.R;
-import com.termux.app.terminal.TerminalBookmarkStore;
-import com.termux.app.terminal.TerminalDrawerAdapter;
-import com.termux.app.terminal.TerminalDrawerRecyclerView;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
-import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Before;
@@ -33,16 +26,15 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.ShadowDialog;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowNotificationManager;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collections;
 
-import static com.termux.terminal.ProgramStatusStore.*;
 import static org.junit.Assert.*;
 
 /** Android host behavior after libghostty has parsed the OSC callbacks. */
@@ -55,7 +47,6 @@ public class TerminalOscUiTest {
     private TerminalSession other;
     private ShadowNotificationManager notifications;
     private ProgressBar progress;
-    private final List<TermuxSession> sessions = new ArrayList<>();
 
     @Before
     public void setUp() {
@@ -86,7 +77,9 @@ public class TerminalOscUiTest {
     }
 
     @Test
-    public void notificationsUseCurrentVisibleSessionAndSanitizedPlainText() {
+    @Config(qualifiers = "zh-rCN-w320dp-h640dp")
+    public void notificationsUseCurrentVisibleSessionAndUpstreamChannelOptions() {
+        advance(1000);
         other.onDesktopNotification("Background", "Ignored");
         ReflectionHelpers.setField(activity, "mIsVisible", false);
         current.onDesktopNotification("Hidden", "Ignored");
@@ -101,14 +94,26 @@ public class TerminalOscUiTest {
         assertEquals("<b>Done 😀</b>", notification.extras.getString(Notification.EXTRA_TEXT));
         assertEquals("<b>Done 😀</b>", notification.extras.getString(Notification.EXTRA_BIG_TEXT));
         assertEquals("termux_osc_notification_channel", notification.getChannelId());
+        NotificationChannel channel = ((NotificationManager) activity.getSystemService(
+            Context.NOTIFICATION_SERVICE)).getNotificationChannel(notification.getChannelId());
+        assertEquals("Terminal notifications", channel.getName().toString());
+        assertEquals(NotificationManager.IMPORTANCE_DEFAULT, channel.getImportance());
+        assertEquals(Notification.PRIORITY_DEFAULT, notification.priority);
+        assertEquals(0, notification.defaults);
+        assertNull(notification.deleteIntent);
+        assertEquals(R.drawable.ic_service_notification, notification.getSmallIcon().getResId());
         assertTrue((notification.flags & Notification.FLAG_AUTO_CANCEL) != 0);
+        assertTrue(notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN));
         assertTrue(notification.contentIntent.isImmutable());
-        assertEquals(TermuxActivity.class.getName(),
-            Shadows.shadowOf(notification.contentIntent).getSavedIntent().getComponent().getClassName());
+        Intent target = Shadows.shadowOf(notification.contentIntent).getSavedIntent();
+        assertEquals(TermuxActivity.class.getName(), target.getComponent().getClassName());
+        assertEquals(Intent.FLAG_ACTIVITY_NEW_TASK, target.getFlags());
+        assertNull(target.getExtras());
     }
 
     @Test
-    public void notificationsThrottleBurstsAndDuplicatesWithoutDroppingFirstRequest() {
+    public void notificationsUseUpstreamBurstAndDuplicateWindows() {
+        advance(1000);
         current.onDesktopNotification("", "First");
         assertEquals(1, notifications.getAllNotifications().size());
         assertEquals(TermuxConstants.TERMUX_APP_NAME,
@@ -127,29 +132,45 @@ public class TerminalOscUiTest {
     }
 
     @Test
-    public void notificationLimitsKeepUnicodeCodePointsWhole() {
-        // Android 12 caps each field at 1024 UTF-16 units. The emoji cannot
-        // fit in the final unit and must be removed before Android truncates.
-        String prefix = String.join("", java.util.Collections.nCopies(1023, "x"));
-        current.onDesktopNotification(prefix + "😀", prefix + "😀");
-        Notification notification = notifications.getAllNotifications().get(0);
-        assertEquals(prefix, notification.extras.getString(Notification.EXTRA_TITLE));
-        assertEquals(prefix, notification.extras.getString(Notification.EXTRA_TEXT));
-        assertEquals(prefix, notification.extras.getString(Notification.EXTRA_BIG_TEXT));
+    @Config(shadows = SessionWithTitle.class)
+    public void emptyNotificationTitleUsesTheUnmodifiedSessionTitle() {
+        advance(1000);
+        current.onDesktopNotification("\u0007", "Use the session title");
+        assertEquals(SessionWithTitle.TITLE,
+            notifications.getAllNotifications().get(0).extras.getString(Notification.EXTRA_TITLE));
     }
 
     @Test
-    public void notificationLimitRetainsFittingEmojiAndThrottlesIdenticalDisplayedText() {
-        String displayed = String.join("", java.util.Collections.nCopies(1022, "x")) + "😀";
-        current.onDesktopNotification(displayed + "first tail", displayed + "first tail");
+    public void notificationSanitizationUsesTheUpstream4096UnitLimit() {
+        // Test the upstream sanitizer before Android applies its own field limits.
+        String prefix = String.join("", Collections.nCopies(4095, "x"));
+        assertEquals(prefix, sanitizeNotification(prefix + "😀"));
+        String fitting = String.join("", Collections.nCopies(4094, "x")) + "😀";
+        assertEquals(fitting, sanitizeNotification(fitting + "tail"));
+        assertEquals("a\n\tb", sanitizeNotification("\u0001a\n\t\u007f\u0080b"));
+        assertNull(sanitizeNotification(null));
+    }
+
+    @Test
+    public void notificationsCompareSanitizedInputBeforeAndroidDisplayTruncation() {
+        advance(1000);
+        String prefix = String.join("", Collections.nCopies(4096, "x"));
+        current.onDesktopNotification("Build", prefix + "first tail");
+        assertEquals(1, notifications.getAllNotifications().size());
+        String platformPrefix = prefix.substring(0, 1024);
         Notification notification = notifications.getAllNotifications().get(0);
-        assertEquals(displayed, notification.extras.getString(Notification.EXTRA_TITLE));
-        assertEquals(displayed, notification.extras.getString(Notification.EXTRA_TEXT));
-        assertEquals(displayed, notification.extras.getString(Notification.EXTRA_BIG_TEXT));
+        assertEquals(platformPrefix, notification.extras.getString(Notification.EXTRA_TEXT));
+        assertEquals(platformPrefix, notification.extras.getString(Notification.EXTRA_BIG_TEXT));
+        advance(1000);
+        current.onDesktopNotification("Build", prefix + "different tail");
+        assertEquals(1, notifications.getAllNotifications().size());
 
         advance(1000);
-        current.onDesktopNotification(displayed + "different tail", displayed + "different tail");
-        assertEquals(1, notifications.getAllNotifications().size());
+        current.onDesktopNotification("Build", platformPrefix + "second message");
+        assertEquals(2, notifications.getAllNotifications().size());
+        advance(1000);
+        current.onDesktopNotification("Build", platformPrefix + "third message");
+        assertEquals(3, notifications.getAllNotifications().size());
     }
 
     @Test
@@ -261,99 +282,26 @@ public class TerminalOscUiTest {
         assertEquals(View.GONE, progress.getVisibility());
     }
 
-    @Test
-    public void cardsShowLatestTaskStateAndDetailsWithoutChangingOtherSessionSelection() {
-        makeDrawer();
-        current.onProgramStatusReport(WORKING, KIND_NONE, 25, "build", "cargo", "Compile", "");
-        current.onProgramStatusReport(BLOCKED, KIND_QUESTION, -1, "build/test", "", "Continue?", "<b>Yes 😀</b>");
-        measureDrawer();
-        View card = card(current);
-        TextView status = card.findViewById(R.id.session_program_status);
-        assertEquals(View.VISIBLE, status.getVisibility());
-        assertEquals(2, status.getMaxLines());
-        assertTrue(status.getText().toString().startsWith("Blocked · Answer needed · cargo · build/test"));
-        assertTrue(status.getText().toString().contains("25%"));
-        assertTrue(card.getHeight() > Math.round(64 * card.getResources().getDisplayMetrics().density));
-        assertTrue(status.getContentDescription().toString().contains("Task status"));
-
-        card.findViewById(R.id.session_card_content).performClick();
-        AlertDialog details = (AlertDialog) ShadowDialog.getLatestDialog();
-        assertNotNull(details);
-        String message = ((TextView) details.findViewById(android.R.id.message)).getText().toString();
-        assertTrue(message.contains("<b>Yes 😀</b>"));
-        assertTrue(message.contains("Compile"));
-        assertSame(current, activity.getCurrentSession());
-        details.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-
-        card(other).findViewById(R.id.session_card_content).performClick();
-        assertSame(other, activity.getCurrentSession());
-    }
-
-    @Test
-    public void cardUpdatesDetectStatusChangesAndDismissOnlyFinishedTasks() {
-        makeDrawer();
-        current.onProgramStatusReport(DONE, KIND_NONE, -1, "finished", "", "Built", "");
-        current.onProgramStatusReport(ERROR, KIND_NONE, -1, "failed", "", "Failed", "");
-        current.onProgramStatusReport(WORKING, KIND_NONE, 5, "active", "", "Running", "");
-        measureDrawer();
-        current.onProgramStatusReport(WORKING, KIND_NONE, 80, "active", "", "Running", "");
-        measureDrawer();
-        TextView status = card(current).findViewById(R.id.session_program_status);
-        assertTrue(status.getText().toString().contains("80%"));
-        card(current).findViewById(R.id.session_card_content).performClick();
-        AlertDialog details = (AlertDialog) ShadowDialog.getLatestDialog();
-        details.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
-        measureDrawer();
-        assertEquals(1, current.getProgramStatuses().size());
-        assertEquals("active", current.getProgramStatuses().get(0).id);
-        assertFalse(status.getText().toString().contains("Built"));
-        current.onProgramStatusPrompt();
-        measureDrawer();
-        assertEquals(View.GONE, status.getVisibility());
-        assertEquals(View.GONE, card(other).findViewById(R.id.session_program_status).getVisibility());
-    }
-
     private TerminalSession session(String name) {
         TerminalSession session = new TerminalSession("", "", new String[0], new String[0], 100, client);
         session.mSessionName = name;
         return session;
     }
 
-    private void makeDrawer() {
-        activity.getSharedPreferences("terminal_bookmarks", 0).edit().clear().commit();
-        for (TerminalSession terminal : new TerminalSession[]{current, other}) {
-            sessions.add(ReflectionHelpers.callConstructor(TermuxSession.class,
-                ClassParameter.from(TerminalSession.class, terminal),
-                ClassParameter.from(ExecutionCommand.class, new ExecutionCommand()),
-                ClassParameter.from(TermuxSession.TermuxSessionClient.class,
-                    (TermuxSession.TermuxSessionClient) sessions::remove),
-                ClassParameter.from(boolean.class, false)));
-        }
-        activity.mDrawerAdapter = new TerminalDrawerAdapter(activity, new TerminalBookmarkStore(activity), item -> {});
-        activity.mDrawerAdapter.setSessions(sessions);
-    }
-
-    private View card(TerminalSession session) {
-        TerminalDrawerRecyclerView list = activity.findViewById(R.id.terminal_drawer_list);
-        int position = activity.mDrawerAdapter.findSessionPosition(session);
-        RecyclerView.ViewHolder holder = list.findViewHolderForAdapterPosition(position);
-        assertNotNull(holder);
-        return holder.itemView;
-    }
-
-    private void measureDrawer() {
-        View drawer = activity.findViewById(R.id.left_drawer);
-        float density = drawer.getResources().getDisplayMetrics().density;
-        int width = Math.round(320 * density), height = Math.round(640 * density);
-        for (int i = 0; i < 2; i++) {
-            drawer.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
-            drawer.layout(0, 0, width, height);
-            Shadows.shadowOf(Looper.getMainLooper()).idle();
-        }
+    private static String sanitizeNotification(String value) {
+        return ReflectionHelpers.callStaticMethod(TermuxTerminalSessionActivityClient.class,
+            "sanitizeOscNotificationText", ClassParameter.from(String.class, value));
     }
 
     private static void advance(long millis) {
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(millis));
+    }
+
+    @Implements(value = TerminalSession.class, isInAndroidSdk = false)
+    public static class SessionWithTitle {
+        static final String TITLE = "Session\u0007\u007f";
+
+        @Implementation
+        protected String getTitle() { return TITLE; }
     }
 }

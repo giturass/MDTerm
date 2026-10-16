@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="terminal_notification_channel_name">Terminal notifications</string>
     <string name="terminal_progress_description_default">Terminal progress</string>
     <string name="terminal_progress_description">Terminal progress: %1$s, %2$d%%</string>
     <string name="terminal_progress_description_indeterminate">Terminal progress: %1$s</string>
@@ -10,20 +9,5 @@
         <item>Error</item>
         <item>Working</item>
         <item>Paused</item>
-    </string-array>
-    <string name="program_status_details">Task status · Session %1$d</string>
-    <string name="program_status_dismiss_finished">Dismiss finished</string>
-    <string-array name="program_status_states">
-        <item>Idle</item>
-        <item>Working</item>
-        <item>Done</item>
-        <item>Blocked</item>
-        <item>Error</item>
-    </string-array>
-    <string-array name="program_status_kinds">
-        <item></item>
-        <item>Approval needed</item>
-        <item>Answer needed</item>
-        <item>Login needed</item>
     </string-array>
 </resources>

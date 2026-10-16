@@ -136,12 +136,16 @@ URL text in the transcript.
 
 ## Notifications, progress and task status
 
-OSC 9 and OSC 777 notification sequences create Android notifications for the
-currently visible session. Tapping a notification opens the app.
-Android notification permissions and channel settings still apply. Requests
-are limited to one per second, with identical notifications suppressed for
-five seconds. Title and body are limited to 1024 UTF-16 code units, keeping
-each Unicode code point intact. For example:
+OSC 9 and OSC 777 notification handling matches the upstream reference commit:
+only the current session can notify while the activity is visible. Tapping a
+notification opens the app. The `termux_osc_notification_channel` channel is
+named `Terminal notifications` and uses Android's default importance; Android
+notification permissions and channel settings still apply. Requests are limited
+to one per second, with identical sanitized title/body pairs suppressed for five
+seconds. The sanitizer removes control characters except tabs and newlines and
+limits incoming title/body fields to 4096 UTF-16 code units without splitting
+code points. Android can apply its own shorter display limit. An empty title
+falls back to the session title or app name; an empty body is ignored. For example:
 
 ```sh
 printf '\033]9;Build finished\007'
@@ -160,12 +164,11 @@ printf '\033]9;4;1;40\007'  # 40 percent
 printf '\033]9;4;0\007'     # Hide progress
 ```
 
-OSC 7501 task records appear on their session's drawer card, including updates
-from other sessions. Tap the current session card to read the full details or
-dismiss finished tasks. Records support idle, working, done, blocked and error
-states, progress and parent/child tasks; `title` and `msg` fields use base64.
-The store retains up to 64 records. A prompt or process exit clears transient
-states while preserving done/error records until dismissed or explicitly cleared.
+OSC 7501 task records are stored per session. Records support idle, working,
+done, blocked and error states, progress and parent/child tasks; `title` and
+`msg` fields use base64. The store retains up to 64 records. A prompt or process
+exit clears transient states while preserving done/error records until explicitly
+cleared. Session cards retain their original appearance and actions.
 
 ```sh
 printf '\033]7501;state=working:id=build:app=cargo:progress=40\007'
@@ -259,13 +262,13 @@ shadow of the native terminal; they do not establish Vulkan driver compatibility
 Prompt regressions cover menu/shortcut dispatch, disabled shortcuts, pending
 flings, text selection and uncommitted IME text. Additional regressions cover
 IME configuration and commits, search input/navigation/lifecycle, hyperlink
-targeting, notification throttling, progress timeouts, task cards and compression
+targeting, notification throttling, progress timeouts, task records and compression
 scheduling. Resource tests cover repeated installation, repair, failures,
 Nushell autoload, system rc preservation and shell environments. Native C API
 tests cover protocol parsing, search, prompt grouping and navigation boundaries.
 
 Use a CI-built APK on a compatible Android device to check Kitty images and
-animation, IME composition, notifications, progress, task cards, search,
+animation, IME composition, notifications, progress, search,
 hyperlink actions, custom fonts, theme reload, rotation, session switching,
 and rapid session closure while output is arriving. Use the workflow artifacts
 for those device checks; do not build on the local Termux device.

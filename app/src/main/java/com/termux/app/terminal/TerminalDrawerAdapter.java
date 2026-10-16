@@ -19,7 +19,6 @@ import com.termux.app.TermuxActivity;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
-import com.termux.terminal.ProgramStatusStore;
 import com.termux.terminal.TerminalSession;
 
 import java.util.ArrayList;
@@ -47,8 +46,6 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
     private final TerminalBookmarkStore store;
     private final OnBookmarkClickListener bookmarkClickListener;
     private final TerminalDrawerRecyclerView list;
-    private final String[] programStatusStates;
-    private final String[] programStatusKinds;
     private final Handler summaryHandler = new Handler(Looper.getMainLooper());
     private final Map<TerminalSession, Runnable> summaryIdleCallbacks = new HashMap<>();
     private final Map<Object, Long> itemIds = new HashMap<>();
@@ -63,8 +60,6 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         this.activity = activity;
         this.store = store;
         bookmarkClickListener = listener;
-        programStatusStates = activity.getResources().getStringArray(R.array.program_status_states);
-        programStatusKinds = activity.getResources().getStringArray(R.array.program_status_kinds);
         bookmarks = store.getAll();
         setHasStableIds(true);
         rows = snapshotRows();
@@ -201,7 +196,7 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
             }
             String label = environment.isEmpty() ? displayPath : environment + " · " + displayPath;
             result.add(new Row(BOOKMARK, itemId(bookmark.id), bookmark, null, 0,
-                bookmark.name, label, "", false, false, 0, 0));
+                bookmark.name, label, false, false, 0, 0));
         }
         result.add(Row.header(1, R.id.terminal_sessions_header, R.string.terminal_sessions_header));
         for (int i = 0; i < sessions.size(); i++) {
@@ -210,7 +205,6 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
             TerminalSession session = item.getTerminalSession();
             result.add(new Row(SESSION, itemId(item), null, session, i + 1,
                 session == null ? null : session.mSessionName, session == null ? null : session.getTitle(),
-                session == null ? "" : programStatusText(session.getProgramStatuses()),
                 session != null && session == activity.getCurrentSession(),
                 session != null && session.isRunning(), 0, 0));
         }
@@ -301,19 +295,6 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         // Preserve a marquee through unrelated output, selection and name changes.
         if (!TextUtils.equals(card.summary.getText(), row.summary)) card.summary.setText(row.summary);
         card.summary.setVisibility(TextUtils.isEmpty(row.summary) ? View.GONE : View.VISIBLE);
-        if (!TextUtils.equals(card.status.getText(), row.programStatus)) card.status.setText(row.programStatus);
-        boolean hasProgramStatus = !TextUtils.isEmpty(row.programStatus);
-        card.status.setVisibility(hasProgramStatus ? View.VISIBLE : View.GONE);
-        card.status.setContentDescription(!hasProgramStatus ? null
-            : activity.getString(R.string.program_status_details, row.number) + ": " + row.programStatus);
-        // Ordinary sessions and bookmarks keep the same height, including after status removal
-        // or recycling a card that previously displayed task details.
-        ViewGroup.LayoutParams layoutParams = card.itemView.getLayoutParams();
-        int height = hasProgramStatus ? ViewGroup.LayoutParams.WRAP_CONTENT : card.defaultHeight;
-        if (layoutParams.height != height) {
-            layoutParams.height = height;
-            card.itemView.setLayoutParams(layoutParams);
-        }
     }
 
     @Override
@@ -348,17 +329,6 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         if (row.type == BOOKMARK) {
             bookmarkClickListener.onBookmarkClick(row.bookmark);
         } else if (row.session != null) {
-            List<ProgramStatusStore.Record> statuses = row.session.getProgramStatuses();
-            if (row.session == activity.getCurrentSession() && !statuses.isEmpty()) {
-                new MaterialAlertDialogBuilder(activity)
-                    .setTitle(activity.getString(R.string.program_status_details, row.number))
-                    .setMessage(programStatusText(statuses))
-                    .setPositiveButton(android.R.string.ok, null)
-                    .setNeutralButton(R.string.program_status_dismiss_finished,
-                        (dialog, which) -> row.session.dismissFinishedProgramStatuses())
-                    .show();
-                return;
-            }
             activity.getTermuxTerminalSessionClient().setCurrentSession(row.session);
             activity.getDrawer().closeDrawers();
         }
@@ -369,24 +339,6 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         if (row == null) return;
         if (row.type == BOOKMARK) showBookmarkMenu(holder.menu, row.bookmark);
         else if (row.session != null) showSessionMenu(holder.menu, row.session);
-    }
-
-    /** Newest reports first; dialog text retains every field and treats it as plain text. */
-    private String programStatusText(List<ProgramStatusStore.Record> records) {
-        StringBuilder text = new StringBuilder();
-        for (int i = records.size() - 1; i >= 0; i--) {
-            ProgramStatusStore.Record record = records.get(i);
-            if (text.length() > 0) text.append("\n\n");
-            text.append(programStatusStates[record.state]);
-            if (record.kind != ProgramStatusStore.KIND_NONE)
-                text.append(" · ").append(programStatusKinds[record.kind]);
-            if (record.progress >= 0) text.append(" · ").append(record.progress).append('%');
-            if (!record.app.isEmpty()) text.append(" · ").append(record.app);
-            if (!record.id.isEmpty()) text.append(" · ").append(record.id);
-            if (!record.title.isEmpty()) text.append(" · ").append(record.title);
-            if (!record.message.isEmpty()) text.append("\n").append(record.message);
-        }
-        return text.toString();
     }
 
     private void showSessionMenu(View anchor, TerminalSession session) {
@@ -451,18 +403,14 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         final TextView number;
         final TextView name;
         final TextView summary;
-        final TextView status;
         final View menu;
-        final int defaultHeight;
         long boundId = RecyclerView.NO_ID;
 
         CardHolder(View view) {
             super(view);
-            defaultHeight = view.getLayoutParams().height;
             number = view.findViewById(R.id.session_number);
             name = view.findViewById(R.id.session_name);
             summary = view.findViewById(R.id.session_title);
-            status = view.findViewById(R.id.session_program_status);
             menu = view.findViewById(R.id.session_menu_button);
             view.findViewById(R.id.session_card_content).setOnClickListener(ignored -> openCard(this));
             menu.setOnClickListener(ignored -> showMenu(this));
@@ -478,15 +426,13 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         final int number;
         final String name;
         final String summary;
-        final String programStatus;
         final boolean current;
         final boolean running;
         final int headerId;
         final int headerText;
 
         Row(int type, long id, TerminalBookmark bookmark, TerminalSession session, int number,
-            String name, String summary, String programStatus, boolean current, boolean running,
-            int headerId, int headerText) {
+            String name, String summary, boolean current, boolean running, int headerId, int headerText) {
             this.type = type;
             this.id = id;
             this.bookmark = bookmark;
@@ -494,7 +440,6 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
             this.number = number;
             this.name = name;
             this.summary = summary;
-            this.programStatus = programStatus;
             this.current = current;
             this.running = running;
             this.headerId = headerId;
@@ -502,13 +447,12 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
         }
 
         static Row header(long id, int viewId, int textId) {
-            return new Row(HEADER, id, null, null, 0, null, null, "", false, false, viewId, textId);
+            return new Row(HEADER, id, null, null, 0, null, null, false, false, viewId, textId);
         }
 
         boolean sameContent(Row other) {
             return number == other.number && current == other.current && running == other.running
-                && TextUtils.equals(name, other.name) && TextUtils.equals(summary, other.summary)
-                && TextUtils.equals(programStatus, other.programStatus);
+                && TextUtils.equals(name, other.name) && TextUtils.equals(summary, other.summary);
         }
     }
 }

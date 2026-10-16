@@ -3,7 +3,7 @@ MDTerm for Android 12+ (arm64-v8a, Vulkan 1.1 level 1), based on [Termux v0.119.
 - Ghostty `libghostty-vt` terminal core and Vulkan presentation, adapted from [XYenon/termux-app-ghostty](https://github.com/XYenon/termux-app-ghostty), with Kitty images and animations. Matching `xterm-ghostty` terminfo is installed automatically.
 - Material Design 3 interface, wallpaper dynamic colors, and Simplified Chinese.
 - Retained MDTerm terminal controls, settings, session management and bookmarks. Normal IME composition replaces the cursor preview, with `enable-ime-input` enabled by default.
-- OSC 9/777 Android notifications, OSC 9;4 progress, and OSC 7501 task status on session cards with details and dismissal of finished tasks.
+- Upstream-compatible OSC 9/777 Android notifications and OSC 9;4 progress. OSC 7501 task records are stored per session; session cards retain their existing layout and actions.
 - Terminal search from the menu or Ctrl+Alt+F, and Open link / Copy link actions for OSC 8 hyperlinks.
 - Background scrollback compression under Android memory pressure, and automatic loading of the Nushell Ghostty integration module.
 - Uses the baseline's `2025.03.28-r1+apt-android-7` bootstrap and second-stage initialization. Kitty images use the Ghostty renderer; the later upstream Termux Sixel/iTerm implementation is not included.

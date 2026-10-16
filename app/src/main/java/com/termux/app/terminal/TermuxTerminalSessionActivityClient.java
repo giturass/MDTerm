@@ -60,13 +60,12 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     private static final int MAX_SESSIONS = 8;
 
-    // Android 12 Notification.safeCharSequence truncates title/text/bigText at
-    // 1024 UTF-16 units. Apply that limit before the builder can split a pair.
-    private static final int MAX_OSC_NOTIFICATION_CHARS = 1024;
+    private static final int MAX_OSC_NOTIFICATION_CHARS = 4096;
     private static final long OSC_NOTIFICATION_MIN_INTERVAL_MS = 1000;
     private static final long OSC_NOTIFICATION_DUPLICATE_INTERVAL_MS = 5000;
     private static final long OSC_PROGRESS_TIMEOUT_MS = 15000;
     private static final String OSC_NOTIFICATION_CHANNEL_ID = "termux_osc_notification_channel";
+    private static final String OSC_NOTIFICATION_CHANNEL_NAME = "Terminal notifications";
     private long mLastOscNotificationTime;
     private String mLastOscNotificationTitle;
     private String mLastOscNotificationBody;
@@ -195,11 +194,6 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         termuxSessionListNotifyUpdated();
     }
 
-    @Override
-    public void onProgramStatusChanged(@NonNull TerminalSession session) {
-        if (mActivity.isVisible()) termuxSessionListNotifyUpdated();
-    }
-
     /** OSC 9/777 follows upstream: only the visible, current session may notify. */
     @Override
     public void onDesktopNotification(@NonNull TerminalSession session,
@@ -207,19 +201,23 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         if (!mActivity.isVisible() || mActivity.getCurrentSession() != session) return;
         title = sanitizeOscNotificationText(title);
         body = sanitizeOscNotificationText(body);
-        if (TextUtils.isEmpty(title)) title = sanitizeOscNotificationText(session.getTitle());
-        if (TextUtils.isEmpty(title)) title = TermuxConstants.TERMUX_APP_NAME;
+        if (TextUtils.isEmpty(title)) title = TextUtils.isEmpty(session.getTitle())
+            ? TermuxConstants.TERMUX_APP_NAME : session.getTitle();
         if (TextUtils.isEmpty(body)) return;
 
         long now = SystemClock.elapsedRealtime();
-        if (mLastOscNotificationBody != null &&
-            (now - mLastOscNotificationTime < OSC_NOTIFICATION_MIN_INTERVAL_MS ||
-             (TextUtils.equals(title, mLastOscNotificationTitle) &&
-              TextUtils.equals(body, mLastOscNotificationBody) &&
-              now - mLastOscNotificationTime < OSC_NOTIFICATION_DUPLICATE_INTERVAL_MS))) return;
+        if (now - mLastOscNotificationTime < OSC_NOTIFICATION_MIN_INTERVAL_MS ||
+            (TextUtils.equals(title, mLastOscNotificationTitle) &&
+             TextUtils.equals(body, mLastOscNotificationBody) &&
+             now - mLastOscNotificationTime < OSC_NOTIFICATION_DUPLICATE_INTERVAL_MS)) {
+            return;
+        }
+        mLastOscNotificationTime = now;
+        mLastOscNotificationTitle = title;
+        mLastOscNotificationBody = body;
 
         NotificationUtils.setupNotificationChannel(mActivity, OSC_NOTIFICATION_CHANNEL_ID,
-            mActivity.getString(R.string.terminal_notification_channel_name),
+            OSC_NOTIFICATION_CHANNEL_NAME,
             NotificationManager.IMPORTANCE_DEFAULT);
         PendingIntent intent = PendingIntent.getActivity(mActivity, 0,
             TermuxActivity.newInstance(mActivity),
@@ -232,9 +230,6 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             builder.setSmallIcon(R.drawable.ic_service_notification)
                 .setAutoCancel(true).setShowWhen(true);
             manager.notify(TermuxNotificationUtils.getNextNotificationId(mActivity), builder.build());
-            mLastOscNotificationTime = now;
-            mLastOscNotificationTitle = title;
-            mLastOscNotificationBody = body;
         }
     }
 
@@ -291,8 +286,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             i += charCount;
             if (clean.length() + charCount > MAX_OSC_NOTIFICATION_CHARS) break;
             if (codePoint == '\n' || codePoint == '\t' ||
-                (codePoint >= 0x20 && (codePoint < 0x7f || codePoint > 0x9f)))
+                (codePoint >= 0x20 && (codePoint < 0x7f || codePoint > 0x9f))) {
                 clean.appendCodePoint(codePoint);
+            }
         }
         return clean.toString();
     }

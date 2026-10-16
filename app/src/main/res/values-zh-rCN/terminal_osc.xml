@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="terminal_notification_channel_name">终端通知</string>
     <string name="terminal_progress_description_default">终端进度</string>
     <string name="terminal_progress_description">终端进度：%1$s，%2$d%%</string>
     <string name="terminal_progress_description_indeterminate">终端进度：%1$s</string>
@@ -10,20 +9,5 @@
         <item>出错</item>
         <item>进行中</item>
         <item>已暂停</item>
-    </string-array>
-    <string name="program_status_details">任务状态 · 会话 %1$d</string>
-    <string name="program_status_dismiss_finished">清除已完成任务</string>
-    <string-array name="program_status_states">
-        <item>空闲</item>
-        <item>进行中</item>
-        <item>已完成</item>
-        <item>等待处理</item>
-        <item>出错</item>
-    </string-array>
-    <string-array name="program_status_kinds">
-        <item></item>
-        <item>需要授权</item>
-        <item>需要回答</item>
-        <item>需要登录</item>
     </string-array>
 </resources>
