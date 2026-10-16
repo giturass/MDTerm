@@ -207,7 +207,8 @@ public class TerminalSearchTest {
     public void searchCancelsFlingAndSelectionAndPreservesTheViewportUntilDismissal() {
         appendHistory();
         view.setTopRow(-5);
-        TextSelectionCursorController selection = view.getTextSelectionCursorController();
+        TextSelectionCursorController selection = ReflectionHelpers.callInstanceMethod(
+            view, "getTextSelectionCursorController");
         ReflectionHelpers.setField(selection, "mIsSelectingText", true);
         Scroller scroller = ReflectionHelpers.getField(view, "mScroller");
         scroller.startScroll(0, 0, 0, 100, 1000);
