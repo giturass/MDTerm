@@ -19,18 +19,17 @@ import com.termux.R;
 import com.termux.app.terminal.TerminalBookmark;
 import com.termux.app.terminal.TerminalBookmarkStore;
 import com.termux.app.terminal.TerminalDrawerAdapter;
-import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
+import com.termux.app.terminal.TermuxTerminalSessionClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
-import com.termux.shared.shell.command.ExecutionCommand;
+import com.termux.shared.models.ExecutionCommand;
 import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
-import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
-import com.termux.shared.termux.shell.TermuxShellManager;
-import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
-import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
-import com.termux.terminal.GhosttyTerminal;
+import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxPreferenceConstants;
+import com.termux.app.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.shell.TermuxSession;
+import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Before;
@@ -50,7 +49,6 @@ import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,10 +76,9 @@ public class BookmarkStartupTest {
             .putBoolean(TermuxPreferenceConstants.TERMUX_APP.KEY_SHOW_TERMINAL_TOOLBAR, true)
             .putBoolean(TermuxPreferenceConstants.TERMUX_APP.KEY_SOFT_KEYBOARD_ENABLED, true)
             .commit());
-        TermuxAppSharedProperties.init(application).loadTermuxPropertiesFromDisk();
+        new TermuxAppSharedProperties(application).loadTermuxPropertiesFromDisk();
         bookmarks = new TerminalBookmarkStore(application);
         service = Robolectric.buildService(TermuxService.class).get();
-        ReflectionHelpers.setField(service, "mShellManager", new TermuxShellManager(application));
         ShadowInstaller.calls = 0;
         ShadowInstaller.pending = null;
     }
@@ -167,7 +164,7 @@ public class BookmarkStartupTest {
         assertEquals(directory, createdCommands().get(0).workingDirectory);
         assertEquals(1, service.getTermuxSessionsSize());
         assertSame(service.getTermuxSession(0).getTerminalSession(), activity.getCurrentSession());
-        assertSame(activity.getCurrentSession().getTerminal(), activity.getTerminalView().getTerminal());
+        assertSame(activity.getCurrentSession().getEmulator(), activity.getTerminalView().mEmulator);
         assertTerminalVisible();
         activity.getTermuxTerminalViewClient().onToggleSoftKeyboardRequest();
         assertTrue(Shadows.shadowOf(input()).isSoftInputVisible());
@@ -279,92 +276,27 @@ public class BookmarkStartupTest {
         java.util.Map<String, Object> properties = ReflectionHelpers.getField(shared, "mMap");
         properties.put(TermuxPropertyConstants.KEY_TERMINAL_CURSOR_BLINK_RATE, 500);
         connect();
-        GhosttyTerminal oldTerminal = previous.getTerminalSession().getTerminal();
-        assertTrue(isCursorBlinkVisible());
+        TerminalEmulator oldEmulator = previous.getTerminalSession().getEmulator();
+        assertTrue(oldEmulator.shouldCursorBeVisible());
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
-        assertFalse(isCursorBlinkVisible());
-        assertTrue(oldTerminal.isCursorVisible());
+        assertFalse(oldEmulator.shouldCursorBeVisible());
 
         service.getTermuxSessions().clear();
         activity.termuxSessionListNotifyUpdated();
         assertEmptyNavigation();
-        assertTrue(isCursorBlinkVisible());
+        assertTrue(oldEmulator.shouldCursorBeVisible());
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
-        assertTrue(isCursorBlinkVisible());
+        assertTrue(oldEmulator.shouldCursorBeVisible());
 
         clickBookmark();
         measureDrawer();
-        GhosttyTerminal currentTerminal = activity.getCurrentSession().getTerminal();
-        assertNotSame(oldTerminal, currentTerminal);
-        assertSame(currentTerminal, activity.getTerminalView().getTerminal());
-        assertTrue(isCursorBlinkVisible());
+        TerminalEmulator currentEmulator = activity.getCurrentSession().getEmulator();
+        assertNotSame(oldEmulator, currentEmulator);
+        assertSame(currentEmulator, activity.getTerminalView().mEmulator);
+        assertTrue(currentEmulator.shouldCursorBeVisible());
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
-        assertFalse(isCursorBlinkVisible());
-        assertTrue(currentTerminal.isCursorVisible());
-        assertTrue(oldTerminal.isCursorVisible());
-    }
-
-    @Test
-    public void cursorBlinkingContinuesAfterDirectSessionSwitchAndDisablingRestoresVisibility() {
-        TermuxSession first = existingSession();
-        host(new Intent(Intent.ACTION_MAIN), false);
-        Object shared = ReflectionHelpers.getField(activity.getProperties(), "mSharedProperties");
-        java.util.Map<String, Object> properties = ReflectionHelpers.getField(shared, "mMap");
-        properties.put(TermuxPropertyConstants.KEY_TERMINAL_CURSOR_BLINK_RATE, 500);
-        connect();
-        assertSame(first.getTerminalSession(), activity.getCurrentSession());
-        assertTrue(isCursorBlinkVisible());
-        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
-        assertFalse(isCursorBlinkVisible());
-
-        TermuxSession second = existingSession();
-        assertNotNull(second.getTerminalSession().getTerminal());
-        activity.getTermuxTerminalSessionClient().setCurrentSession(second.getTerminalSession());
-        measureDrawer();
-
-        assertEquals(2, service.getTermuxSessionsSize());
-        assertSame(second.getTerminalSession(), activity.getCurrentSession());
-        assertSame(second.getTerminalSession().getTerminal(), activity.getTerminalView().getTerminal());
-        assertTrue(isCursorBlinkVisible());
-        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
-        assertFalse(isCursorBlinkVisible());
-
-        assertTrue(activity.getTerminalView().setTerminalCursorBlinkerRate(0));
-        assertTrue(isCursorBlinkVisible());
-        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1000));
-        assertTrue(isCursorBlinkVisible());
-    }
-
-    @Test
-    public void cursorBlinkingRestartsWhenOutputShowsCursorAfterSwitchToHiddenSession() {
-        TermuxSession first = existingSession();
-        host(new Intent(Intent.ACTION_MAIN), false);
-        Object shared = ReflectionHelpers.getField(activity.getProperties(), "mSharedProperties");
-        java.util.Map<String, Object> properties = ReflectionHelpers.getField(shared, "mMap");
-        properties.put(TermuxPropertyConstants.KEY_TERMINAL_CURSOR_BLINK_RATE, 500);
-        connect();
-        assertSame(first.getTerminalSession(), activity.getCurrentSession());
-
-        TerminalSession second = existingSession().getTerminalSession();
-        GhosttyTerminal terminal = second.getTerminal();
-        byte[] hideCursor = "\u001b[?25l".getBytes(StandardCharsets.UTF_8);
-        terminal.feed(hideCursor, 0, hideCursor.length);
-        assertFalse(terminal.isCursorVisible());
-        activity.getTermuxTerminalSessionClient().setCurrentSession(second);
-        measureDrawer();
-        activity.getTermuxTerminalSessionClient().onTextChanged(second);
-        assertSame(second, activity.getCurrentSession());
-        assertTrue(isCursorBlinkVisible());
-        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
-        assertTrue(isCursorBlinkVisible());
-
-        byte[] showCursor = "\u001b[?25h".getBytes(StandardCharsets.UTF_8);
-        terminal.feed(showCursor, 0, showCursor.length);
-        activity.getTermuxTerminalSessionClient().onTextChanged(second);
-        assertTrue(terminal.isCursorVisible());
-        assertTrue(isCursorBlinkVisible());
-        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
-        assertFalse(isCursorBlinkVisible());
+        assertFalse(currentEmulator.shouldCursorBeVisible());
+        assertTrue(oldEmulator.shouldCursorBeVisible());
     }
 
     @Test
@@ -392,15 +324,19 @@ public class BookmarkStartupTest {
         assertNotNull(preferences);
         assertTrue(preferences.shouldShowTerminalToolbar());
         ReflectionHelpers.setField(activity, "mPreferences", preferences);
-        ReflectionHelpers.setField(activity, "mProperties", TermuxAppSharedProperties.getProperties());
+        ReflectionHelpers.setField(activity, "mProperties", new TermuxAppSharedProperties(activity));
         ReflectionHelpers.setField(activity, "mIsVisible", true);
         ReflectionHelpers.setField(activity, "mIsActivityRecreated", recreated);
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
-        TermuxTerminalSessionActivityClient client = new TermuxTerminalSessionActivityClient(activity);
-        ReflectionHelpers.setField(activity, "mTermuxTerminalSessionActivityClient", client);
+        TermuxTerminalSessionClient client = new TermuxTerminalSessionClient(activity);
+        ReflectionHelpers.setField(activity, "mTermuxTerminalSessionClient", client);
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, client);
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
         activity.mTerminalView.setTextSize(20);
+        // Legacy Robolectric graphics have no usable font metrics for terminal resize.
+        Object renderer = ReflectionHelpers.getField(activity.mTerminalView, "mRenderer");
+        ReflectionHelpers.setField(renderer, "mFontWidth", 10f);
+        ReflectionHelpers.setField(renderer, "mFontLineSpacing", 20);
         activity.getTerminalToolbar().setVisibility(View.VISIBLE);
         ReflectionHelpers.setField(activity, "mBookmarkStore", bookmarks);
         ReflectionHelpers.setField(activity, "mDrawerAdapter",
@@ -434,7 +370,7 @@ public class BookmarkStartupTest {
     private void assertEmptyNavigation() {
         assertEquals(0, service.getTermuxSessionsSize());
         assertNull(activity.getCurrentSession());
-        assertNull(activity.getTerminalView().getTerminal());
+        assertNull(activity.getTerminalView().mEmulator);
         assertTrue(activity.isWaitingForSession());
         assertEquals(DrawerLayout.LOCK_MODE_LOCKED_OPEN, activity.getDrawer().getDrawerLockMode(Gravity.START));
         assertTrue(activity.getDrawer().isDrawerOpen(Gravity.START));
@@ -453,11 +389,6 @@ public class BookmarkStartupTest {
 
     private InputMethodManager input() {
         return (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-    }
-
-    private boolean isCursorBlinkVisible() {
-        // Blink timing belongs to the view; terminal cursor visibility is controlled by escape sequences.
-        return ReflectionHelpers.getField(activity.getTerminalView(), "mCursorVisible");
     }
 
     private void settle() {
@@ -506,20 +437,19 @@ public class BookmarkStartupTest {
     }
 
     private static TermuxSession syntheticSession(TermuxService service, ExecutionCommand command) {
-        TermuxShellManager manager = ReflectionHelpers.getField(service, "mShellManager");
         TermuxTerminalSessionClientBase client = new TermuxTerminalSessionClientBase();
         TerminalSession terminal = new TerminalSession("", command.workingDirectory,
             new String[0], new String[0], 100, client);
         ReflectionHelpers.setField(terminal, "mShellPid", 1234);
-        ReflectionHelpers.setField(terminal, "mTerminal", new GhosttyTerminal(terminal, 80, 24, 10, 20, 100));
+        ReflectionHelpers.setField(terminal, "mEmulator", new TerminalEmulator(terminal, 80, 24, 10, 20, 100, client));
         command.setState(ExecutionCommand.ExecutionState.EXECUTING);
         TermuxSession session = ReflectionHelpers.callConstructor(TermuxSession.class,
             ClassParameter.from(TerminalSession.class, terminal),
             ClassParameter.from(ExecutionCommand.class, command),
             ClassParameter.from(TermuxSession.TermuxSessionClient.class,
-                (TermuxSession.TermuxSessionClient) manager.mTermuxSessions::remove),
+                (TermuxSession.TermuxSessionClient) service.mTermuxSessions::remove),
             ClassParameter.from(boolean.class, false));
-        manager.mTermuxSessions.add(session);
+        service.mTermuxSessions.add(session);
         return session;
     }
 
@@ -541,9 +471,13 @@ public class BookmarkStartupTest {
         final List<ExecutionCommand> created = new ArrayList<>();
 
         @Implementation
-        protected TermuxSession createTermuxSession(ExecutionCommand command) {
+        protected TermuxSession createTermuxSession(ExecutionCommand command, String sessionName) {
+            // The stable service accepts the session name separately from ExecutionCommand.
+            // Intercept this overload before it discovers device SELinux state or starts a PTY.
             created.add(command);
-            return syntheticSession(service, command);
+            TermuxSession session = syntheticSession(service, command);
+            session.getTerminalSession().mSessionName = sessionName;
+            return session;
         }
     }
 
@@ -553,13 +487,8 @@ public class BookmarkStartupTest {
 
         @Implementation
         protected void updateSize(int columns, int rows, int cellWidthPixels, int cellHeightPixels) {
-            GhosttyTerminal terminal = session.getTerminal();
-            if (terminal == null) {
-                ReflectionHelpers.setField(session, "mTerminal", new GhosttyTerminal(session,
-                    columns, rows, cellWidthPixels, cellHeightPixels, 100));
-            } else {
-                terminal.resize(columns, rows, cellWidthPixels, cellHeightPixels);
-            }
+            // Keep emulator attachment and resizing real; only skip the native PTY ioctl.
+            session.getEmulator().resize(columns, rows, cellWidthPixels, cellHeightPixels);
         }
     }
 }

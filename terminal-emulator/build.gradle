@@ -1,29 +1,19 @@
 apply plugin: 'com.android.library'
 apply plugin: 'maven-publish'
 
-def nativeSourcesDir = rootProject.ext.nativeSourcesDir
-def ghosttyRoot = new File(project.buildDir, "ghostty")
-def ghosttyZigLocalCache = new File(project.buildDir, "ghostty-zig-cache")
-def nativeNdkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
-
 android {
     namespace "com.termux.emulator"
 
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
-    ndkVersion = nativeNdkVersion
+    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
 
     defaultConfig {
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
-        consumerProguardFiles 'consumer-rules.pro'
 
         externalNativeBuild {
-            cmake {
-                arguments "-DGHOSTTY_ROOT=" + ghosttyRoot.absolutePath,
-                    "-DLIBPNG_SRC=" + new File(nativeSourcesDir, "libpng").absolutePath,
-                    "-DFREETYPE_SRC=" + new File(nativeSourcesDir, "freetype").absolutePath,
-                    "-DHARFBUZZ_SRC=" + new File(nativeSourcesDir, "harfbuzz").absolutePath,
-                    "-DANDROID_STL=c++_static"
+            ndkBuild {
+                cFlags "-std=c11", "-Wall", "-Wextra", "-Werror", "-Os", "-fno-stack-protector", "-Wl,--gc-sections"
             }
         }
 
@@ -40,9 +30,8 @@ android {
     }
 
     externalNativeBuild {
-        cmake {
-            path "src/main/jni/CMakeLists.txt"
-            version project.properties.cmakeVersion
+        ndkBuild {
+            path "src/main/jni/Android.mk"
         }
     }
 
@@ -61,64 +50,6 @@ android {
             withJavadocJar()
             allVariants()
         }
-    }
-}
-
-def ghosttyBuild = tasks.register("buildGhosttyAndroid", Exec) {
-    group = "build"
-    description = "Build libghostty-vt for the selected Android ABIs."
-    dependsOn rootProject.tasks.named("prepareNativeSources")
-    workingDir rootProject.projectDir
-    commandLine "bash", "scripts/build-ghostty-android.sh"
-    environment "GHOSTTY_ANDROID_OUTPUT_ROOT", ghosttyRoot.absolutePath
-    environment "TERMUX_APP_ABIS", rootProject.ext.termuxAppAbis.join(",")
-    environment "ZIG_VERSION", project.properties.zigVersion
-    environment "ANDROID_NDK_VERSION", nativeNdkVersion
-    environment "ANDROID_API_LEVEL", project.properties.minSdkVersion
-    environment "NATIVE_SOURCES_DIR", nativeSourcesDir.absolutePath
-    environment "GHOSTTY_ZIG_LOCAL_CACHE_DIR", ghosttyZigLocalCache.absolutePath
-    environment "ZIG_GLOBAL_CACHE_DIR", new File(rootProject.buildDir, "zig-cache").absolutePath
-    rootProject.ext.nativeSourceRevisions.each { dependency, source ->
-        environment "${dependency.toUpperCase()}_REVISION", source.revision
-        inputs.property "nativeSource.${dependency}.revision", source.revision
-    }
-    inputs.property "apiLevel", project.properties.minSdkVersion
-    inputs.property "ndkVersion", nativeNdkVersion
-    inputs.property "zigVersion", project.properties.zigVersion
-    inputs.property "abis", rootProject.ext.termuxAppAbis.join(",")
-    inputs.files(
-        rootProject.file("native/patches/ghostty-android.patch"),
-        rootProject.file("scripts/build-ghostty-android.sh"),
-        rootProject.file("scripts/verify-native-deps.sh"))
-    rootProject.ext.termuxAppAbis.each { abi ->
-        outputs.file new File(ghosttyRoot, abi + "/lib/libghostty-vt.a")
-        outputs.dir new File(ghosttyRoot, abi + "/include/ghostty")
-    }
-    doFirst {
-        // Resolve through AGP so local.properties, ndkPath and SDK-installed
-        // NDKs all use the same toolchain as the CMake build.
-        environment "ANDROID_NDK_HOME", androidComponents.sdkComponents.ndkDirectory.get().asFile.absolutePath
-    }
-}
-
-tasks.register("testGhosttyNative", Exec) {
-    group = "verification"
-    description = "Run the pinned terminal and C API suites on the GitHub Actions host."
-    dependsOn ghosttyBuild
-    workingDir rootProject.projectDir
-    commandLine "bash", "scripts/test-ghostty-native.sh"
-    environment "GHOSTTY_REVISION", rootProject.ext.nativeSourceRevisions.ghostty.revision
-    environment "ZIG_VERSION", project.properties.zigVersion
-    environment "ZIG_GLOBAL_CACHE_DIR", new File(rootProject.buildDir, "zig-cache").absolutePath
-}
-
-// AGP resolves the imported archive and headers at CMake configuration time.
-// Depend on the single shared Zig task even when debug/release build together.
-tasks.configureEach { task ->
-    if (task.name.startsWith("configureCMake") ||
-            task.name.startsWith("buildCMake") ||
-            task.name.startsWith("generateJsonModel")) {
-        task.dependsOn ghosttyBuild
     }
 }
 
@@ -146,7 +77,7 @@ afterEvaluate {
                 from components.default
                 groupId = 'com.termux'
                 artifactId = 'terminal-emulator'
-                version = '0.119.0-beta.3'
+                version = '0.118.3'
                 artifact(sourceJar)
             }
         }

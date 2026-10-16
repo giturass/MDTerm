@@ -15,8 +15,6 @@
     <string name="mdterm_prop_back_key">Back button</string>
     <string name="mdterm_prop_volume_keys">Volume buttons</string>
     <string name="mdterm_prop_keyboard_toggle">Keyboard toggle button</string>
-    <string name="mdterm_prop_ime_input">IME composition</string>
-    <string name="mdterm_prop_ime_input_summary">Allow normal input methods to compose text and show candidates. Enabled by default.</string>
     <string name="mdterm_prop_hide_keyboard">Hide keyboard on startup</string>
     <string name="mdterm_prop_hide_keyboard_summary">Start with the software keyboard hidden; applies next time the app starts</string>
     <string name="mdterm_prop_sessions">Sessions</string>
@@ -47,7 +45,7 @@
     <string name="mdterm_prop_shortcut_summary">Enter ctrl + one character, for example ctrl + t. Leave empty to remove the custom shortcut.</string>
     <string name="mdterm_prop_compatibility">Compatibility</string>
     <string name="mdterm_prop_character_input">Character-based input</string>
-    <string name="mdterm_prop_character_input_summary">Fix letters appearing only after Enter on some keyboards; applies when IME composition is disabled</string>
+    <string name="mdterm_prop_character_input_summary">Fix letters only appearing after Enter with some keyboards; takes priority over the composing preview</string>
     <string name="mdterm_prop_ctrl_space">Ctrl+Space workaround</string>
     <string name="mdterm_prop_ctrl_space_summary">Fix keyboards that do not send Ctrl+Space correctly</string>
     <string name="mdterm_prop_fullscreen_workaround">Fullscreen layout workaround</string>

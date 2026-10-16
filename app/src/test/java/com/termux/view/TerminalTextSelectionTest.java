@@ -4,12 +4,12 @@ import android.app.Application;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.graphics.Typeface;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.ActionMode;
 import android.view.Gravity;
 import android.view.InputDevice;
-import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -18,25 +18,19 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.ListAdapter;
 import android.widget.PopupMenu;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputConnection;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
-import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
+import com.termux.app.terminal.TermuxTerminalSessionClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
-import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
-import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
-import com.termux.terminal.GhosttyTerminal;
+import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.app.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
-import com.termux.test.ShadowGhosttyTerminal;
 
 import org.junit.After;
 import org.junit.Before;
@@ -47,19 +41,13 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
-import org.robolectric.annotation.Implementation;
-import org.robolectric.annotation.Implements;
 import org.robolectric.annotation.LooperMode;
-import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -81,7 +69,7 @@ public class TerminalTextSelectionTest {
         activity = controller.get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         ReflectionHelpers.setField(activity, "mPreferences", TermuxAppSharedPreferences.build(activity));
-        TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
+        TermuxAppSharedProperties properties = new TermuxAppSharedProperties(activity);
         properties.loadTermuxPropertiesFromDisk();
         ReflectionHelpers.setField(activity, "mProperties", properties);
         ReflectionHelpers.setField(activity, "mIsVisible", true);
@@ -96,8 +84,11 @@ public class TerminalTextSelectionTest {
         view = new TerminalView(activity, null);
         view.setId(R.id.terminal_view);
         view.setFocusableInTouchMode(true);
-        // The Ghostty shadow supplies deterministic terminal cell metrics without native rendering.
-        view.setTextSize(20);
+        view.mRenderer = new TerminalRenderer(20, Typeface.MONOSPACE);
+        // Robolectric's legacy graphics do not supply real terminal cell metrics.
+        ReflectionHelpers.setField(view.mRenderer, "mFontWidth", 10f);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacing", 20);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacingAndAscent", 0);
         host.addView(view, new FrameLayout.LayoutParams(400, 160));
         ReflectionHelpers.setField(activity, "mTerminalView", view);
         client = new RecordingClient(activity);
@@ -111,11 +102,12 @@ public class TerminalTextSelectionTest {
 
         TermuxTerminalSessionClientBase sessionClient = new TermuxTerminalSessionClientBase();
         TerminalSession session = new TerminalSession("", "", new String[0], new String[0], 100, sessionClient);
-        GhosttyTerminal terminal = new GhosttyTerminal(session, 40, 8, 10, 20, 100);
-        ReflectionHelpers.setField(session, "mTerminal", terminal);
+        TerminalEmulator emulator = new TerminalEmulator(session, 40, 8, 10, 20, 100, sessionClient);
+        ReflectionHelpers.setField(session, "mEmulator", emulator);
         ReflectionHelpers.setField(session, "mShellPid", 1);
-        view.attachSession(session);
-        session.updateTerminalSessionClient(new TermuxTerminalSessionActivityClient(activity));
+        view.mTermSession = session;
+        view.mEmulator = emulator;
+        session.updateTerminalSessionClient(new TermuxTerminalSessionClient(activity));
         clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
         clipboard.clearPrimaryClip();
     }
@@ -187,7 +179,7 @@ public class TerminalTextSelectionTest {
         assertFalse(view.isSelectingText());
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
         append("\u001b[?1000h");
-        assertTrue(view.getTerminal().isMouseTrackingActive());
+        assertTrue(view.mEmulator.isMouseTrackingActive());
         view.mGestureRecognizer.mListener.onDoubleTap(event);
         assertFalse(view.isSelectingText());
 
@@ -277,7 +269,7 @@ public class TerminalTextSelectionTest {
     @Test
     public void selectionUsesTheVisibleScrollbackRow() {
         appendHistory();
-        int historyRows = view.getScrollbackRows();
+        int historyRows = view.mEmulator.getScreen().getActiveTranscriptRows();
         assertTrue(historyRows > 0);
         view.setTopRow(-historyRows);
         select(15, 10);
@@ -324,7 +316,6 @@ public class TerminalTextSelectionTest {
     }
 
     @Test
-    @Config(shadows = HyperlinkTerminal.class)
     public void moreActionPreservesSelectedTextAndExitsBeforeOpeningContextMenu() {
         append("alpha beta");
         String[] contextText = {null};
@@ -332,226 +323,15 @@ public class TerminalTextSelectionTest {
             assertFalse(view.isSelectingText());
             assertEquals(DrawerLayout.LOCK_MODE_UNLOCKED, drawer.getDrawerLockMode(Gravity.START));
             contextText[0] = view.getStoredSelectedText();
-            assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
         });
         select(75, 10);
-        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
         host.mode.click(view.getTextSelectionCursorController().ACTION_MORE);
         assertEquals("beta", contextText[0]);
-        view.onContextMenuClosed(null);
-        assertNull(view.getContextHyperlink());
-        assertNull(view.getStoredSelectedText());
-    }
-
-    @Test
-    @Config(shadows = HyperlinkTerminal.class)
-    public void selectingTextFromTheActionsMenuKeepsTheLinkAfterQueuedDismissal() {
-        append("alpha beta");
-        view.setContextMenuAction(() -> assertTrue(activity.showTerminalActions(75, 10)));
-        assertTrue(view.showContextMenu(75, 10));
-        AlertDialog actions = (AlertDialog) ShadowDialog.getLatestDialog();
-        assertNotNull(actions);
-
-        clickTerminalAction(actions, R.string.action_select_text);
-        assertFalse(actions.isShowing());
-        assertFalse(view.isSelectingText());
-        Shadows.shadowOf(Looper.getMainLooper()).idle();
-
-        assertTrue(view.isSelectingText());
-        assertEquals("beta", view.getSelectedText());
-        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
-        host.mode.click(view.getTextSelectionCursorController().ACTION_MORE);
-        AlertDialog links = (AlertDialog) ShadowDialog.getLatestDialog();
-        assertNotSame(actions, links);
-        assertTrue(links.isShowing());
-
-        clickTerminalAction(links, R.string.action_copy_link);
-        Shadows.shadowOf(Looper.getMainLooper()).idle();
-        assertEquals(HyperlinkTerminal.LINK,
-            clipboard.getPrimaryClip().getItemAt(0).getText().toString());
-        assertFalse(view.isSelectingText());
-        assertFalse(links.isShowing());
-        assertNull(view.getContextHyperlink());
-        assertEquals("", takeOutput());
-    }
-
-    @Test
-    @Config(shadows = HyperlinkTerminal.class)
-    public void copyingOrCancellingSelectionAndChangingSessionClearTheLinkTarget() {
-        append("alpha beta");
-        select(75, 10);
-        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
-        host.mode.click(view.getTextSelectionCursorController().ACTION_COPY);
-        assertEquals("beta", clipboard.getPrimaryClip().getItemAt(0).getText().toString());
-        assertNull(view.getContextHyperlink());
-
-        select(75, 10);
-        host.mode.finish();
-        assertNull(view.getContextHyperlink());
-
-        view.setContextMenuAction(() -> { });
-        assertTrue(view.showContextMenu(75, 10));
-        assertEquals(HyperlinkTerminal.LINK, view.getContextHyperlink());
-        view.attachSession(null);
-        assertNull(view.getContextHyperlink());
-    }
-
-    @Test
-    @Config(shadows = HyperlinkTerminal.class)
-    public void mouseContextMenuTargetsTheClickedCellAndClearsUnrelatedSelection() {
-        append("alpha beta\u001b[?1000h");
-        String[] contextLink = {null};
-        view.setContextMenuAction(() -> {
-            assertFalse(view.isSelectingText());
-            contextLink[0] = view.getContextHyperlink();
-        });
-        select(15, 10);
-        MotionEvent.PointerProperties pointer = new MotionEvent.PointerProperties();
-        pointer.id = 0;
-        pointer.toolType = MotionEvent.TOOL_TYPE_MOUSE;
-        MotionEvent.PointerCoords coordinates = new MotionEvent.PointerCoords();
-        coordinates.x = 75;
-        coordinates.y = 10;
-        long now = SystemClock.uptimeMillis();
-        MotionEvent click = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 1,
-            new MotionEvent.PointerProperties[]{pointer}, new MotionEvent.PointerCoords[]{coordinates},
-            0, MotionEvent.BUTTON_SECONDARY, 1, 1, 0, 0, InputDevice.SOURCE_MOUSE, 0);
-        try {
-            assertTrue(view.onTouchEvent(click));
-        } finally {
-            click.recycle();
-        }
-        MotionEvent release = MotionEvent.obtain(now, now + 1, MotionEvent.ACTION_UP, 1,
-            new MotionEvent.PointerProperties[]{pointer}, new MotionEvent.PointerCoords[]{coordinates},
-            0, 0, 1, 1, 0, 0, InputDevice.SOURCE_MOUSE, 0);
-        try {
-            assertTrue(view.onTouchEvent(release));
-        } finally {
-            release.recycle();
-        }
-        assertEquals(HyperlinkTerminal.LINK, contextLink[0]);
-        assertEquals("", takeOutput());
-
-        assertTrue(view.showContextMenu(15, 10));
-        assertNull(contextLink[0]);
-        assertTrue(view.showContextMenu(-1, 10));
-        assertNull(contextLink[0]);
-    }
-
-    @Test
-    public void promptNavigationClearsSelectionAndUnlocksDrawerWithoutMouseInput() {
-        append("alpha beta\u001b[?1000h");
-        select(15, 10);
-        RecordingActionMode mode = host.mode;
-        view.mScrollRemainder = 7;
-
-        view.scrollToPrompt(-1);
-
-        assertFalse(view.isSelectingText());
-        assertTrue(mode.finished);
-        assertNull(view.getSelectedText());
-        assertEquals(DrawerLayout.LOCK_MODE_UNLOCKED, drawer.getDrawerLockMode(Gravity.START));
-        assertEquals(0, view.mScrollRemainder, 0);
-        ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
-        assertEquals(Collections.singletonList(-1), terminal.getPromptScrollRequests());
-        assertEquals("", takeOutput());
-    }
-
-    @Test
-    @Config(qualifiers = "zh-rCN-w400dp-h640dp-mdpi")
-    public void terminalMenuDispatchesBothPromptDirections() {
-        Menu menu = new PopupMenu(activity, view).getMenu();
-        ReflectionHelpers.callInstanceMethod(activity, "populateTerminalActions",
-            ClassParameter.from(Menu.class, menu));
-        int[] labels = {R.string.action_previous_prompt, R.string.action_next_prompt};
-        for (int label : labels) {
-            MenuItem action = null;
-            for (int i = 0; i < menu.size(); i++) {
-                MenuItem item = menu.getItem(i);
-                if (activity.getString(label).contentEquals(item.getTitle())) {
-                    assertNull("A prompt action must appear once", action);
-                    action = item;
-                }
-            }
-            assertNotNull(action);
-            assertTrue(action.isEnabled());
-            assertNotNull(action.getIcon());
-            assertTrue(activity.onContextItemSelected(action));
-        }
-        ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
-        assertEquals(Arrays.asList(-1, 1), terminal.getPromptScrollRequests());
-        assertEquals("", takeOutput());
-    }
-
-    @Test
-    public void promptShortcutsPreserveCompositionAndHonorDisabledShortcuts() {
-        Object shared = ReflectionHelpers.getField(activity.getProperties(), "mSharedProperties");
-        Map<String, Object> values = ReflectionHelpers.getField(shared, "mMap");
-        String setting = TermuxPropertyConstants.KEY_DISABLE_HARDWARE_KEYBOARD_SHORTCUTS;
-        Object original = values.put(setting, false);
-        int[] keyDownCalls = {0};
-        view.setTerminalViewClient(new TermuxTerminalViewClient(activity, null) {
-            @Override public boolean shouldEnableImeInput() { return true; }
-            @Override public boolean onKeyDown(int keyCode, KeyEvent event, TerminalSession session) {
-                keyDownCalls[0]++;
-                return super.onKeyDown(keyCode, event, session);
-            }
-        });
-        try {
-            InputConnection input = view.onCreateInputConnection(new EditorInfo());
-            assertTrue(input.setComposingText("你好", 1));
-            for (int keyCode : new int[]{KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN}) {
-                promptKey(keyCode);
-                assertEquals("你好", input.getTextBeforeCursor(10, 0).toString());
-                assertEquals("", takeOutput());
-            }
-            ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
-            assertEquals(Arrays.asList(-1, 1), terminal.getPromptScrollRequests());
-            assertEquals(2, keyDownCalls[0]);
-            assertEquals("Navigation must not forward presses or releases", 0, terminal.getKeyEventCount());
-
-            values.put(setting, true);
-            promptKey(KeyEvent.KEYCODE_PAGE_UP);
-            assertEquals(Arrays.asList(-1, 1), terminal.getPromptScrollRequests());
-            assertEquals(3, keyDownCalls[0]);
-            String output = takeOutput();
-            assertFalse(output.contains("你好"));
-            assertFalse("A disabled shortcut must reach the terminal", output.isEmpty());
-            assertEquals("你好", input.getTextBeforeCursor(10, 0).toString());
-            assertTrue(input.finishComposingText());
-            assertEquals("你好", takeOutput());
-        } finally {
-            if (original == null) values.remove(setting);
-            else values.put(setting, original);
-        }
-    }
-
-    private void promptKey(int keyCode) {
-        long now = SystemClock.uptimeMillis();
-        int modifiers = KeyEvent.META_CTRL_ON | KeyEvent.META_ALT_ON;
-        assertTrue(view.onKeyDown(keyCode, new KeyEvent(now, now,
-            KeyEvent.ACTION_DOWN, keyCode, 0, modifiers)));
-        assertTrue(view.onKeyUp(keyCode, new KeyEvent(now, now,
-            KeyEvent.ACTION_UP, keyCode, 0, modifiers)));
-    }
-
-    private void clickTerminalAction(AlertDialog dialog, int label) {
-        ListAdapter adapter = dialog.getListView().getAdapter();
-        for (int i = 0; i < adapter.getCount(); i++) {
-            MenuItem item = (MenuItem) adapter.getItem(i);
-            if (activity.getString(label).contentEquals(item.getTitle())) {
-                assertTrue(item.isEnabled());
-                dialog.getListView().performItemClick(
-                    adapter.getView(i, null, dialog.getListView()), i, adapter.getItemId(i));
-                return;
-            }
-        }
-        fail("Terminal action was missing: " + activity.getString(label));
     }
 
     private void append(String text) {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        view.getTerminal().feed(bytes, 0, bytes.length);
+        view.mEmulator.append(bytes, bytes.length);
     }
 
     private void appendHistory() {
@@ -621,18 +401,6 @@ public class TerminalTextSelectionTest {
         @Override public void onSingleTapUp(MotionEvent event) { singleTaps++; }
         @Override public boolean shouldUseHorizontalCursorGestures() { return true; }
         @Override public boolean shouldUseVerticalCursorGestures() { return true; }
-    }
-
-    /** Inject a native OSC 8 lookup result without asking the legacy text fixture to parse it. */
-    @Implements(value = GhosttyTerminal.class, isInAndroidSdk = false)
-    public static class HyperlinkTerminal extends ShadowGhosttyTerminal {
-        static final String LINK = "https://example.org/path?q=hello%20world#section";
-
-        @Implementation
-        @Override
-        protected String getHyperlink(int column, int viewportRow) {
-            return column == 7 && viewportRow == 0 ? LINK : null;
-        }
     }
 
     private static final class SelectionHost extends FrameLayout {

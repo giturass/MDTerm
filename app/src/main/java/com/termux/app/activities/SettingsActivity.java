@@ -19,11 +19,11 @@ import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.TermuxSettingsDataStore;
 import com.termux.app.fragments.settings.TermuxPropertiesPreferences;
 import com.termux.app.fragments.settings.termux.DebuggingPreferencesFragment;
-import com.termux.shared.termux.settings.preferences.TermuxAPIAppSharedPreferences;
-import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.termux.settings.preferences.TermuxFloatAppSharedPreferences;
-import com.termux.shared.termux.settings.preferences.TermuxTaskerAppSharedPreferences;
-import com.termux.shared.termux.settings.preferences.TermuxWidgetAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxAPIAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxFloatAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxTaskerAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxWidgetAppSharedPreferences;
 import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.theme.NightMode;
 

@@ -1,18 +1,10 @@
 # MDTerm native runtime
 
-The upstream source baseline is [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3),
-commit `e634d8f981f48b6b89202cf0e04533f0889e03b3`. MDTerm retains its Material
-interface, terminal bookmarks and cursor gestures. Normal IME composition is
-enabled by default through `enable-ime-input`. The terminal core uses Ghostty `libghostty-vt` and the Vulkan renderer
-adapted from XYenon/termux-app-ghostty, including Kitty images and animations.
-The later upstream Termux Sixel/iTerm renderer is not included. See
-[Ghostty integration](ghostty.md) for pinned revisions and native build details.
-
-Three later upstream fixes are retained:
-
-- [3b66f879](https://github.com/termux/termux-app/commit/3b66f8799635a4dba4a206563048ff0e6792c487): `RunCommandService` does not write to request-specified result files before verifying that `allow-external-apps` is enabled.
-- [084d709f](https://github.com/termux/termux-app/commit/084d709f): JNI releases the working-directory string with the matching `cwd` reference.
-- [b4a2c32c](https://github.com/termux/termux-app/commit/b4a2c32c): `TermuxOpenReceiver.ContentProvider.getType()` handles URIs without a path segment without a null-pointer exception.
+The upstream baseline is [Termux v0.118.3](https://github.com/termux/termux-app/tree/v0.118.3).
+MDTerm's interface, bookmarks, cursor gestures and optional IME composing preview
+are carried over from [7e410325](https://github.com/giturass/MDTerm/commit/7e41032575e1e8f0e5e4be7497ff6114f5e55be2)
+and adapted to that baseline. Terminal emulation uses the upstream Java emulator
+and Canvas renderer; sessions and background tasks use the v0.118.3 shell APIs.
 
 MDTerm uses `com.termux` for its Android application ID, Java namespace and
 shared user ID. Its app name and Material Design interface remain MDTerm.
@@ -23,7 +15,7 @@ prefix, `/data/data/com.termux/files/usr`, and home directory,
 `/data/data/com.termux/files/home`. Interactive sessions launch their shell
 through the terminal JNI layer; background commands use `Runtime.exec`.
 Login-shell arguments, executable shebang handling and the system-shell
-failsafe follow the upstream Termux implementation.
+failsafe follow the upstream Termux v0.118.3 implementation.
 
 There is no bundled PRoot runtime, path translation, command wrapper or Intent
 rewriting. Package commands such as `termux-open` and `termux-setup-storage`
@@ -31,21 +23,22 @@ target `com.termux` directly.
 
 ## Building
 
-The `downloadBootstraps` task supplies the baseline's official bootstrap,
-`2025.03.28-r1+apt-android-7`, verified by SHA-256 before native compilation.
-First installation uses the baseline's second-stage initialization as well.
-MDTerm's build and UI dependencies remain downstream customizations: Android
-12+ and arm64 targets, Java 17, Gradle 9.2.1, AGP 8.13.2, SDK 36,
-NDK 29.0.14206865, CMake 3.22.1, Zig 0.16.0, the ncurses `tic` tool,
-and Material Components 1.12.0. The device must support Vulkan 1.1 (level 1).
-The build fetches pinned Ghostty, FreeType, HarfBuzz and libpng sources, applies
-the checked-in Android patch, and builds `libtermux.so` and matching terminfo.
-Compilation and test builds run on GitHub Actions, not the local Termux device.
-The workflows provide Zig, `tic`, Java and the Android toolchain. The
-[test workflow](../.github/workflows/run_tests.yml) runs Java/Robolectric and
-native Ghostty tests; the [build workflow](../.github/workflows/debug_build.yml)
-uploads the debug APK and SHA-256 checksum. The debug APK uses the repository's
-test signing key. No Python runtime or additional PRoot packages are bundled.
+The existing `downloadBootstraps` task supplies the checksum-verified official
+bootstrap before native compilation. The build targets Android 12+ and arm64,
+with `apt-android-7` packages. No Python runtime preparation or additional
+PRoot package downloads are required. The build uses JDK 17 or newer, Gradle
+9.2.1, Android Gradle Plugin 8.13.2, Android SDK 36 and NDK 29.0.14206865.
+These build tools support the MDTerm interface dependencies independently of
+the upstream runtime baseline.
+
+```sh
+./gradlew :app:assembleDebug testDebugUnitTest
+```
+
+The APK is written to `app/build/outputs/apk/debug/`. The debug build uses the
+repository's test signing key. The default app and library version is `0.118.3`;
+MDTerm retains Android version code `1022` so the baseline change does not
+require downgrading that code for existing installations.
 
 ## Release signing
 
@@ -61,8 +54,10 @@ The repository Actions Secrets are:
 - `MDTERM_RELEASE_KEY_ALIAS`: signing key alias.
 - `MDTERM_RELEASE_KEY_PASSWORD`: signing key password.
 
-The release workflow restores the keystore on the runner, requires all signing
-secrets, and verifies the resulting APK's signature and Ghostty native contents.
+For a local signed release, set `MDTERM_RELEASE_STORE_FILE` to the keystore path
+and the same password and alias environment variables, then run
+`./gradlew :app:assembleRelease`. Without signing configuration, local release
+builds are unsigned. The workflow requires all secrets and verifies the signature.
 
 The initial private key and its credentials are backed up locally under
 `.signing/`, which is excluded from Git. Keep a secure backup of that directory:
@@ -118,18 +113,14 @@ After a successful edit, returning to the terminal reloads its properties and
 recreates the activity while preserving sessions. Scrollback size applies to
 new sessions. The default directory applies when no current session exists;
 otherwise new sessions inherit the current directory. Startup keyboard hiding
-applies at the next app start. Normal input-method composition uses
-`enable-ime-input`, enabled by default. It takes priority over
-`enforce-char-based-input`; turn it off before enabling that keyboard workaround.
-The previous app-only composing-preview preference is no longer used. Composing
-text stays in the input method's editable buffer until committed or finished;
-there is no separate terminal-cursor preview.
+applies at the next app start. Character-based input takes priority over the
+composing preview without changing the saved preview preference.
 
 Fullscreen uses the upstream `fullscreen` property. An explicit old
 `terminal_fullscreen` app preference migrates once when there is no explicit
 file value; the file wins if both exist. Terminal bells follow `bell-character`.
 The separate haptic-feedback setting controls toolbar and gesture feedback.
-Android-only preferences such as soft-keyboard enablement,
+Android-only preferences such as soft-keyboard enablement, composing preview,
 notifications, and diagnostics retain their existing preference storage.
 
 ## Terminal bookmarks

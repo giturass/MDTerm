@@ -32,10 +32,7 @@ package com.termux.shared.file.filesystem;
 // Those constants are initialized by native code to ensure correctness on different architectures.
 // AT_SYMLINK_NOFOLLOW (used by fstatat) and AT_REMOVEDIR (used by unlinkat) as of July 2018 do not
 // have equivalents in android.system.OsConstants so left unchanged.
-import android.os.Build;
 import android.system.OsConstants;
-
-import androidx.annotation.RequiresApi;
 
 /**
  * https://cs.android.com/android/platform/superproject/+/android-11.0.0_r3:libcore/ojluni/src/main/java/sun/nio/fs/UnixConstants.java
@@ -59,11 +56,7 @@ public class UnixConstants {
 
     static final int O_SYNC = OsConstants.O_SYNC;
 
-    // Crash on Android 5.
-    // No static field O_DSYNC of type I in class Landroid/system/OsConstants; or its superclasses
-    // (declaration of 'android.system.OsConstants' appears in /system/framework/core-libart.jar)
-    //@RequiresApi(Build.VERSION_CODES.O_MR1)
-    //static final int O_DSYNC = OsConstants.O_DSYNC;
+    static final int O_DSYNC = OsConstants.O_DSYNC;
 
     static final int O_NOFOLLOW = OsConstants.O_NOFOLLOW;
 
@@ -94,8 +87,6 @@ public class UnixConstants {
     static final int S_IFDIR = OsConstants.S_IFDIR;
 
     static final int S_IFLNK = OsConstants.S_IFLNK;
-
-    static final int S_IFSOCK = OsConstants.S_IFSOCK;
 
     static final int S_IFCHR = OsConstants.S_IFCHR;
 

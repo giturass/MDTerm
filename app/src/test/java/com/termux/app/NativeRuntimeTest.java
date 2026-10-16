@@ -5,12 +5,12 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 
 import com.termux.BuildConfig;
-import com.termux.shared.shell.command.ExecutionCommand;
-import com.termux.shared.shell.command.runner.app.AppShell;
+import com.termux.shared.models.ExecutionCommand;
+import com.termux.shared.shell.TermuxTask;
+import com.termux.shared.shell.TermuxShellEnvironmentClient;
 import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
-import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
-import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.shell.TermuxSession;
+import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Rule;
@@ -94,34 +94,41 @@ public class NativeRuntimeTest {
         command.workingDirectory = temporary.getRoot().getAbsolutePath();
         HashMap<String, String> extra = new HashMap<>();
         extra.put("MDTERM_TEST", "direct execution");
-        AppShell shell = AppShell.execute(RuntimeEnvironment.getApplication(), command, null,
-            new TestEnvironment(), extra, true);
+        TestEnvironment environment = new TestEnvironment();
+        environment.extra = extra;
+        TermuxTask shell = TermuxTask.execute(RuntimeEnvironment.getApplication(), command, null,
+            environment, true);
         assertNotNull(shell);
         assertEquals(Integer.valueOf(7), command.resultData.exitCode);
         assertEquals("a b\n" + command.workingDirectory + "\ndirect execution\n", command.resultData.stdout.toString());
     }
 
-    private TerminalSession session(ExecutionCommand command, TermuxShellEnvironment environment,
+    private TerminalSession session(ExecutionCommand command, TestEnvironment environment,
                                     HashMap<String, String> extra) {
+        environment.extra = extra;
         TermuxSession session = TermuxSession.execute(RuntimeEnvironment.getApplication(), command,
-            new TermuxTerminalSessionClientBase(), null, environment, extra, false);
+            new TermuxTerminalSessionClientBase(), null, environment, null, false);
         assertNotNull(session);
         // Inspect the launch request before attaching a view, which starts the Android PTY/JNI process.
         return session.getTerminalSession();
     }
 
-    private class TestEnvironment extends TermuxShellEnvironment {
+    private class TestEnvironment extends TermuxShellEnvironmentClient {
+        private HashMap<String, String> extra;
+
         @Override public String getDefaultWorkingDirectoryPath() {
             return temporary.getRoot().getAbsolutePath();
         }
 
-        @Override public HashMap<String, String> setupShellCommandEnvironment(Context context,
-                                                                             ExecutionCommand command) {
+        @Override public String[] buildEnvironment(Context context, boolean isFailsafe,
+                                                    String workingDirectory) {
             // Isolate process-launch checks from device-only environment discovery and file writes.
             HashMap<String, String> environment = new HashMap<>();
             environment.put("HOME", getDefaultWorkingDirectoryPath());
             environment.put("PATH", "/system/bin:/usr/bin:/bin");
-            return environment;
+            if (extra != null) environment.putAll(extra);
+            return environment.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new);
         }
     }
 }

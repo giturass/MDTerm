@@ -15,8 +15,6 @@
     <string name="mdterm_prop_back_key">返回键</string>
     <string name="mdterm_prop_volume_keys">音量键</string>
     <string name="mdterm_prop_keyboard_toggle">键盘切换按钮</string>
-    <string name="mdterm_prop_ime_input">输入法组合输入</string>
-    <string name="mdterm_prop_ime_input_summary">支持普通输入法的组合输入和候选词，默认开启。</string>
     <string name="mdterm_prop_hide_keyboard">启动时隐藏键盘</string>
     <string name="mdterm_prop_hide_keyboard_summary">下次启动应用时不自动显示软键盘</string>
     <string name="mdterm_prop_sessions">会话</string>
@@ -47,7 +45,7 @@
     <string name="mdterm_prop_shortcut_summary">填写 ctrl + 单个字符，例如 ctrl + t；留空可移除自定义快捷键</string>
     <string name="mdterm_prop_compatibility">兼容性</string>
     <string name="mdterm_prop_character_input">按字符输入</string>
-    <string name="mdterm_prop_character_input_summary">修复部分键盘需要按回车才显示文字的问题；关闭“输入法组合输入”后生效</string>
+    <string name="mdterm_prop_character_input_summary">修复部分键盘需要按回车才显示文字的问题；启用后优先于预编辑显示</string>
     <string name="mdterm_prop_ctrl_space">Ctrl+空格兼容处理</string>
     <string name="mdterm_prop_ctrl_space_summary">修复部分键盘无法正确发送 Ctrl+空格的问题</string>
     <string name="mdterm_prop_fullscreen_workaround">全屏布局兼容处理</string>

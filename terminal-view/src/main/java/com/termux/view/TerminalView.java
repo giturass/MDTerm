@@ -7,13 +7,14 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
+import android.text.Selection;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.ActionMode;
@@ -23,9 +24,6 @@ import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MotionEvent;
-import android.view.PointerIcon;
-import android.view.Surface;
-import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver;
@@ -35,52 +33,31 @@ import android.view.autofill.AutofillValue;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Scroller;
-import android.view.SurfaceView;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.termux.terminal.GhosttyTerminal;
+import com.termux.terminal.KeyHandler;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
+import com.termux.terminal.TerminalColors;
+import com.termux.terminal.TextStyle;
 import com.termux.view.textselection.TextSelectionCursorController;
 
-import java.io.File;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 /** View displaying and interacting with a {@link TerminalSession}. */
-public final class TerminalView extends SurfaceView implements SurfaceHolder.Callback2 {
+public final class TerminalView extends View {
 
     /** Log terminal view key and IME events. */
     private static boolean TERMINAL_VIEW_KEY_LOGGING_ENABLED = false;
 
-    /** The currently displayed terminal session. */
+    /** The currently displayed terminal session, whose emulator is {@link #mEmulator}. */
     public TerminalSession mTermSession;
-    private volatile GhosttyTerminal mTerminal;
-    private ExecutorService mRenderExecutor = Executors.newSingleThreadExecutor();
-    private final AtomicBoolean mRenderScheduled = new AtomicBoolean();
-    private final AtomicBoolean mRenderDirty = new AtomicBoolean();
-    private final Runnable mKittyAnimationRender = this::requestRender;
-    private int mTextSize = 14;
-    private int mCellWidth = 8;
-    private int mCellHeight = 18;
-    private File[] mFontFiles = new File[0];
-    private volatile boolean mSurfaceReady;
-    private volatile long mRenderGeneration;
-    private boolean mSurfaceAttached;
-    private boolean mSessionNeedsUpdate;
-    private boolean mCursorVisible = true;
-    private boolean mAutoScrollDisabled;
-    private boolean mSearchActive;
-    private String mContextHyperlink;
-    private int mMouseShape = GhosttyTerminal.MOUSE_SHAPE_TEXT;
+    /** Our terminal emulator whose session is {@link #mTermSession}. */
+    public TerminalEmulator mEmulator;
+
+    public TerminalRenderer mRenderer;
 
     public TerminalViewClient mClient;
 
@@ -93,6 +70,10 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     public static final int TERMINAL_CURSOR_BLINK_RATE_MIN = 100;
     public static final int TERMINAL_CURSOR_BLINK_RATE_MAX = 2000;
 
+    /** The top row of text to display. Ranges from -activeTranscriptRows to 0. */
+    int mTopRow;
+    int[] mDefaultSelectors = new int[]{-1,-1,-1,-1};
+
     float mScaleFactor = 1.f;
     final GestureAndScaleRecognizer mGestureRecognizer;
 
@@ -100,25 +81,38 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     private int mMouseScrollStartX = -1, mMouseScrollStartY = -1;
     /** Keep track of the time when a touch event leading to sending mouse scroll events started. */
     private long mMouseStartDownTime = -1;
-    private boolean mMouseContextMenuGesture;
-    // Lock touch drags to the axis and cursor mode chosen at their start.
-    private int mTouchScrollAxis;
-    private boolean mTouchScrollMovesCursor;
-    private boolean mMultiTouchGesture;
-    private float mCursorScrollRemainder;
-    private BaseInputConnection mInputConnection;
-    private String mRenderError;
-    private final Paint mErrorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     final Scroller mScroller;
 
     /** What was left in from scrolling movement. */
     float mScrollRemainder;
 
+    private int mTouchScrollAxis; // 0: undecided, 1: horizontal, 2: vertical
+    private boolean mTouchScrollMovesCursor;
+    private boolean mMultiTouchGesture;
+    private float mCursorScrollRemainder;
+
     /** If non-zero, this is the last unicode code point received if that was a combining character. */
     int mCombiningAccent;
-    /** Keys whose press was emitted by Ghostty and therefore require a release. */
-    private final Set<Long> mPressedKeys = new HashSet<>();
+
+    /**
+     * The current IME composing text (e.g. partially composed CJK) shown as a preview at the
+     * terminal cursor while the user is composing with an InputMethodEditor (IME). Null/empty when
+     * nothing is being composed. The terminal only renders text that is committed and echoed back
+     * by the program running in the pty, so without this preview the in-progress composition (e.g.
+     * ㄱ → 가 → 간) would not be visible at all until commit. See the {@code setComposingText()} override
+     * in {@link #onCreateInputConnection(EditorInfo)}.
+     */
+    private CharSequence mComposingText;
+
+    /**
+     * The currently active {@link BaseInputConnection} (created in {@link #onCreateInputConnection}),
+     * used to access the local {@link Editable} when finalizing in-progress IME composing text after
+     * a non-composing key — such as a control/navigation key from the hardware keyboard or the
+     * Termux extra-keys bar — is pressed. Those keys bypass the IME, so without this the composing
+     * text would never be committed and the preview would follow the cursor around after it moves.
+     */
+    private BaseInputConnection mInputConnection;
 
     /**
      * The current AutoFill type returned for {@link View#getAutofillType()} by {@link #getAutofillType()}.
@@ -159,18 +153,10 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
     private final boolean mAccessibilityEnabled;
 
-    /** The {@link KeyEvent} is generated from a virtual keyboard, like manually with the {@link KeyEvent#KeyEvent(int, int)} constructor. */
-    public final static int KEY_EVENT_SOURCE_VIRTUAL_KEYBOARD = KeyCharacterMap.VIRTUAL_KEYBOARD; // -1
-
-    /** The {@link KeyEvent} is generated from a non-physical device, like if 0 value is returned by {@link KeyEvent#getDeviceId()}. */
-    public final static int KEY_EVENT_SOURCE_SOFT_KEYBOARD = 0;
-
     private static final String LOG_TAG = "TerminalView";
 
     public TerminalView(Context context, AttributeSet attributes) { // NO_UCD (unused code)
         super(context, attributes);
-        getHolder().addCallback(this);
-        setWillNotDraw(false);
         mGestureRecognizer = new GestureAndScaleRecognizer(context, new GestureAndScaleRecognizer.Listener() {
 
             boolean scrolledWithFinger;
@@ -179,11 +165,11 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
             public boolean onUp(MotionEvent event) {
                 mScrollRemainder = 0.0f;
                 mCursorScrollRemainder = 0.0f;
-                if (mTerminal != null && mTerminal.isMouseTrackingActive() && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger && !mMultiTouchGesture) {
+                if (mEmulator != null && mEmulator.isMouseTrackingActive() && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger && !mMultiTouchGesture) {
                     // Quick event processing when mouse tracking is active - do not wait for check of double tapping
                     // for zooming.
-                    sendMouseEvent(event, GhosttyTerminal.MOUSE_ACTION_PRESS, GhosttyTerminal.MOUSE_BUTTON_LEFT);
-                    sendMouseEvent(event, GhosttyTerminal.MOUSE_ACTION_RELEASE, GhosttyTerminal.MOUSE_BUTTON_LEFT);
+                    sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, true);
+                    sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, false);
                     return true;
                 }
                 scrolledWithFinger = false;
@@ -192,7 +178,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
             @Override
             public boolean onSingleTapUp(MotionEvent event) {
-                if (mTerminal == null) return true;
+                if (mEmulator == null) return true;
 
                 if (isSelectingText()) {
                     stopTextSelectionMode();
@@ -205,14 +191,14 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
             @Override
             public boolean onScroll(MotionEvent e, float distanceX, float distanceY) {
-                if (mTerminal == null) return true;
+                if (mEmulator == null) return true;
                 if (mMultiTouchGesture || mGestureRecognizer.isInProgress()) return true;
-                if (mTerminal.isMouseTrackingActive() && e.isFromSource(InputDevice.SOURCE_MOUSE)) {
+                if (mEmulator.isMouseTrackingActive() && e.isFromSource(InputDevice.SOURCE_MOUSE)) {
                     // If moving with mouse pointer while pressing button, report that instead of scroll.
                     // This means that we never report moving with button press-events for touch input,
                     // since we cannot just start sending these events without a starting press event,
                     // which we do not do for touch input, only mouse in onTouchEvent().
-                    sendMouseEvent(e, GhosttyTerminal.MOUSE_ACTION_MOTION, GhosttyTerminal.MOUSE_BUTTON_LEFT);
+                    sendMouseEventCode(e, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
                 } else {
                     scrolledWithFinger = true;
                     if (!e.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText()) {
@@ -230,8 +216,8 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                         }
                     }
                     distanceY += mScrollRemainder;
-                    int deltaRows = (int) (distanceY / mCellHeight);
-                    mScrollRemainder = distanceY - deltaRows * mCellHeight;
+                    int deltaRows = (int) (distanceY / mRenderer.mFontLineSpacing);
+                    mScrollRemainder = distanceY - deltaRows * mRenderer.mFontLineSpacing;
                     doScroll(e, deltaRows);
                 }
                 return true;
@@ -239,7 +225,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
             @Override
             public boolean onScale(float focusX, float focusY, float scale) {
-                if (mTerminal == null || isSelectingText()) return true;
+                if (mEmulator == null || isSelectingText()) return true;
                 mScaleFactor *= scale;
                 mScaleFactor = mClient.onScale(mScaleFactor);
                 return true;
@@ -247,19 +233,19 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
             @Override
             public boolean onFling(final MotionEvent e2, float velocityX, float velocityY) {
-                if (mTerminal == null) return true;
+                if (mEmulator == null) return true;
                 // Cursor movement stops with the finger; pinching must not start a scroll fling.
                 if (mTouchScrollMovesCursor || mMultiTouchGesture) return true;
                 // Do not start scrolling until last fling has been taken care of:
                 if (!mScroller.isFinished()) return true;
 
-                final GhosttyTerminal flingEmulator = mTerminal;
+                final TerminalEmulator flingEmulator = mEmulator;
                 final boolean mouseTrackingAtStartOfFling = flingEmulator.isMouseTrackingActive();
                 float SCALE = 0.25f;
                 if (mouseTrackingAtStartOfFling) {
-                    mScroller.fling(0, 0, 0, -(int) (velocityY * SCALE), 0, 0, -mTerminal.getRows() / 2, mTerminal.getRows() / 2);
+                    mScroller.fling(0, 0, 0, -(int) (velocityY * SCALE), 0, 0, -mEmulator.mRows / 2, mEmulator.mRows / 2);
                 } else {
-                    mScroller.fling(0, getTopRow(), 0, -(int) (velocityY * SCALE), 0, 0, -mTerminal.getScrollbackRows(), 0);
+                    mScroller.fling(0, mTopRow, 0, -(int) (velocityY * SCALE), 0, 0, -mEmulator.getScreen().getActiveTranscriptRows(), 0);
                 }
 
                 post(new Runnable() {
@@ -268,7 +254,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                     @Override
                     public void run() {
                         // A queued frame must not scroll or stop an animation in another session.
-                        if (mTerminal != flingEmulator) return;
+                        if (mEmulator != flingEmulator) return;
                         if (mouseTrackingAtStartOfFling != flingEmulator.isMouseTrackingActive()) {
                             mScroller.abortAnimation();
                             return;
@@ -276,7 +262,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                         if (mScroller.isFinished()) return;
                         boolean more = mScroller.computeScrollOffset();
                         int newY = mScroller.getCurrY();
-                        int diff = mouseTrackingAtStartOfFling ? (newY - mLastY) : (newY - getTopRow());
+                        int diff = mouseTrackingAtStartOfFling ? (newY - mLastY) : (newY - mTopRow);
                         doScroll(e2, diff);
                         mLastY = newY;
                         if (more) post(this);
@@ -306,8 +292,8 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
             @Override
             public boolean onDoubleTap(MotionEvent event) {
-                if (mTerminal == null || mMultiTouchGesture || mGestureRecognizer.isInProgress()
-                    || event.isFromSource(InputDevice.SOURCE_MOUSE) || mTerminal.isMouseTrackingActive())
+                if (mEmulator == null || mMultiTouchGesture || mGestureRecognizer.isInProgress()
+                    || event.isFromSource(InputDevice.SOURCE_MOUSE) || mEmulator.isMouseTrackingActive())
                     return false;
                 if (!isSelectingText()) startTextSelectionMode(event);
                 return true;
@@ -315,7 +301,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
             @Override
             public void onLongPress(MotionEvent event) {
-                if (mTerminal == null || mMultiTouchGesture || mGestureRecognizer.isInProgress()) return;
+                if (mEmulator == null || mMultiTouchGesture || mGestureRecognizer.isInProgress()) return;
                 if (mClient.onLongPress(event)) return;
                 if (!isSelectingText()) {
                     performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
@@ -346,20 +332,9 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
     @Override
     public boolean showContextMenu(float x, float y) {
-        stopTextSelectionMode();
-        mContextHyperlink = x >= 0 && y >= 0
-            ? getHyperlinkAt((int) (x / mCellWidth), (int) (y / mCellHeight)) : null;
         if (mContextMenuAction == null) return super.showContextMenu(x, y);
         mContextMenuAction.run();
         return true;
-    }
-
-    /** Keep the selected link available while handing the floating toolbar over to the menu. */
-    public boolean showContextMenuFromSelection() {
-        String hyperlink = mContextHyperlink;
-        stopTextSelectionMode();
-        mContextHyperlink = hyperlink;
-        return showContextMenu();
     }
 
     /**
@@ -388,110 +363,20 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
      */
     public boolean attachSession(TerminalSession session) {
         if (session == mTermSession) return false;
-        if (mSearchActive && mTerminal != null) mTerminal.clearSearch();
-        mSearchActive = false;
-        mContextHyperlink = null;
+        mTopRow = 0;
+
         mScroller.abortAnimation();
-        stopTerminalCursorBlinker();
-        if (mInputConnection != null) mInputConnection.getEditable().clear();
-
-        // Tear down any active text selection while the old terminal is still
-        // attached, otherwise its stale coordinates and the floating action
-        // mode / selection handles would leak onto the newly attached session.
-        if (isSelectingText()) {
-            stopTextSelectionMode();
-        }
-        // Selection teardown can request one final frame for the old terminal.
-        // Invalidate that request before changing the render target.
-        cancelRenderRequests();
-
-        if (mTerminal != null && mSurfaceAttached) {
-            final GhosttyTerminal oldTerminal = mTerminal;
-            mSurfaceAttached = false;
-            submitRenderTask(oldTerminal::detachSurface);
-        }
         mTermSession = session;
-        mTerminal = session == null ? null : session.getTerminal();
-        mSessionNeedsUpdate = session != null;
-        mRenderError = null;
+        mEmulator = null;
         mCombiningAccent = 0;
-        mPressedKeys.clear();
-        setMouseShape(GhosttyTerminal.MOUSE_SHAPE_TEXT);
+        mComposingText = null;
 
         updateSize();
-        if (mTerminal != null) setMouseShape(mTerminal.getMouseShape());
 
         // Wait with enabling the scrollbar until we have a terminal to get scroll position from.
         setVerticalScrollBarEnabled(true);
 
         return true;
-    }
-
-    /** Apply the current OSC 22 pointer shape to physical mouse/stylus input. */
-    public void setMouseShape(int shape) {
-        mMouseShape = shape;
-        setPointerIcon(PointerIcon.getSystemIcon(
-            getContext(), getAndroidPointerIconType(shape)));
-    }
-
-    static int getAndroidPointerIconType(int shape) {
-        switch (shape) {
-            case GhosttyTerminal.MOUSE_SHAPE_CONTEXT_MENU:
-                return PointerIcon.TYPE_CONTEXT_MENU;
-            case GhosttyTerminal.MOUSE_SHAPE_HELP:
-                return PointerIcon.TYPE_HELP;
-            case GhosttyTerminal.MOUSE_SHAPE_POINTER:
-                return PointerIcon.TYPE_HAND;
-            case GhosttyTerminal.MOUSE_SHAPE_PROGRESS:
-            case GhosttyTerminal.MOUSE_SHAPE_WAIT:
-                return PointerIcon.TYPE_WAIT;
-            case GhosttyTerminal.MOUSE_SHAPE_CELL:
-            case GhosttyTerminal.MOUSE_SHAPE_CROSSHAIR:
-                return PointerIcon.TYPE_CROSSHAIR;
-            case GhosttyTerminal.MOUSE_SHAPE_TEXT:
-            case GhosttyTerminal.MOUSE_SHAPE_VERTICAL_TEXT:
-                return PointerIcon.TYPE_TEXT;
-            case GhosttyTerminal.MOUSE_SHAPE_ALIAS:
-            case GhosttyTerminal.MOUSE_SHAPE_COPY:
-                return PointerIcon.TYPE_COPY;
-            case GhosttyTerminal.MOUSE_SHAPE_MOVE:
-            case GhosttyTerminal.MOUSE_SHAPE_ALL_SCROLL:
-                return PointerIcon.TYPE_ALL_SCROLL;
-            case GhosttyTerminal.MOUSE_SHAPE_NO_DROP:
-            case GhosttyTerminal.MOUSE_SHAPE_NOT_ALLOWED:
-                return PointerIcon.TYPE_NO_DROP;
-            case GhosttyTerminal.MOUSE_SHAPE_GRAB:
-                return PointerIcon.TYPE_GRAB;
-            case GhosttyTerminal.MOUSE_SHAPE_GRABBING:
-                return PointerIcon.TYPE_GRABBING;
-            case GhosttyTerminal.MOUSE_SHAPE_COL_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_E_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_W_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_EW_RESIZE:
-                return PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW;
-            case GhosttyTerminal.MOUSE_SHAPE_ROW_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_N_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_S_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_NS_RESIZE:
-                return PointerIcon.TYPE_VERTICAL_DOUBLE_ARROW;
-            case GhosttyTerminal.MOUSE_SHAPE_NE_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_SW_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_NESW_RESIZE:
-                return PointerIcon.TYPE_TOP_RIGHT_DIAGONAL_DOUBLE_ARROW;
-            case GhosttyTerminal.MOUSE_SHAPE_NW_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_SE_RESIZE:
-            case GhosttyTerminal.MOUSE_SHAPE_NWSE_RESIZE:
-                return PointerIcon.TYPE_TOP_LEFT_DIAGONAL_DOUBLE_ARROW;
-            case GhosttyTerminal.MOUSE_SHAPE_ZOOM_IN:
-            case GhosttyTerminal.MOUSE_SHAPE_ZOOM_OUT:
-            case GhosttyTerminal.MOUSE_SHAPE_DEFAULT:
-            default:
-                return PointerIcon.TYPE_DEFAULT;
-        }
-    }
-
-    int getMouseShapeForTest() {
-        return mMouseShape;
     }
 
     @Override
@@ -501,9 +386,11 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         // initially started with the alternate view or if activity is returned to from another app
         // and the alternate view was the one selected the last time.
         if (mClient.isTerminalViewSelected()) {
-            if (mClient.shouldEnableImeInput()) {
-                // Let ordinary input methods manage their composition and candidate UI.
-                outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL;
+            if (mClient.shouldEnableImeComposing()) {
+                // General text input so the IME composes (setComposingText), e.g. CJK,
+                // with NO_SUGGESTIONS to suppress autocomplete where the IME respects it.
+                // VISIBLE_PASSWORD would suppress suggestions but disables composing (fatal for CJK).
+                outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
             } else if (mClient.shouldEnforceCharBasedInput()) {
                 // Some keyboards seems do not reset the internal state on TYPE_NULL.
                 // Affects mostly Samsung stock keyboards.
@@ -535,11 +422,28 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         BaseInputConnection connection = new BaseInputConnection(this, true) {
 
             @Override
+            public boolean setComposingText(CharSequence text, int newCursorPosition) {
+                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
+                    mClient.logInfo(LOG_TAG, "IME: setComposingText(\"" + text + "\", " + newCursorPosition + ")");
+                }
+                super.setComposingText(text, newCursorPosition);
+                // Show the in-progress composition (e.g. a CJK syllable being built) as a preview
+                // at the terminal cursor. The terminal only renders committed-and-echoed text, so
+                // without this the composing characters would never be visible until commit.
+                setComposingTextPreview(text);
+                return true;
+            }
+
+            @Override
             public boolean finishComposingText() {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
+                boolean hadComposing = mComposingText != null;
                 super.finishComposingText();
 
-                sendTextToTerminal(getEditable());
+                setComposingTextPreview(null);
+                if (hadComposing) {
+                    sendTextToTerminal(getEditable());
+                }
                 getEditable().clear();
                 return true;
             }
@@ -551,8 +455,9 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                 }
                 super.commitText(text, newCursorPosition);
 
-                if (mTerminal == null) return true;
+                if (mEmulator == null) return true;
 
+                setComposingTextPreview(null);
                 Editable content = getEditable();
                 sendTextToTerminal(content);
                 content.clear();
@@ -568,6 +473,25 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                 KeyEvent deleteKey = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL);
                 for (int i = 0; i < leftLength; i++) sendKeyEvent(deleteKey);
                 return super.deleteSurroundingText(leftLength, rightLength);
+            }
+
+            @Override
+            public boolean setSelection(int start, int end) {
+                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+                    mClient.logInfo(LOG_TAG, "IME: setSelection(" + start + ", " + end + ")");
+                boolean result = super.setSelection(start, end);
+                // The IME moved the cursor within the (fake) Editable. Redraw so the pre-edit cursor
+                // (read from the Editable Selection/composing span) updates. Movement is the IME's job.
+                invalidate();
+                // If the IME moved the cursor OUTSIDE the composing region it is leaving the
+                // composition, so finalize (commit) at the current cursor before the move takes effect.
+                Editable editable = getEditable();
+                int composingStart = BaseInputConnection.getComposingSpanStart(editable);
+                int composingEnd = BaseInputConnection.getComposingSpanEnd(editable);
+                if (composingStart != -1 && composingEnd != -1 && (start < composingStart || end > composingEnd)) {
+                    finalizeComposingIfActive();
+                }
+                return result;
             }
 
             void sendTextToTerminal(CharSequence text) {
@@ -622,7 +546,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                         }
                     }
 
-                    inputCodePoint(KEY_EVENT_SOURCE_SOFT_KEYBOARD, codePoint, ctrlHeld, false);
+                    inputCodePoint(codePoint, ctrlHeld, false);
                 }
             }
 
@@ -633,34 +557,54 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
     @Override
     protected int computeVerticalScrollRange() {
-        return mTerminal == null ? 1 : mTerminal.getTotalRows();
+        return mEmulator == null ? 1 : mEmulator.getScreen().getActiveRows();
     }
 
     @Override
     protected int computeVerticalScrollExtent() {
-        return mTerminal == null ? 1 : mTerminal.getRows();
+        return mEmulator == null ? 1 : mEmulator.mRows;
     }
 
     @Override
     protected int computeVerticalScrollOffset() {
-        GhosttyTerminal terminal = mTerminal;
-        return terminal != null ? Math.max(0, terminal.getViewportOffset()) : 1;
-    }
-
-    static int resolveVerticalScrollOffset(boolean hasTerminal, int viewportOffset) {
-        return hasTerminal ? Math.max(0, viewportOffset) : 1;
+        return mEmulator == null ? 1 : mEmulator.getScreen().getActiveRows() + mTopRow - mEmulator.mRows;
     }
 
     public void onScreenUpdated() {
-        onScreenUpdated(false);
-    }
+        if (mEmulator == null) return;
 
-    public void onScreenUpdated(boolean skipScrolling) {
-        if (mTerminal == null) return;
-        if (!skipScrolling && !isSelectingText() && !mAutoScrollDisabled && !mSearchActive) {
-            mTerminal.scrollToBottom();
+        int rowsInHistory = mEmulator.getScreen().getActiveTranscriptRows();
+        if (mTopRow < -rowsInHistory) mTopRow = -rowsInHistory;
+
+        boolean skipScrolling = false;
+        if (isSelectingText()) {
+            // Do not scroll when selecting text.
+            int rowShift = mEmulator.getScrollCounter();
+            if (-mTopRow + rowShift > rowsInHistory) {
+                // .. unless we're hitting the end of history transcript, in which
+                // case we abort text selection and scroll to end.
+                stopTextSelectionMode();
+            } else {
+                skipScrolling = true;
+                mTopRow -= rowShift;
+                decrementYTextSelectionCursors(rowShift);
+            }
         }
-        requestRender();
+
+        if (!skipScrolling && mTopRow != 0) {
+            // Scroll down if not already there.
+            if (mTopRow < -3) {
+                // Awaken scroll bars only if scrolling a noticeable amount
+                // - we do not want visible scroll bars during normal typing
+                // of one row at a time.
+                awakenScrollBars();
+            }
+            mTopRow = 0;
+        }
+
+        mEmulator.clearScrollCounter();
+
+        invalidate();
         if (mAccessibilityEnabled) setContentDescription(getText());
     }
 
@@ -670,7 +614,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     public void onContextMenuClosed(Menu menu) {
         // Unset the stored text since it shouldn't be used anymore and should be cleared from memory
         unsetStoredSelectedText();
-        mContextHyperlink = null;
     }
 
     /**
@@ -679,45 +622,19 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
      * @param textSize the new font size, in density-independent pixels.
      */
     public void setTextSize(int textSize) {
-        mTextSize = Math.max(1, textSize);
-        updateFontMetrics();
+        mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
         updateSize();
     }
 
-    public void setFontFiles(File[] fontFiles) {
-        mFontFiles = fontFiles == null
-            ? new File[0] : Arrays.copyOf(fontFiles, fontFiles.length);
-        updateFontMetrics();
+    public void setTypeface(Typeface newTypeface) {
+        mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface);
         updateSize();
-        requestRender();
-    }
-
-    public void setFontFile(@Nullable File fontFile) {
-        setFontFiles(fontFile == null ? null : new File[]{fontFile});
-    }
-
-    private void updateFontMetrics() {
-        int[] metrics = GhosttyTerminal.measureFonts(mTextSize, getFontPaths());
-        mCellWidth = Math.max(1, metrics[0]);
-        mCellHeight = Math.max(1, metrics[1]);
-    }
-
-    private String[] getFontPaths() {
-        String[] paths = new String[mFontFiles.length];
-        for (int i = 0; i < mFontFiles.length; i++)
-            paths[i] = mFontFiles[i].getAbsolutePath();
-        return paths;
+        invalidate();
     }
 
     @Override
     public boolean onCheckIsTextEditor() {
         return true;
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasWindowFocus) {
-        super.onWindowFocusChanged(hasWindowFocus);
-        if (mTerminal != null) mTerminal.sendFocus(hasWindowFocus);
     }
 
     @Override
@@ -730,100 +647,81 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
      * position of the event.
      *
      * @param event The event with the position to get the column and row for.
+     * @param relativeToScroll If true the column number will take the scroll
+     * position into account. E.g. if scrolled 3 lines up and the event
+     * position is in the top left, column will be -3 if relativeToScroll is
+     * true and 0 if relativeToScroll is false.
      * @return Array with the column and row.
      */
-    public int[] getColumnAndRow(MotionEvent event) {
-        int column = (int) (event.getX() / mCellWidth);
-        int row = (int) (event.getY() / mCellHeight);
+    public int[] getColumnAndRow(MotionEvent event, boolean relativeToScroll) {
+        int column = (int) (event.getX() / mRenderer.mFontWidth);
+        int row = (int) ((event.getY() - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
+        if (relativeToScroll) {
+            row += mTopRow;
+        }
         return new int[] { column, row };
     }
 
-    void sendMouseEvent(MotionEvent event, int action, int button) {
-        mTerminal.sendMouse(action, button, toGhosttyModifiers(event),
-            event.getX(), event.getY(), getWidth(), getHeight(), mCellWidth,
-            mCellHeight);
+    /** Send a single mouse event code to the terminal. */
+    void sendMouseEventCode(MotionEvent e, int button, boolean pressed) {
+        int[] columnAndRow = getColumnAndRow(e, false);
+        int x = columnAndRow[0] + 1;
+        int y = columnAndRow[1] + 1;
+        if (pressed && (button == TerminalEmulator.MOUSE_WHEELDOWN_BUTTON || button == TerminalEmulator.MOUSE_WHEELUP_BUTTON)) {
+            if (mMouseStartDownTime == e.getDownTime()) {
+                x = mMouseScrollStartX;
+                y = mMouseScrollStartY;
+            } else {
+                mMouseStartDownTime = e.getDownTime();
+                mMouseScrollStartX = x;
+                mMouseScrollStartY = y;
+            }
+        }
+        mEmulator.sendMouseEvent(button, x, y, pressed);
     }
 
     private void moveCursorByScroll(float distance, boolean horizontal) {
-        if (mTermSession == null || mTerminal == null) return;
+        if (mTermSession == null || mRenderer == null) return;
         float density = getResources().getDisplayMetrics().density;
-        float step = horizontal ? Math.max(mCellWidth, 24 * density)
-            : Math.max(mCellHeight, 36 * density);
+        float step = horizontal ? Math.max(mRenderer.mFontWidth, 24 * density)
+            : Math.max(mRenderer.mFontLineSpacing, 36 * density);
         mCursorScrollRemainder += distance;
         int count = (int) (mCursorScrollRemainder / step);
         mCursorScrollRemainder -= count * step;
         if (count == 0) return;
 
+        finalizeComposingIfActive();
         setTopRow(0);
         int keyCode = horizontal
             ? (count > 0 ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_RIGHT)
             : (count > 0 ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN);
         // Cursor gestures send plain arrows without consuming keyboard modifiers.
         for (int i = 0; i < Math.abs(count); i++) handleKeyCode(keyCode, 0);
-        requestRender();
+        invalidate();
     }
 
     /** Perform a scroll, either from dragging the screen or by scrolling a mouse wheel. */
     void doScroll(MotionEvent event, int rowsDown) {
-        if (rowsDown == 0) return;
         boolean up = rowsDown < 0;
         int amount = Math.abs(rowsDown);
-        if (mTerminal.isMouseTrackingActive()) {
-            for (int i = 0; i < amount; i++) {
-                sendMouseEvent(event, GhosttyTerminal.MOUSE_ACTION_PRESS,
-                    up ? GhosttyTerminal.MOUSE_BUTTON_FOUR
-                        : GhosttyTerminal.MOUSE_BUTTON_FIVE);
-            }
-        } else if (mTerminal.isAlternateBufferActive()) {
-            for (int i = 0; i < amount; i++) {
+        for (int i = 0; i < amount; i++) {
+            if (mEmulator.isMouseTrackingActive()) {
+                sendMouseEventCode(event, up ? TerminalEmulator.MOUSE_WHEELUP_BUTTON : TerminalEmulator.MOUSE_WHEELDOWN_BUTTON, true);
+            } else if (mEmulator.isAlternateBufferActive()) {
+                // Send up and down key events for scrolling, which is what some terminals do to make scroll work in
+                // e.g. less, which shifts to the alt screen without mouse handling.
                 handleKeyCode(up ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN, 0);
+            } else {
+                mTopRow = Math.min(0, Math.max(-(mEmulator.getScreen().getActiveTranscriptRows()), mTopRow + (up ? -1 : 1)));
+                if (!awakenScrollBars()) invalidate();
             }
-        } else {
-            scrollViewport(rowsDown);
         }
-        awakenScrollBars();
-        requestRender();
-    }
-
-    private void scrollViewport(int rows) {
-        if (!isSelectingText()) {
-            mTerminal.scrollViewport(rows);
-            return;
-        }
-
-        int selectionRowShift = scrollSelectionViewport(rows);
-        if (selectionRowShift != 0) {
-            mTextSelectionCursorController.shiftSelectionRows(selectionRowShift);
-            renderTextSelection();
-        }
-    }
-
-    /** Keep a find result visible while the host's search field owns input. */
-    public void setSearchActive(boolean active) {
-        mSearchActive = active;
-        if (active) {
-            mScroller.abortAnimation();
-            mScrollRemainder = 0;
-            stopTextSelectionMode();
-        }
-    }
-
-    /** Jump through shell prompt groups without sending input to the PTY. */
-    public void scrollToPrompt(int count) {
-        if (mTerminal == null) return;
-        mScroller.abortAnimation();
-        mScrollRemainder = 0;
-        stopTextSelectionMode();
-        mTerminal.scrollToPrompt(count);
-        awakenScrollBars();
-        requestRender();
-        if (mAccessibilityEnabled) setContentDescription(getText());
     }
 
     /** Overriding {@link View#onGenericMotionEvent(MotionEvent)}. */
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
-        if (mTerminal != null && event.isFromSource(InputDevice.SOURCE_MOUSE) && event.getAction() == MotionEvent.ACTION_SCROLL) {
+        if (mEmulator != null && event.isFromSource(InputDevice.SOURCE_MOUSE) && event.getAction() == MotionEvent.ACTION_SCROLL) {
             // Handle mouse wheel scrolling.
             boolean up = event.getAxisValue(MotionEvent.AXIS_VSCROLL) > 0.0f;
             doScroll(event, up ? -3 : 3);
@@ -836,7 +734,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     @Override
     @TargetApi(23)
     public boolean onTouchEvent(MotionEvent event) {
-        if (mTerminal == null) return true;
+        if (mEmulator == null) return true;
         final int action = event.getAction();
         if (event.getPointerCount() > 1) mMultiTouchGesture = true;
         if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
@@ -846,41 +744,32 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
             mTouchScrollMovesCursor = false;
         }
 
-        if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-            boolean secondary = event.isButtonPressed(MotionEvent.BUTTON_SECONDARY);
-            if (action == MotionEvent.ACTION_DOWN) mMouseContextMenuGesture = secondary;
-            if (mMouseContextMenuGesture || secondary) {
-                if (action == MotionEvent.ACTION_DOWN) showContextMenu(event.getX(), event.getY());
-                // Button state is already empty on UP; do not forward it as a left release.
-                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
-                    mMouseContextMenuGesture = false;
-                return true;
-            }
-        }
-
         if (isSelectingText()) {
             updateFloatingToolbarVisibility(event);
             mGestureRecognizer.onTouchEvent(event);
             return true;
         } else if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-            if (event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) {
+            if (event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)) {
+                if (action == MotionEvent.ACTION_DOWN) showContextMenu();
+                return true;
+            } else if (event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) {
                 ClipboardManager clipboardManager = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
                 ClipData clipData = clipboardManager.getPrimaryClip();
                 if (clipData != null) {
                     ClipData.Item clipItem = clipData.getItemAt(0);
                     if (clipItem != null) {
                         CharSequence text = clipItem.coerceToText(getContext());
-                        if (!TextUtils.isEmpty(text)) mTerminal.paste(text.toString());
+                        if (!TextUtils.isEmpty(text)) mEmulator.paste(text.toString());
                     }
                 }
-            } else if (mTerminal.isMouseTrackingActive()) { // BUTTON_PRIMARY.
+            } else if (mEmulator.isMouseTrackingActive()) { // BUTTON_PRIMARY.
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                     case MotionEvent.ACTION_UP:
-                        sendMouseEvent(event, event.getAction() == MotionEvent.ACTION_DOWN ? GhosttyTerminal.MOUSE_ACTION_PRESS : GhosttyTerminal.MOUSE_ACTION_RELEASE, GhosttyTerminal.MOUSE_BUTTON_LEFT);
+                        sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, event.getAction() == MotionEvent.ACTION_DOWN);
                         break;
                     case MotionEvent.ACTION_MOVE:
-                        sendMouseEvent(event, GhosttyTerminal.MOUSE_ACTION_MOTION, GhosttyTerminal.MOUSE_BUTTON_LEFT);
+                        sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
                         break;
                 }
             }
@@ -920,9 +809,9 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     /**
      * Key presses in software keyboards will generally NOT trigger this listener, although some
      * may elect to do so in some situations. Do not rely on this to catch software key presses.
-     * Gboard calls this when shouldEnableImeInput() and shouldEnforceCharBasedInput() are disabled
-     * (InputType.TYPE_NULL) instead of calling commitText(), with deviceId=-1. However, Hacker's
-     * Keyboard, OpenBoard, LG Keyboard call commitText().
+     * Gboard calls this when shouldEnforceCharBasedInput() is disabled (InputType.TYPE_NULL) instead
+     * of calling commitText(), with deviceId=-1. However, Hacker's Keyboard, OpenBoard, LG Keyboard
+     * call commitText().
      *
      * This function may also be called directly without android calling it, like by
      * `TerminalExtraKeys` which generates a KeyEvent manually which uses {@link KeyCharacterMap#VIRTUAL_KEYBOARD}
@@ -1017,34 +906,25 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
             mClient.logInfo(LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
-        long keyIdentity = keyIdentity(event);
-        boolean repeating = event.getRepeatCount() > 0;
-        if (!repeating) mPressedKeys.remove(keyIdentity);
-        int keyAction = repeating
-            ? GhosttyTerminal.KEY_ACTION_REPEAT
-            : GhosttyTerminal.KEY_ACTION_PRESS;
-        if (mTerminal == null) return true;
-        // Viewport navigation must not submit an unfinished IME composition.
-        // Let the client honor the shortcut setting before the normal input path.
-        boolean promptNavigationKey = event.isCtrlPressed() && event.isAltPressed()
-            && (keyCode == KeyEvent.KEYCODE_PAGE_UP || keyCode == KeyEvent.KEYCODE_PAGE_DOWN);
-        if (promptNavigationKey && mClient.onKeyDown(keyCode, event, mTermSession)) {
-            requestRender();
-            return true;
+        if (mEmulator == null) return true;
+        // Keys arriving here (hardware keyboard or the Termux extra-keys bar) bypass the IME, so
+        // finalize any in-progress composing now: it commits at the current cursor instead of the
+        // preview following the cursor around after it moves. (No-op when nothing is composing.)
+        // Modifier keys (shift/ctrl/alt/meta/sym/fn) produce no input and must NOT finalize:
+        // otherwise pressing shift to build a CJK double consonant (e.g. Korean ㅆ = shift+ㅅ
+        // for 했) aborts the in-progress composition (해) — finalize commits it and the posted
+        // restartInput clears the IME's composing buffer, so the following ㅅ enters detached.
+        if (!KeyEvent.isModifierKey(keyCode)) {
+            finalizeComposingIfActive();
         }
         if (isSelectingText()) {
             stopTextSelectionMode();
         }
 
-        if (!promptNavigationKey && mClient.onKeyDown(keyCode, event, mTermSession)) {
-            requestRender();
+        if (mClient.onKeyDown(keyCode, event, mTermSession)) {
+            invalidate();
             return true;
-        } else if (event.isSystem() &&
-                   keyCode != KeyEvent.KEYCODE_SYSRQ &&
-                   keyCode != KeyEvent.KEYCODE_BREAK &&
-                   keyCode != KeyEvent.KEYCODE_HELP &&
-                   (!mClient.shouldBackButtonBeMappedToEscape() ||
-                    keyCode != KeyEvent.KEYCODE_BACK)) {
+        } else if (event.isSystem() && (!mClient.shouldBackButtonBeMappedToEscape() || keyCode != KeyEvent.KEYCODE_BACK)) {
             return super.onKeyDown(keyCode, event);
         } else if (event.getAction() == KeyEvent.ACTION_MULTIPLE && keyCode == KeyEvent.KEYCODE_UNKNOWN) {
             mTermSession.write(event.getCharacters());
@@ -1053,18 +933,20 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
 
         final int metaState = event.getMetaState();
         final boolean controlDown = event.isCtrlPressed() || mClient.readControlKey();
-        final boolean leftAltDownFromEvent =
-            (metaState & KeyEvent.META_ALT_LEFT_ON) != 0;
-        final boolean leftAltDown =
-            leftAltDownFromEvent || mClient.readAltKey();
+        final boolean leftAltDown = (metaState & KeyEvent.META_ALT_LEFT_ON) != 0 || mClient.readAltKey();
         final boolean shiftDown = event.isShiftPressed() || mClient.readShiftKey();
         final boolean rightAltDownFromEvent = (metaState & KeyEvent.META_ALT_RIGHT_ON) != 0;
 
-        int keyMod = toGhosttyModifiers(event);
-        if (controlDown) keyMod |= GhosttyTerminal.MOD_CTRL;
-        if (event.isAltPressed() || leftAltDown) keyMod |= GhosttyTerminal.MOD_ALT;
-        if (shiftDown) keyMod |= GhosttyTerminal.MOD_SHIFT;
-        if (event.isNumLockOn()) keyMod |= GhosttyTerminal.MOD_NUM_LOCK;
+        int keyMod = 0;
+        if (controlDown) keyMod |= KeyHandler.KEYMOD_CTRL;
+        if (event.isAltPressed() || leftAltDown) keyMod |= KeyHandler.KEYMOD_ALT;
+        if (shiftDown) keyMod |= KeyHandler.KEYMOD_SHIFT;
+        if (event.isNumLockOn()) keyMod |= KeyHandler.KEYMOD_NUM_LOCK;
+        // https://github.com/termux/termux-app/issues/731
+        if (!event.isFunctionPressed() && handleKeyCode(keyCode, keyMod)) {
+            if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "handleKeyCode() took key event");
+            return true;
+        }
 
         // Clear Ctrl since we handle that ourselves:
         int bitsToClear = KeyEvent.META_CTRL_MASK;
@@ -1082,18 +964,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         int result = event.getUnicodeChar(effectiveMetaState);
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
             mClient.logInfo(LOG_TAG, "KeyEvent#getUnicodeChar(" + effectiveMetaState + ") returned: " + result);
-        int unshiftedCodePoint = getUnshiftedCodePoint(event);
-
         if (result == 0) {
-            // Function keys generally do not have text. Give the terminal
-            // encoder the physical key before allowing Android to fall back.
-            if (!event.isFunctionPressed() &&
-                handleKeyCode(keyCode, keyAction, keyMod, 0, null,
-                    unshiftedCodePoint, false, event)) {
-                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
-                    mClient.logInfo(LOG_TAG, "handleKeyCode() took key event");
-                return true;
-            }
             return false;
         }
 
@@ -1101,7 +972,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         if ((result & KeyCharacterMap.COMBINING_ACCENT) != 0) {
             // If entered combining accent previously, write it out:
             if (mCombiningAccent != 0)
-                inputCodePoint(event.getDeviceId(), mCombiningAccent, controlDown, leftAltDown);
+                inputCodePoint(mCombiningAccent, controlDown, leftAltDown);
             mCombiningAccent = result & KeyCharacterMap.COMBINING_ACCENT_MASK;
         } else {
             if (mCombiningAccent != 0) {
@@ -1109,63 +980,33 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                 if (combinedChar > 0) result = combinedChar;
                 mCombiningAccent = 0;
             }
+            inputCodePoint(result, controlDown, leftAltDown);
         }
 
-        if (mCombiningAccent != oldCombiningAccent) requestRender();
-
-        if ((result & KeyCharacterMap.COMBINING_ACCENT) != 0) {
-            mTerminal.sendKey(keyCode, keyAction,
-                keyMod, 0, null, unshiftedCodePoint, true);
-            return true;
-        }
-
-        if (result > 0 && mClient.onCodePoint(result, controlDown, mTermSession))
-            return true;
-
-        int terminalCodePoint = normalizeHardwareCodePoint(
-            event.getDeviceId(), result);
-        String text = printableText(terminalCodePoint);
-        int consumedModifiers = getConsumedModifiers(
-            event, effectiveMetaState, terminalCodePoint, shiftDown,
-            rightAltDownFromEvent && !leftAltDownFromEvent);
-
-        // https://github.com/termux/termux-app/issues/731
-        if (!event.isFunctionPressed() &&
-            handleKeyCode(keyCode, keyAction, keyMod, consumedModifiers, text,
-                unshiftedCodePoint, false, event)) {
-            if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
-                mClient.logInfo(LOG_TAG, "handleKeyCode() took key event");
-            return true;
-        }
-
-        writeCodePoint(event.getDeviceId(), result, controlDown, leftAltDown);
+        if (mCombiningAccent != oldCombiningAccent) invalidate();
 
         return true;
     }
 
-    public void inputCodePoint(int eventSource, int codePoint, boolean controlDownFromEvent, boolean leftAltDownFromEvent) {
+    public void inputCodePoint(int codePoint, boolean controlDownFromEvent, boolean leftAltDownFromEvent) {
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
-            mClient.logInfo(LOG_TAG, "inputCodePoint(eventSource=" + eventSource + ", codePoint=" + codePoint + ", controlDownFromEvent=" + controlDownFromEvent + ", leftAltDownFromEvent="
+            mClient.logInfo(LOG_TAG, "inputCodePoint(codePoint=" + codePoint + ", controlDownFromEvent=" + controlDownFromEvent + ", leftAltDownFromEvent="
                 + leftAltDownFromEvent + ")");
         }
 
         if (mTermSession == null) return;
+        // Same rationale as onKeyDown(): some input paths (extra-keys literal characters) call
+        // inputCodePoint directly, bypassing onKeyDown and the IME. Finalize composing first.
+        finalizeComposingIfActive();
 
-        if (!mCursorVisible) {
-            mCursorVisible = true;
-            requestRender();
-        }
+        // Ensure cursor is shown when a key is pressed down like long hold on (arrow) keys
+        if (mEmulator != null)
+            mEmulator.setCursorBlinkState(true);
 
         final boolean controlDown = controlDownFromEvent || mClient.readControlKey();
         final boolean altDown = leftAltDownFromEvent || mClient.readAltKey();
 
         if (mClient.onCodePoint(codePoint, controlDown, mTermSession)) return;
-
-        writeCodePoint(eventSource, codePoint, controlDown, altDown);
-    }
-
-    private void writeCodePoint(int eventSource, int codePoint,
-                                boolean controlDown, boolean altDown) {
 
         if (controlDown) {
             if (codePoint >= 'a' && codePoint <= 'z') {
@@ -1192,98 +1033,44 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         }
 
         if (codePoint > -1) {
-            codePoint = normalizeHardwareCodePoint(eventSource, codePoint);
+            // Work around bluetooth keyboards sending funny unicode characters instead
+            // of the more normal ones from ASCII that terminal programs expect - the
+            // desire to input the original characters should be low.
+            switch (codePoint) {
+                case 0x02DC: // SMALL TILDE.
+                    codePoint = 0x007E; // TILDE (~).
+                    break;
+                case 0x02CB: // MODIFIER LETTER GRAVE ACCENT.
+                    codePoint = 0x0060; // GRAVE ACCENT (`).
+                    break;
+                case 0x02C6: // MODIFIER LETTER CIRCUMFLEX ACCENT.
+                    codePoint = 0x005E; // CIRCUMFLEX ACCENT (^).
+                    break;
+            }
+
             // If left alt, send escape before the code point to make e.g. Alt+B and Alt+F work in readline:
             mTermSession.writeCodePoint(altDown, codePoint);
         }
     }
 
-    private static int normalizeHardwareCodePoint(int eventSource, int codePoint) {
-        if (eventSource <= KEY_EVENT_SOURCE_SOFT_KEYBOARD) return codePoint;
-
-        // Work around bluetooth keyboards sending compatibility characters
-        // instead of the ASCII characters terminal programs expect.
-        switch (codePoint) {
-            case 0x02DC: return 0x007E; // SMALL TILDE -> TILDE (~).
-            case 0x02CB: return 0x0060; // MODIFIER LETTER GRAVE -> GRAVE (`).
-            case 0x02C6: return 0x005E; // MODIFIER CIRCUMFLEX -> (^).
-            default: return codePoint;
-        }
-    }
-
-    private static long keyIdentity(KeyEvent event) {
-        return ((long) event.getDeviceId() << 32) |
-            (event.getKeyCode() & 0xffffffffL);
-    }
-
-    private static int getUnshiftedCodePoint(KeyEvent event) {
-        int codePoint = event.getUnicodeChar(0);
-        if ((codePoint & KeyCharacterMap.COMBINING_ACCENT) != 0)
-            codePoint &= KeyCharacterMap.COMBINING_ACCENT_MASK;
-        return normalizeHardwareCodePoint(event.getDeviceId(), codePoint);
-    }
-
-    @Nullable
-    private static String printableText(int codePoint) {
-        return codePoint >= 0x20 && codePoint != 0x7f
-            ? new String(Character.toChars(codePoint))
-            : null;
-    }
-
-    private static int getConsumedModifiers(KeyEvent event,
-                                            int effectiveMetaState,
-                                            int codePoint,
-                                            boolean shiftDown,
-                                            boolean rightAltDown) {
-        int consumed = 0;
-        if (shiftDown && event.getUnicodeChar(effectiveMetaState &
-                ~KeyEvent.META_SHIFT_MASK) != codePoint) {
-            consumed |= GhosttyTerminal.MOD_SHIFT;
-        }
-        if (rightAltDown && event.getUnicodeChar(effectiveMetaState &
-                ~KeyEvent.META_ALT_MASK) != codePoint) {
-            consumed |= GhosttyTerminal.MOD_ALT;
-        }
-        return consumed;
-    }
-
     /** Input the specified keyCode if applicable and return if the input was consumed. */
     public boolean handleKeyCode(int keyCode, int keyMod) {
-        if (mTerminal == null) return false;
-        return handleKeyCode(keyCode, GhosttyTerminal.KEY_ACTION_PRESS, keyMod,
-            0, null, 0, false, null);
-    }
-
-    private boolean handleKeyCode(int keyCode, int keyAction, int keyMod,
-                                  int consumedModifiers,
-                                  @Nullable String text,
-                                  int unshiftedCodePoint,
-                                  boolean composing,
-                                  @Nullable KeyEvent event) {
-        if (!mCursorVisible) {
-            mCursorVisible = true;
-            requestRender();
-        }
+        // Ensure cursor is shown when a key is pressed down like long hold on (arrow) keys
+        if (mEmulator != null)
+            mEmulator.setCursorBlinkState(true);
 
         if (handleKeyCodeAction(keyCode, keyMod))
             return true;
-        if (keyAction == GhosttyTerminal.KEY_ACTION_REPEAT &&
-            (event == null || !mPressedKeys.contains(keyIdentity(event)))) {
-            return true;
-        }
 
-        boolean forwarded = mTerminal.sendKey(
-            keyCode, keyAction,
-            keyMod, consumedModifiers, text, unshiftedCodePoint, composing);
-        if (forwarded && event != null &&
-            keyAction == GhosttyTerminal.KEY_ACTION_PRESS) {
-            mPressedKeys.add(keyIdentity(event));
-        }
-        return forwarded;
+        TerminalEmulator term = mTermSession.getEmulator();
+        String code = KeyHandler.getCode(keyCode, keyMod, term.isCursorKeysApplicationMode(), term.isKeypadApplicationMode());
+        if (code == null) return false;
+        mTermSession.write(code);
+        return true;
     }
 
     public boolean handleKeyCodeAction(int keyCode, int keyMod) {
-        boolean shiftDown = (keyMod & GhosttyTerminal.MOD_SHIFT) != 0;
+        boolean shiftDown = (keyMod & KeyHandler.KEYMOD_SHIFT) != 0;
 
         switch (keyCode) {
             case KeyEvent.KEYCODE_PAGE_UP:
@@ -1291,13 +1078,9 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                 // shift+page_up and shift+page_down should scroll scrollback history instead of
                 // scrolling command history or changing pages
                 if (shiftDown) {
-                    long time = android.os.SystemClock.uptimeMillis();
-                    MotionEvent motionEvent = MotionEvent.obtain(time, time,
-                        MotionEvent.ACTION_DOWN, 0, 0, 0);
-                    doScroll(motionEvent,
-                        keyCode == KeyEvent.KEYCODE_PAGE_UP
-                            ? -mTerminal.getRows()
-                            : mTerminal.getRows());
+                    long time = SystemClock.uptimeMillis();
+                    MotionEvent motionEvent = MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN, 0, 0, 0);
+                    doScroll(motionEvent, keyCode == KeyEvent.KEYCODE_PAGE_UP ? -mEmulator.mRows : mEmulator.mRows);
                     motionEvent.recycle();
                     return true;
                 }
@@ -1318,75 +1101,19 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
             mClient.logInfo(LOG_TAG, "onKeyUp(keyCode=" + keyCode + ", event=" + event + ")");
 
-        boolean forwarded = mPressedKeys.remove(keyIdentity(event));
-
         // Do not return for KEYCODE_BACK and send it to the client since user may be trying
         // to exit the activity.
-        if (mTerminal == null && keyCode != KeyEvent.KEYCODE_BACK) return true;
+        if (mEmulator == null && keyCode != KeyEvent.KEYCODE_BACK) return true;
 
-        boolean clientHandled = mClient.onKeyUp(keyCode, event);
-        if (clientHandled) requestRender();
-        if (!forwarded && clientHandled) return true;
-        if (!forwarded && event.isSystem() &&
-                   keyCode != KeyEvent.KEYCODE_SYSRQ &&
-                   keyCode != KeyEvent.KEYCODE_BREAK &&
-                   keyCode != KeyEvent.KEYCODE_HELP) {
+        if (mClient.onKeyUp(keyCode, event)) {
+            invalidate();
+            return true;
+        } else if (event.isSystem()) {
             // Let system key events through.
             return super.onKeyUp(keyCode, event);
         }
-        if (!forwarded) return true;
 
-        int codePoint = event.getUnicodeChar(event.getMetaState() &
-            ~(KeyEvent.META_CTRL_MASK | KeyEvent.META_ALT_LEFT_ON));
-        int unshiftedCodePoint = getUnshiftedCodePoint(event);
-        int terminalCodePoint = normalizeHardwareCodePoint(
-            event.getDeviceId(), codePoint);
-        String text = (codePoint & KeyCharacterMap.COMBINING_ACCENT) == 0
-            ? printableText(terminalCodePoint)
-            : null;
-        int modifiers = toGhosttyModifiers(event);
-        boolean rightAltDown =
-            (event.getMetaState() & KeyEvent.META_ALT_RIGHT_ON) != 0;
-        int consumedModifiers = getConsumedModifiers(
-            event, event.getMetaState(), terminalCodePoint,
-            event.isShiftPressed(), rightAltDown);
-        mTerminal.sendKey(keyCode, GhosttyTerminal.KEY_ACTION_RELEASE,
-            modifiers, consumedModifiers, text, unshiftedCodePoint, false);
         return true;
-    }
-
-    private int toGhosttyModifiers(KeyEvent event) {
-        int modifiers = 0;
-        if (event.isShiftPressed()) modifiers |= GhosttyTerminal.MOD_SHIFT;
-        if (event.isCtrlPressed()) modifiers |= GhosttyTerminal.MOD_CTRL;
-        if (event.isAltPressed()) modifiers |= GhosttyTerminal.MOD_ALT;
-        if (event.isMetaPressed()) modifiers |= GhosttyTerminal.MOD_SUPER;
-        if (event.isCapsLockOn()) modifiers |= GhosttyTerminal.MOD_CAPS_LOCK;
-        if (event.isNumLockOn()) modifiers |= GhosttyTerminal.MOD_NUM_LOCK;
-        int meta = event.getMetaState();
-        if ((meta & KeyEvent.META_SHIFT_RIGHT_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_SHIFT_SIDE;
-        if ((meta & KeyEvent.META_CTRL_RIGHT_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_CTRL_SIDE;
-        if ((meta & KeyEvent.META_ALT_RIGHT_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_ALT_SIDE;
-        if ((meta & KeyEvent.META_META_RIGHT_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_SUPER_SIDE;
-        return modifiers;
-    }
-
-    private int toGhosttyModifiers(MotionEvent event) {
-        int modifiers = 0;
-        int meta = event.getMetaState();
-        if ((meta & KeyEvent.META_SHIFT_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_SHIFT;
-        if ((meta & KeyEvent.META_CTRL_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_CTRL;
-        if ((meta & KeyEvent.META_ALT_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_ALT;
-        if ((meta & KeyEvent.META_META_ON) != 0)
-            modifiers |= GhosttyTerminal.MOD_SUPER;
-        return modifiers;
     }
 
     /**
@@ -1404,165 +1131,115 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         int viewHeight = getHeight();
         if (viewWidth == 0 || viewHeight == 0 || mTermSession == null) return;
 
-        int newColumns = Math.max(4, (int) (viewWidth / mCellWidth));
-        int newRows = Math.max(4, viewHeight / mCellHeight);
+        // Set to 80 and 24 if you want to enable vttest.
+        int newColumns = Math.max(4, (int) (viewWidth / mRenderer.mFontWidth));
+        int newRows = Math.max(4, (viewHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
 
-        if (mSessionNeedsUpdate || mTerminal == null ||
-            newColumns != mTerminal.getColumns() ||
-            newRows != mTerminal.getRows()) {
-            mTermSession.updateSize(newColumns, newRows, mCellWidth, mCellHeight);
-            mTerminal = mTermSession.getTerminal();
-            if (mTerminal == null) return;
-            mSessionNeedsUpdate = false;
-            mTerminal.setGlyphProtocolEnabled(true);
-            mTerminal.setKittyGraphicsOptions(64L * 1024L * 1024L,
-                getContext().getCacheDir().getAbsolutePath());
+        if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
+            mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
+            mEmulator = mTermSession.getEmulator();
             mClient.onEmulatorSet();
 
+            // Update mTerminalCursorBlinkerRunnable inner class mEmulator on session change
             if (mTerminalCursorBlinkerRunnable != null)
-                mTerminalCursorBlinkerRunnable.setTerminal(mTerminal);
+                mTerminalCursorBlinkerRunnable.setEmulator(mEmulator);
+
+            mTopRow = 0;
+            scrollTo(0, 0);
+            invalidate();
         }
-
-        if (mSurfaceReady && mTerminal != null && !mTerminal.isClosed()) {
-            Surface surface = getHolder().getSurface();
-            if (surface != null && surface.isValid()) {
-                final GhosttyTerminal terminal = mTerminal;
-                final int width = viewWidth;
-                final int height = viewHeight;
-                final int textSize = mTextSize;
-                final String[] fontPaths = getFontPaths();
-                final boolean attach = !mSurfaceAttached;
-                final long generation = mRenderGeneration;
-                mSurfaceAttached = true;
-                submitRenderTask(() -> {
-                    if (!isCurrentRenderTarget(terminal, generation)) return;
-                    try {
-                        if (attach) {
-                            terminal.attachSurfaceWithFonts(surface, width,
-                                height, textSize, fontPaths);
-                        } else {
-                            terminal.resizeSurfaceWithFonts(width, height,
-                                textSize, fontPaths);
-                        }
-                        post(() -> {
-                            if (!isCurrentRenderTarget(terminal, generation)) return;
-                            mRenderError = null;
-                            requestRender();
-                        });
-                    } catch (RuntimeException e) {
-                        post(() -> {
-                            if (!isCurrentRenderTarget(terminal, generation)) return;
-                            mSurfaceAttached = false;
-                            showRenderError("Vulkan terminal initialization failed", e);
-                        });
-                    }
-                });
-            }
-        }
-    }
-
-    private void requestRender() {
-        invalidate();
-        if (!mSurfaceReady || !mSurfaceAttached || mTerminal == null ||
-            mTerminal.isClosed() || mRenderError != null || mRenderExecutor.isShutdown()) return;
-        mRenderDirty.set(true);
-        if (!mRenderScheduled.compareAndSet(false, true)) return;
-        final GhosttyTerminal terminal = mTerminal;
-        final long generation = mRenderGeneration;
-        final boolean cursorVisible = mCursorVisible;
-        mRenderDirty.set(false);
-        mRenderExecutor.execute(() -> {
-            long animationDelay = -1;
-            boolean retry = false;
-            try {
-                if (!isCurrentRenderTarget(terminal, generation)) return;
-                animationDelay = terminal.tickKittyGraphicsAnimations(
-                    SystemClock.uptimeMillis());
-                retry = !terminal.render(cursorVisible);
-                long holdDelay = terminal.getRenderHoldDelay();
-                if (holdDelay >= 0 &&
-                    (animationDelay < 0 || holdDelay < animationDelay))
-                    animationDelay = holdDelay;
-            } catch (RuntimeException e) {
-                post(() -> {
-                    if (isCurrentRenderTarget(terminal, generation))
-                        showRenderError("Vulkan terminal render failed", e);
-                });
-            } finally {
-                final long nextAnimationDelay = animationDelay;
-                final boolean retryRender = retry;
-                post(() -> {
-                    // A completion from a removed session or destroyed Surface
-                    // must not cancel a new session's pending frame/animation.
-                    if (generation != mRenderGeneration || terminal != mTerminal) return;
-                    mRenderScheduled.set(false);
-                    removeCallbacks(mKittyAnimationRender);
-                    if (!isCurrentRenderTarget(terminal, generation) || mRenderError != null) return;
-                    if (mRenderDirty.get() || retryRender) {
-                        // Retry lock contention at frame cadence, without a
-                        // tight UI/render loop while the PTY is busy.
-                        postDelayed(mKittyAnimationRender, 16);
-                    } else if (nextAnimationDelay >= 0) {
-                        postDelayed(mKittyAnimationRender,
-                            Math.max(1, nextAnimationDelay));
-                    }
-                });
-            }
-        });
-    }
-
-    private boolean isCurrentRenderTarget(GhosttyTerminal terminal, long generation) {
-        return generation == mRenderGeneration && terminal == mTerminal &&
-            mSurfaceReady && !terminal.isClosed();
-    }
-
-    private void cancelRenderRequests() {
-        mRenderGeneration++;
-        removeCallbacks(mKittyAnimationRender);
-        mRenderDirty.set(false);
-        mRenderScheduled.set(false);
-    }
-
-    private void showRenderError(String message, RuntimeException error) {
-        removeCallbacks(mKittyAnimationRender);
-        mRenderError = getContext().getString(R.string.terminal_renderer_unavailable);
-        invalidate();
-        if (mClient != null) mClient.logStackTraceWithMessage(LOG_TAG, message, error);
-    }
-
-    /**
-     * Submit a task to the render thread, ignoring it if the executor has
-     * already been shut down (e.g. after {@link #onDetachedFromWindow()}).
-     */
-    private void submitRenderTask(Runnable task) {
-        if (!mRenderExecutor.isShutdown()) mRenderExecutor.execute(task);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        renderTextSelection();
-        if (mRenderError != null) {
-            mErrorPaint.setColor(0xffeeeeee);
-            mErrorPaint.setTextSize(16 * getResources().getDisplayMetrics().scaledDensity);
-            canvas.drawColor(0xff202020);
-            canvas.drawText(mRenderError, 16, 48, mErrorPaint);
+        if (mEmulator == null) {
+            canvas.drawColor(TerminalColors.COLOR_SCHEME.mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND]);
+        } else {
+            // render the terminal view and highlight any selected text
+            int[] sel = mDefaultSelectors;
+            if (mTextSelectionCursorController != null) {
+                mTextSelectionCursorController.getSelectors(sel);
+            }
+
+            mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3]);
+
+            // render the text selection handles
+            renderTextSelection();
+
+            // render the in-progress IME composing text (e.g. CJK) preview at the cursor
+            drawComposingText(canvas);
         }
     }
 
-    public GhosttyTerminal getTerminal() {
-        return mTerminal;
+    /** Update the IME composing text preview shown at the cursor and request a redraw if it changed. */
+    private void setComposingTextPreview(CharSequence text) {
+        CharSequence newPreview = (text != null && text.length() > 0) ? text : null;
+        if (newPreview == null) {
+            if (mComposingText == null) return;
+            mComposingText = null;
+        } else {
+            mComposingText = newPreview;
+        }
+        invalidate();
     }
 
-    /** Scroll position relative to the active screen, with zero at the bottom. */
-    public int getTopRow() {
-        return mTerminal == null ? 0 : mTerminal.getViewportOffset() - mTerminal.getScrollbackRows();
+    /**
+     * Finalize (commit) any in-progress IME composing text through the InputConnection path.
+     * Called when input bypasses the IME (hardware keys / extra-keys literals via
+     * {@link #onKeyDown} / {@link #inputCodePoint}), which would otherwise leave the composing
+     * text uncommitted with the preview chasing the cursor once it moves.
+     *
+     * Some IMEs do not keep the composing text in the (fake) Editable, so {@code getEditable()}
+     * may be empty even though {@code mComposingText} has the in-progress composition; copy it in
+     * so {@code finishComposingText} sends it (no direct pty write).
+     *
+     * Afterwards {@code restartInput} is posted so the IME discards its own composing buffer
+     * (some IMEs keep committed text stale in it). Only after finalize — not every commit — so
+     * digit-only input is unaffected.
+     */
+    private void finalizeComposingIfActive() {
+        if (mComposingText == null) return;
+        if (mInputConnection != null) {
+            Editable e = mInputConnection.getEditable();
+            if (e.length() == 0 && mComposingText.length() > 0) {
+                e.append(mComposingText);
+            }
+            mInputConnection.finishComposingText();
+        }
+        post(() -> {
+            InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.restartInput(TerminalView.this);
+        });
     }
 
-    public void setTopRow(int row) {
-        if (mTerminal == null) return;
-        scrollViewport(Math.min(0, Math.max(-mTerminal.getScrollbackRows(), row)) - getTopRow());
-        requestRender();
+    /**
+     * Draw the current IME composing text (e.g. partially composed CJK) as a preview at the
+     * terminal cursor, on top of the rendered terminal. Delegates to
+     * {@link TerminalRenderer#renderComposingText} so the preview uses the exact same paint, font
+     * family/fallback, width scaling and text style (bold/italic/colors/dim) as the on-screen text.
+     */
+    private void drawComposingText(Canvas canvas) {
+        if (mEmulator == null || mRenderer == null) return;
+        // Some IMEs still send composing text for TYPE_NULL. Respect the preview preference
+        // independently of inputType, without discarding the IME's pending text.
+        if (!mClient.shouldEnableImeComposing()) return;
+        CharSequence composing = mComposingText;
+        if (composing == null || composing.length() == 0) return;
+        // Read the IME's pre-edit cursor (its Selection within the composing span of the fake
+        // Editable) so in-composition cursor movement is visible (GNOME-terminal-like). Movement
+        // is the IME's job; we only display it.
+        int cursorOffsetInChars = -1;
+        if (mInputConnection != null) {
+            Editable editable = mInputConnection.getEditable();
+            int composingStart = BaseInputConnection.getComposingSpanStart(editable);
+            int composingEnd = BaseInputConnection.getComposingSpanEnd(editable);
+            int selStart = Selection.getSelectionStart(editable);
+            if (composingStart != -1 && composingEnd != -1 && selStart >= composingStart && selStart <= composingEnd) {
+                cursorOffsetInChars = selStart - composingStart;
+            }
+        }
+        final char[] chars = composing.toString().toCharArray();
+        mRenderer.renderComposingText(mEmulator, canvas, mTopRow, chars, 0, chars.length, cursorOffsetInChars);
     }
 
     public TerminalSession getCurrentSession() {
@@ -1570,143 +1247,34 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     private CharSequence getText() {
-        return mTerminal == null ? "" : mTerminal.getViewportText();
+        return mEmulator.getScreen().getSelectedText(0, mTopRow, mEmulator.mColumns, mTopRow + mEmulator.mRows);
     }
 
     public int getCursorX(float x) {
-        return (int) (x / mCellWidth);
+        return (int) (x / mRenderer.mFontWidth);
     }
 
     public int getCursorY(float y) {
-        return (int) (y / mCellHeight);
+        return (int) (((y - 40) / mRenderer.mFontLineSpacing) + mTopRow);
     }
 
     public int getPointX(int cx) {
-        if (mTerminal != null && cx > mTerminal.getColumns()) {
-            cx = mTerminal.getColumns();
+        if (cx > mEmulator.mColumns) {
+            cx = mEmulator.mColumns;
         }
-        return Math.round(cx * mCellWidth);
+        return Math.round(cx * mRenderer.mFontWidth);
     }
 
     public int getPointY(int cy) {
-        return Math.round(cy * mCellHeight);
+        return Math.round((cy - mTopRow) * mRenderer.mFontLineSpacing);
     }
 
-    /**
-     * Scroll while a selection is active and return the row adjustment needed
-     * to keep existing endpoints on the same terminal rows.
-     */
-    public int scrollSelectionViewport(int rows) {
-        if (mTerminal == null || mTerminal.isAlternateBufferActive()) return 0;
-        int before = mTerminal.getViewportOffset();
-        mTerminal.scrollViewport(rows);
-        int after = mTerminal.getViewportOffset();
-        int selectionRowShift = before - after;
-        if (selectionRowShift != 0) {
-            awakenScrollBars();
-            requestRender();
-        }
-        return selectionRowShift;
+    public int getTopRow() {
+        return mTopRow;
     }
 
-    public int getCellWidth() {
-        return mCellWidth;
-    }
-
-    public int getCellHeight() {
-        return mCellHeight;
-    }
-
-    public int getTerminalRows() {
-        return mTerminal == null ? 0 : mTerminal.getRows();
-    }
-
-    public int getTerminalColumns() {
-        return mTerminal == null ? 0 : mTerminal.getColumns();
-    }
-
-    public int getScrollbackRows() {
-        return mTerminal == null ? 0 : mTerminal.getScrollbackRows();
-    }
-
-    public boolean hasTerminal() {
-        return mTerminal != null;
-    }
-
-    public void paste(String text) {
-        if (mTerminal != null) mTerminal.paste(text);
-    }
-
-    public void toggleAutoScrollDisabled() {
-        mAutoScrollDisabled = !mAutoScrollDisabled;
-        if (!mAutoScrollDisabled && mTerminal != null) {
-            mTerminal.scrollToBottom();
-            requestRender();
-        }
-    }
-
-    public boolean setSelection(int startColumn, int startRow,
-                                int endColumn, int endRow) {
-        if (mTerminal == null ||
-            !mTerminal.setSelection(startColumn, startRow, endColumn, endRow)) {
-            return false;
-        }
-        requestRender();
-        return true;
-    }
-
-    @Nullable
-    public int[] selectWord(int column, int row) {
-        return mTerminal == null ? null : mTerminal.selectWord(column, row);
-    }
-
-    public void clearNativeSelection() {
-        if (mTerminal != null) mTerminal.clearSelection();
-    }
-
-    @Nullable
-    public String getNativeSelectedText() {
-        return mTerminal == null ? null : mTerminal.getSelectedText();
-    }
-
-    @Nullable
-    public String getHyperlinkAt(int column, int row) {
-        return mTerminal == null ? null : mTerminal.getHyperlink(column, row);
-    }
-
-    @Nullable
-    public String getContextHyperlink() {
-        return mContextHyperlink;
-    }
-
-    @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        cancelRenderRequests();
-        mSurfaceReady = true;
-        updateSize();
-    }
-
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width,
-                               int height) {
-        mSurfaceReady = true;
-        updateSize();
-    }
-
-    @Override
-    public void surfaceRedrawNeeded(SurfaceHolder holder) {
-        requestRender();
-    }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        mSurfaceReady = false;
-        cancelRenderRequests();
-        if (mTerminal != null && mSurfaceAttached) {
-            final GhosttyTerminal terminal = mTerminal;
-            mSurfaceAttached = false;
-            submitRenderTask(terminal::detachSurface);
-        }
+    public void setTopRow(int mTopRow) {
+        this.mTopRow = mTopRow;
     }
 
 
@@ -1757,6 +1325,8 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     public AutofillManager getAutoFillManagerService() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null;
+
         try {
             Context context = getContext();
             if (context == null) return null;
@@ -1768,6 +1338,8 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     public boolean isAutoFillEnabled() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false;
+
         try {
             AutofillManager autofillManager = getAutoFillManagerService();
             return autofillManager != null && autofillManager.isEnabled();
@@ -1778,14 +1350,19 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     public synchronized void requestAutoFillUsername() {
-        requestAutoFill(new String[]{View.AUTOFILL_HINT_USERNAME});
+        requestAutoFill(
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? new String[]{View.AUTOFILL_HINT_USERNAME} :
+                null);
     }
 
     public synchronized void requestAutoFillPassword() {
-        requestAutoFill(new String[]{View.AUTOFILL_HINT_PASSWORD});
+        requestAutoFill(
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? new String[]{View.AUTOFILL_HINT_PASSWORD} :
+            null);
     }
 
     public synchronized void requestAutoFill(String[] autoFillHints) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         if (autoFillHints == null || autoFillHints.length < 1) return;
 
         try {
@@ -1806,6 +1383,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     public synchronized void cancelRequestAutoFill() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         if (mAutoFillType == AUTOFILL_TYPE_NONE) return;
 
         try {
@@ -1850,7 +1428,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         if (mTerminalCursorBlinkerRate == 0) {
             mClient.logVerbose(LOG_TAG, "Cursor blinker disabled");
             stopTerminalCursorBlinker();
-            requestRender();
         }
 
         return result;
@@ -1863,12 +1440,12 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
      *
      * This should be called when the view holding this activity is resumed or stopped so that
      * cursor blinker does not run when activity is not visible. If you call this on onResume()
-     * to start cursor blinking, then ensure that {@link #mTerminal} is set, otherwise wait for the
+     * to start cursor blinking, then ensure that {@link #mEmulator} is set, otherwise wait for the
      * {@link TerminalViewClient#onEmulatorSet()} event after calling {@link #attachSession(TerminalSession)}
-     * for the first session added in the activity since blinking will not start if {@link #mTerminal}
+     * for the first session added in the activity since blinking will not start if {@link #mEmulator}
      * is not set, like if activity is started again after exiting it with double back press. Do not
      * call this directly after {@link #attachSession(TerminalSession)} since {@link #updateSize()}
-     * may return without setting {@link #mTerminal} since width/height may be 0. Its called again in
+     * may return without setting {@link #mEmulator} since width/height may be 0. Its called again in
      * {@link #onSizeChanged(int, int, int, int)}. Calling on onResume() if emulator is already set
      * is necessary, since onEmulatorSet() may not be called after activity is started after device
      * display timeout with double tap and not power button.
@@ -1902,21 +1479,23 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
      *
      * @param start If cursor blinker should be started or stopped.
      * @param startOnlyIfCursorEnabled If set to {@code true}, then it will also be checked if the
-     *                                 cursor is even enabled before
+     *                                 cursor is even enabled by {@link TerminalEmulator} before
      *                                 starting the cursor blinker.
      */
     public synchronized void setTerminalCursorBlinkerState(boolean start, boolean startOnlyIfCursorEnabled) {
         // Stop any existing cursor blinker callbacks
         stopTerminalCursorBlinker();
 
-        if (mTerminal == null) return;
+        if (mEmulator == null) return;
+
+        mEmulator.setCursorBlinkingEnabled(false);
 
         if (start) {
             // If cursor blinker is not enabled or is not valid
             if (mTerminalCursorBlinkerRate < TERMINAL_CURSOR_BLINK_RATE_MIN || mTerminalCursorBlinkerRate > TERMINAL_CURSOR_BLINK_RATE_MAX)
                 return;
             // If cursor blinder is to be started only if cursor is enabled
-            else if (startOnlyIfCursorEnabled && !mTerminal.isCursorVisible()) {
+            else if (startOnlyIfCursorEnabled && ! mEmulator.isCursorEnabled()) {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
                     mClient.logVerbose(LOG_TAG, "Ignoring call to start cursor blinker since cursor is not enabled");
                 return;
@@ -1927,14 +1506,9 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                 mClient.logVerbose(LOG_TAG, "Starting cursor blinker with the blink rate " + mTerminalCursorBlinkerRate);
             if (mTerminalCursorBlinkerHandler == null)
                 mTerminalCursorBlinkerHandler = new Handler(Looper.getMainLooper());
-            mTerminalCursorBlinkerRunnable = new TerminalCursorBlinkerRunnable(
-                mTerminal, mTerminalCursorBlinkerRate);
-            requestRender();
-            mTerminalCursorBlinkerHandler.postDelayed(
-                mTerminalCursorBlinkerRunnable, mTerminalCursorBlinkerRate);
-        } else {
-            mCursorVisible = true;
-            requestRender();
+            mTerminalCursorBlinkerRunnable = new TerminalCursorBlinkerRunnable(mEmulator, mTerminalCursorBlinkerRate);
+            mEmulator.setCursorBlinkingEnabled(true);
+            mTerminalCursorBlinkerRunnable.run();
         }
     }
 
@@ -1947,36 +1521,40 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
                 mClient.logVerbose(LOG_TAG, "Stopping cursor blinker");
             mTerminalCursorBlinkerHandler.removeCallbacks(mTerminalCursorBlinkerRunnable);
         }
-        mTerminalCursorBlinkerRunnable = null;
-        mCursorVisible = true;
     }
 
     private class TerminalCursorBlinkerRunnable implements Runnable {
 
-        private GhosttyTerminal mBlinkTerminal;
+        private TerminalEmulator mEmulator;
         private final int mBlinkRate;
 
-        public TerminalCursorBlinkerRunnable(GhosttyTerminal terminal,
-                                             int blinkRate) {
-            mBlinkTerminal = terminal;
+        // Initialize with false so that initial blink state is visible after toggling
+        boolean mCursorVisible = false;
+
+        public TerminalCursorBlinkerRunnable(TerminalEmulator emulator, int blinkRate) {
+            mEmulator = emulator;
             mBlinkRate = blinkRate;
         }
 
-        public void setTerminal(GhosttyTerminal terminal) {
-            mBlinkTerminal = terminal;
+        public void setEmulator(TerminalEmulator emulator) {
+            mEmulator = emulator;
         }
 
         public void run() {
             try {
-                if (mBlinkTerminal != null && mBlinkTerminal == mTerminal && !mBlinkTerminal.isClosed()) {
+                if (mEmulator != null) {
+                    // Toggle the blink state and then invalidate() the view so
+                    // that onDraw() is called, which then calls TerminalRenderer.render()
+                    // which checks with TerminalEmulator.shouldCursorBeVisible() to decide whether
+                    // to draw the cursor or not
                     mCursorVisible = !mCursorVisible;
-                    requestRender();
+                    //mClient.logVerbose(LOG_TAG, "Toggling cursor blink state to " + mCursorVisible);
+                    mEmulator.setCursorBlinkState(mCursorVisible);
+                    invalidate();
                 }
             } finally {
                 // Recall the Runnable after mBlinkRate milliseconds to toggle the blink state
-                if (mTerminalCursorBlinkerRunnable == this && mBlinkTerminal != null &&
-                    mBlinkTerminal == mTerminal && !mBlinkTerminal.isClosed())
-                    mTerminalCursorBlinkerHandler.postDelayed(this, mBlinkRate);
+                mTerminalCursorBlinkerHandler.postDelayed(this, mBlinkRate);
             }
         }
     }
@@ -2004,7 +1582,7 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     private boolean hideTextSelectionCursors() {
-        return getTextSelectionCursorController().hide();
+        return mTextSelectionCursorController != null && mTextSelectionCursorController.hide();
     }
 
     private void renderTextSelection() {
@@ -2048,55 +1626,33 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     public void startTextSelectionMode(MotionEvent event) {
-        if (mTerminal == null || !requestFocus()) {
+        if (mEmulator == null || mRenderer == null || !requestFocus()) {
             return;
         }
 
         mScroller.abortAnimation();
-        int[] point = getColumnAndRow(event);
-        mContextHyperlink = getHyperlinkAt(point[0], point[1]);
         showTextSelectionCursors(event);
         mClient.copyModeChanged(isSelectingText());
-        // The selection handles may receive the rest of the long-press
-        // gesture, so do not rely on TerminalView receiving ACTION_UP to
-        // make the floating toolbar visible.
-        showFloatingToolbar();
 
-        requestRender();
+        invalidate();
     }
 
     public void stopTextSelectionMode() {
-        mContextHyperlink = null;
         if (hideTextSelectionCursors()) {
             mClient.copyModeChanged(isSelectingText());
-            clearNativeSelection();
-            requestRender();
+            invalidate();
+        }
+    }
+
+    private void decrementYTextSelectionCursors(int decrement) {
+        if (mTextSelectionCursorController != null) {
+            mTextSelectionCursorController.decrementYTextSelectionCursors(decrement);
         }
     }
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-
-        // Recreate the render executor if it was shut down on a previous detach
-        // so a re-attached view can render again.
-        if (mRenderExecutor.isShutdown()) {
-            final ExecutorService previousExecutor = mRenderExecutor;
-            mRenderExecutor = Executors.newSingleThreadExecutor();
-            // Keep detach/attach ordered even when the same View is quickly
-            // reattached before its old executor has drained. Never wait on UI.
-            mRenderExecutor.execute(() -> {
-                boolean interrupted = false;
-                while (!previousExecutor.isTerminated()) {
-                    try {
-                        previousExecutor.awaitTermination(1, TimeUnit.SECONDS);
-                    } catch (InterruptedException e) {
-                        interrupted = true;
-                    }
-                }
-                if (interrupted) Thread.currentThread().interrupt();
-            });
-        }
 
         if (mTextSelectionCursorController != null) {
             getViewTreeObserver().addOnTouchModeChangeListener(mTextSelectionCursorController);
@@ -2107,11 +1663,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
 
-        mSurfaceReady = false;
-        cancelRenderRequests();
-        mScroller.abortAnimation();
-        stopTerminalCursorBlinker();
-
         if (mTextSelectionCursorController != null) {
             // Might solve the following exception
             // android.view.WindowLeaked: Activity com.termux.app.TermuxActivity has leaked window android.widget.PopupWindow
@@ -2120,15 +1671,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
             getViewTreeObserver().removeOnTouchModeChangeListener(mTextSelectionCursorController);
             mTextSelectionCursorController.onDetached();
         }
-
-        // Detach the surface and stop the dedicated render thread so it does not
-        // outlive the view (and keep the terminal from being reclaimed).
-        if (mTerminal != null && mSurfaceAttached) {
-            final GhosttyTerminal terminal = mTerminal;
-            mSurfaceAttached = false;
-            submitRenderTask(terminal::detachSurface);
-        }
-        mRenderExecutor.shutdown();
     }
 
 
@@ -2137,7 +1679,6 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
      * Define functions required for long hold toolbar.
      */
     private final Runnable mShowFloatingToolbar = new Runnable() {
-        @RequiresApi(api = Build.VERSION_CODES.M)
         @Override
         public void run() {
             if (getTextSelectionActionMode() != null) {
@@ -2146,16 +1687,13 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         }
     };
 
-    @RequiresApi(api = Build.VERSION_CODES.M)
     private void showFloatingToolbar() {
         if (getTextSelectionActionMode() != null) {
             int delay = ViewConfiguration.getDoubleTapTimeout();
-            removeCallbacks(mShowFloatingToolbar);
             postDelayed(mShowFloatingToolbar, delay);
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.M)
     void hideFloatingToolbar() {
         if (getTextSelectionActionMode() != null) {
             removeCallbacks(mShowFloatingToolbar);
@@ -2167,22 +1705,13 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
         if (getTextSelectionActionMode() != null) {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_MOVE:
-                    if (shouldHideFloatingToolbarForMove(
-                            mTextSelectionCursorController.isSelectionStartDragged(),
-                            mTextSelectionCursorController.isSelectionEndDragged())) {
-                        hideFloatingToolbar();
-                    }
+                    hideFloatingToolbar();
                     break;
                 case MotionEvent.ACTION_UP:  // fall through
                 case MotionEvent.ACTION_CANCEL:
                     showFloatingToolbar();
             }
         }
-    }
-
-    static boolean shouldHideFloatingToolbarForMove(boolean startHandleDragged,
-                                                    boolean endHandleDragged) {
-        return startHandleDragged || endHandleDragged;
     }
 
 }

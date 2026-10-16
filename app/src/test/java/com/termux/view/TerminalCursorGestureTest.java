@@ -2,17 +2,17 @@ package com.termux.view;
 
 import android.app.Activity;
 import android.app.Application;
+import android.graphics.Typeface;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
 
-import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
-import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
-import com.termux.terminal.GhosttyTerminal;
+import com.termux.shared.terminal.TermuxTerminalViewClientBase;
+import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
-import com.termux.test.ShadowGhosttyTerminal;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -20,7 +20,6 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
-import org.robolectric.shadow.api.Shadow;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
 import org.robolectric.util.ReflectionHelpers;
@@ -51,13 +50,13 @@ public class TerminalCursorGestureTest {
         for (int i = 0; i < lines.length; i += 4) {
             lines[i] = 'x'; lines[i + 1] = '\r'; lines[i + 2] = '\n'; lines[i + 3] = ' ';
         }
-        view.getTerminal().feed(lines, 0, lines.length);
-        assertTrue(view.getScrollbackRows() > 0);
+        view.mEmulator.append(lines, lines.length);
+        assertTrue(view.mEmulator.getScreen().getActiveTranscriptRows() > 0);
         long time = SystemClock.uptimeMillis();
         touch(view, time, time, MotionEvent.ACTION_DOWN, 150, 150);
         touch(view, time, time + 30, MotionEvent.ACTION_MOVE, 150, 230);
         assertEquals(0, takeOutput(view).length);
-        assertTrue("Expected scrollback, top row=" + view.getTopRow(), view.getTopRow() < 0);
+        assertTrue("Expected scrollback, top row=" + view.mTopRow, view.mTopRow < 0);
         touch(view, time, time + 60, MotionEvent.ACTION_CANCEL, 150, 230);
     }
 
@@ -71,12 +70,12 @@ public class TerminalCursorGestureTest {
         StringBuilder history = new StringBuilder();
         for (int i = 0; i < 40; i++) history.append("line\r\n");
         byte[] lines = history.toString().getBytes(StandardCharsets.UTF_8);
-        view.getTerminal().feed(lines, 0, lines.length);
+        view.mEmulator.append(lines, lines.length);
         long time = SystemClock.uptimeMillis();
         touch(view, time, time, MotionEvent.ACTION_DOWN, 150, 150);
         touch(view, time, time + 30, MotionEvent.ACTION_MOVE, 150, 230);
         assertEquals(0, takeOutput(view).length);
-        assertTrue(view.getTopRow() < 0);
+        assertTrue(view.mTopRow < 0);
         touch(view, time, time + 60, MotionEvent.ACTION_CANCEL, 150, 230);
     }
 
@@ -87,7 +86,7 @@ public class TerminalCursorGestureTest {
         assertOnlyArrow(view, "\u001b[A");
         swipe(view, 0, 80);
         assertOnlyArrow(view, "\u001b[B");
-        assertEquals(0, view.getTopRow());
+        assertEquals(0, view.mTopRow);
         assertTrue(view.mScroller.isFinished());
     }
 
@@ -95,7 +94,7 @@ public class TerminalCursorGestureTest {
     public void diagonalDragKeepsItsInitialAxisAndApplicationCursorEncoding() {
         TerminalView view = terminal(true);
         byte[] mode = "\u001b[?1h".getBytes(StandardCharsets.UTF_8);
-        view.getTerminal().feed(mode, 0, mode.length);
+        view.mEmulator.append(mode, mode.length);
         swipe(view, 80, 20);
         assertOnlyArrow(view, "\u001bOC");
     }
@@ -163,8 +162,8 @@ public class TerminalCursorGestureTest {
             Shadows.shadowOf(Looper.getMainLooper()).idle();
 
             assertNull(view.mTermSession);
-            assertNull(view.getTerminal());
-            assertEquals(0, view.getTopRow());
+            assertNull(view.mEmulator);
+            assertEquals(0, view.mTopRow);
             assertTrue(view.mScroller.isFinished());
         } finally {
             event.recycle();
@@ -180,11 +179,12 @@ public class TerminalCursorGestureTest {
         TerminalView replacement = terminal(false);
         appendHistory(replacement);
         byte[] mouseMode = "\u001b[?1000h".getBytes(StandardCharsets.UTF_8);
-        replacement.getTerminal().feed(mouseMode, 0, mouseMode.length);
-        assertTrue(replacement.getTerminal().isMouseTrackingActive());
+        replacement.mEmulator.append(mouseMode, mouseMode.length);
+        assertTrue(replacement.mEmulator.isMouseTrackingActive());
         assertTrue(view.attachSession(replacement.mTermSession));
         assertTrue(view.mScroller.isFinished());
-        assertSame(replacement.getTerminal(), view.getTerminal());
+        // The zero-size host avoids native PTY resize; supply the new session's emulator.
+        view.mEmulator = replacement.mEmulator;
         view.setTopRow(-5);
         MotionEvent newEvent = startFling(view);
         try {
@@ -192,7 +192,7 @@ public class TerminalCursorGestureTest {
             Shadows.shadowOf(Looper.getMainLooper()).runOneTask();
 
             assertSame(replacement.mTermSession, view.mTermSession);
-            assertEquals(-5, view.getTopRow());
+            assertEquals(-5, view.mTopRow);
             assertFalse(view.mScroller.isFinished());
             assertEquals(0, takeOutput(view).length);
         } finally {
@@ -210,33 +210,12 @@ public class TerminalCursorGestureTest {
         assertTrue(view.isAttachedToWindow());
     }
 
-    @Test
-    public void promptNavigationCancelsQueuedFlingWithoutSendingMouseEvents() {
-        TerminalView view = terminal(false);
-        attachForPostedCallbacks(view);
-        appendHistory(view);
-        byte[] mouseMode = "\u001b[?1000h".getBytes(StandardCharsets.UTF_8);
-        view.getTerminal().feed(mouseMode, 0, mouseMode.length);
-        MotionEvent event = startFling(view);
-        try {
-            view.scrollToPrompt(-1);
-            assertTrue(view.mScroller.isFinished());
-            Shadows.shadowOf(Looper.getMainLooper()).idle();
-            ShadowGhosttyTerminal terminal = Shadow.extract(view.getTerminal());
-            assertEquals(java.util.Collections.singletonList(-1), terminal.getPromptScrollRequests());
-            assertEquals(0, takeOutput(view).length);
-        } finally {
-            view.attachSession(null);
-            event.recycle();
-        }
-    }
-
     private static void appendHistory(TerminalView view) {
         StringBuilder history = new StringBuilder();
         for (int i = 0; i < 60; i++) history.append("line\r\n");
         byte[] lines = history.toString().getBytes(StandardCharsets.UTF_8);
-        view.getTerminal().feed(lines, 0, lines.length);
-        assertTrue(view.getScrollbackRows() > 5);
+        view.mEmulator.append(lines, lines.length);
+        assertTrue(view.mEmulator.getScreen().getActiveTranscriptRows() > 5);
     }
 
     private static MotionEvent startFling(TerminalView view) {
@@ -263,12 +242,14 @@ public class TerminalCursorGestureTest {
         });
         TermuxTerminalSessionClientBase client = new TermuxTerminalSessionClientBase();
         TerminalSession session = new TerminalSession("", "", new String[0], new String[0], 100, client);
-        GhosttyTerminal terminal = new GhosttyTerminal(session, 80, 24, 10, 20, 100);
-        ReflectionHelpers.setField(session, "mTerminal", terminal);
+        TerminalEmulator emulator = new TerminalEmulator(session, 80, 24, 10, 20, 100, client);
+        ReflectionHelpers.setField(session, "mEmulator", emulator);
         ReflectionHelpers.setField(session, "mShellPid", 1);
-        // The Ghostty shadow supplies deterministic terminal cell metrics without native rendering.
-        view.setTextSize(20);
-        view.attachSession(session);
+        view.mTermSession = session;
+        view.mEmulator = emulator;
+        view.mRenderer = new TerminalRenderer(20, Typeface.MONOSPACE);
+        // Legacy Robolectric graphics do not provide real font metrics for scroll row conversion.
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacing", 20);
         return view;
     }
 

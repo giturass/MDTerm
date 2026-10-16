@@ -22,7 +22,7 @@ import com.termux.shared.data.DataUtils;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.file.filesystem.FileType;
 import com.termux.shared.logger.Logger;
-import com.termux.shared.errors.Error;
+import com.termux.shared.models.errors.Error;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.markdown.MarkdownUtils;
 import com.termux.shared.interact.ShareUtils;
@@ -39,7 +39,7 @@ import io.noties.markwon.recycler.SimpleEntry;
 /**
  * An activity to show reports in markdown format as per CommonMark spec based on config passed as {@link ReportInfo}.
  * Add Following to `AndroidManifest.xml` to use in an app:
- * {@code `<activity android:name="com.termux.shared.activities.ReportActivity" android:theme="@style/Theme.AppCompat.TermuxReportActivity" android:documentLaunchMode="intoExisting" />` }
+ * {@code `<activity android:name="com.termux.shared.activities.ReportActivity" android:theme="@style/Theme.MarkdownViewActivity.DayNight" android:documentLaunchMode="intoExisting" />` }
  * and
  * {@code `<receiver android:name="com.termux.shared.activities.ReportActivity$ReportActivityBroadcastReceiver"  android:exported="false" />` }
  * Receiver **must not** be `exported="true"`!!!

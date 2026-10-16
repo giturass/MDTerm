@@ -1,5 +1,0 @@
-<resources>
-    <string name="action_open_link">打开链接</string>
-    <string name="action_copy_link">复制链接</string>
-    <string name="msg_link_copied_to_clipboard">链接已复制到剪贴板</string>
-</resources>

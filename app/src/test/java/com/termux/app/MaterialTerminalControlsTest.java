@@ -33,19 +33,19 @@ import com.termux.shared.termux.TermuxConstants;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
 import com.termux.app.settings.properties.TermuxPropertiesSettings;
-import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
-import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
-import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
-import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
-import com.termux.shared.termux.extrakeys.ExtraKeyButton;
-import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
-import com.termux.shared.termux.extrakeys.ExtraKeysView;
-import com.termux.shared.termux.extrakeys.SpecialButton;
-import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
-import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
-import com.termux.terminal.GhosttyTerminal;
+import com.termux.app.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.settings.properties.TermuxSharedProperties;
+import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxPreferenceConstants;
+import com.termux.shared.terminal.io.extrakeys.ExtraKeysConstants;
+import com.termux.shared.terminal.io.extrakeys.ExtraKeyButton;
+import com.termux.shared.terminal.io.extrakeys.ExtraKeysInfo;
+import com.termux.shared.terminal.io.extrakeys.ExtraKeysView;
+import com.termux.shared.terminal.io.extrakeys.SpecialButton;
+import com.termux.shared.terminal.io.TerminalExtraKeys;
+import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;
@@ -132,34 +132,50 @@ public class MaterialTerminalControlsTest {
     }
 
     @Test
-    public void normalImeInputTakesPriorityUntilExplicitlyDisabled() {
+    @Config(shadows = RecordingRecreationActivity.class)
+    public void externalStyleReloadRecreatesViewsButInternalRefreshKeepsThem() {
         TermuxActivity activity = drawerActivity(true);
-        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "true");
-        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, null);
-        EditorInfo normal = new EditorInfo();
-        assertNotNull(activity.getTerminalView().onCreateInputConnection(normal));
-        assertEquals(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL, normal.inputType);
-        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeInput());
+        ReflectionHelpers.callInstanceMethod(activity, "setTerminalToolbarView");
+        ReflectionHelpers.setField(activity, "mIsVisible", true);
+        activity.mTermuxTerminalViewClient = null;
+        RecordingRecreationActivity shadow = Shadow.extract(activity);
+        TermuxActivity.TermuxActivityBroadcastReceiver receiver =
+            activity.new TermuxActivityBroadcastReceiver();
 
-        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, "false");
+        Intent externalReload = new Intent(TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY.ACTION_RELOAD_STYLE);
+        receiver.onReceive(activity, externalReload);
+        assertEquals(1, shadow.recreations);
+
+        Intent internalRefresh = new Intent(externalReload).putExtra(
+            TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY_NAME + ".EXTRA_RECREATE_ACTIVITY", false);
+        receiver.onReceive(activity, internalRefresh);
+        assertEquals(1, shadow.recreations);
+    }
+
+    @Test
+    public void characterInputPropertyOverridesComposingWithoutLosingItsPreference() {
+        TermuxActivity activity = drawerActivity(true);
+        activity.getPreferences().setImeComposingEnabled(true);
+        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
+        EditorInfo composing = new EditorInfo();
+        assertNotNull(activity.getTerminalView().onCreateInputConnection(composing));
+        assertEquals(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL
+            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, composing.inputType);
+        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
+
+        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "true");
         EditorInfo characterInput = new EditorInfo();
         assertNotNull(activity.getTerminalView().onCreateInputConnection(characterInput));
         assertEquals(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
             | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, characterInput.inputType);
-        assertFalse(activity.getTermuxTerminalViewClient().shouldEnableImeInput());
-        assertTrue(activity.getProperties().isEnforcingCharBasedInput());
+        assertFalse(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
+        assertTrue(activity.getPreferences().isImeComposingEnabled());
 
-        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, "true");
+        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
         EditorInfo restored = new EditorInfo();
         activity.getTerminalView().onCreateInputConnection(restored);
-        assertEquals(normal.inputType, restored.inputType);
-        assertTrue(activity.getProperties().isEnforcingCharBasedInput());
-
-        setProperty(activity, TermuxPropertyConstants.KEY_ENABLE_IME_INPUT, "false");
-        setProperty(activity, TermuxPropertyConstants.KEY_ENFORCE_CHAR_BASED_INPUT, "false");
-        EditorInfo raw = new EditorInfo();
-        activity.getTerminalView().onCreateInputConnection(raw);
-        assertEquals(InputType.TYPE_NULL, raw.inputType);
+        assertEquals(composing.inputType, restored.inputType);
+        assertTrue(activity.getTermuxTerminalViewClient().shouldEnableImeComposing());
     }
 
     @Test
@@ -342,16 +358,16 @@ public class MaterialTerminalControlsTest {
         ReflectionHelpers.callInstanceMethod(activity, "setTerminalToolbarView");
         TermuxTerminalSessionClientBase client = new TermuxTerminalSessionClientBase();
         TerminalSession session = new TerminalSession("", "", new String[0], new String[0], 100, client);
-        GhosttyTerminal terminal = new GhosttyTerminal(session, 80, 24, 10, 20, 100);
-        ReflectionHelpers.setField(session, "mTerminal", terminal);
+        TerminalEmulator emulator = new TerminalEmulator(session, 80, 24, 10, 20, 100, client);
+        ReflectionHelpers.setField(session, "mEmulator", emulator);
         ReflectionHelpers.setField(session, "mShellPid", 1);
-        activity.getTerminalView().setTextSize(20);
-        activity.getTerminalView().attachSession(session);
+        ReflectionHelpers.setField(activity.getTerminalView(), "mTermSession", session);
+        activity.getTerminalView().mEmulator = emulator;
 
         for (String prefix : new String[]{"\u001b[", "\u001bO"}) {
             if (prefix.equals("\u001bO")) {
                 byte[] mode = "\u001b[?1h".getBytes(StandardCharsets.UTF_8);
-                terminal.feed(mode, 0, mode.length);
+                emulator.append(mode, mode.length);
             }
             for (String key : Arrays.asList("UP", "DOWN", "LEFT", "RIGHT")) toolbarButton(activity, key).performClick();
             assertEquals(prefix + "A" + prefix + "B" + prefix + "D" + prefix + "C", takeTerminalOutput(session));
@@ -476,7 +492,7 @@ public class MaterialTerminalControlsTest {
             }
         };
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
-        ReflectionHelpers.setField(activity, "mProperties", TermuxAppSharedProperties.init(activity));
+        ReflectionHelpers.setField(activity, "mProperties", new TermuxAppSharedProperties(activity));
         TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
             activity.mTermuxTerminalViewClient, null);
         ExtraKeysView keys = activity.findViewById(R.id.terminal_toolbar_extra_keys);
@@ -532,7 +548,7 @@ public class MaterialTerminalControlsTest {
         assertNotNull(preferences);
         assertEquals(showToolbar, preferences.shouldShowTerminalToolbar());
         ReflectionHelpers.setField(activity, "mPreferences", preferences);
-        TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
+        TermuxAppSharedProperties properties = new TermuxAppSharedProperties(activity);
         properties.loadTermuxPropertiesFromDisk();
         ReflectionHelpers.setField(activity, "mProperties", properties);
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
@@ -613,7 +629,7 @@ public class MaterialTerminalControlsTest {
         HorizontalScrollView toolbar = root.findViewById(R.id.terminal_toolbar);
         toolbar.setVisibility(View.VISIBLE);
         ExtraKeysView keys = toolbar.findViewById(R.id.terminal_toolbar_extra_keys);
-        keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
+        keys.reload(new ExtraKeysInfo(com.termux.shared.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
             "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
         measure(toolbar, context, 304, 52);
         String[] labels = {"ESC", "CTRL", "ALT", "/", "TAB", "", "", "HOME", "END", "PGUP", "PGDN"};
@@ -658,7 +674,7 @@ public class MaterialTerminalControlsTest {
         HorizontalScrollView toolbar = root.findViewById(R.id.terminal_toolbar);
         toolbar.setVisibility(View.VISIBLE);
         ExtraKeysView keys = toolbar.findViewById(R.id.terminal_toolbar_extra_keys);
-        keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
+        keys.reload(new ExtraKeysInfo(com.termux.shared.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
             "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
         measure(toolbar, context, 304, 52);
         View ctrl = keys.getChildAt(1);

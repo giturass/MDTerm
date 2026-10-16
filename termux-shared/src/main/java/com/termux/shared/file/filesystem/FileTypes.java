@@ -82,7 +82,6 @@ public class FileTypes {
      *                       returned.
      * @return Returns the {@link FileType} of file.
      */
-    @NonNull
     public static FileType getFileType(final String filePath, final boolean followLinks) {
         if (filePath == null || filePath.isEmpty()) return FileType.NO_EXIST;
 
@@ -104,8 +103,6 @@ public class FileTypes {
             return FileType.DIRECTORY;
         else if (fileAttributes.isSymbolicLink())
             return FileType.SYMLINK;
-        else if (fileAttributes.isSocket())
-            return FileType.SOCKET;
         else if (fileAttributes.isCharacter())
             return FileType.CHARACTER;
         else if (fileAttributes.isFifo())

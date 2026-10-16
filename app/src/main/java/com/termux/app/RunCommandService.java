@@ -13,19 +13,18 @@ import android.os.IBinder;
 import com.termux.R;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.data.IntentUtils;
-import com.termux.shared.termux.plugins.TermuxPluginUtils;
-import com.termux.shared.termux.file.TermuxFileUtils;
+import com.termux.shared.file.TermuxFileUtils;
 import com.termux.shared.file.filesystem.FileType;
-import com.termux.shared.errors.Errno;
-import com.termux.shared.errors.Error;
+import com.termux.shared.models.errors.Errno;
+import com.termux.shared.models.errors.Error;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.RUN_COMMAND_SERVICE;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_SERVICE;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.notification.NotificationUtils;
-import com.termux.shared.shell.command.ExecutionCommand;
-import com.termux.shared.shell.command.ExecutionCommand.Runner;
+import com.termux.app.utils.PluginUtils;
+import com.termux.shared.models.ExecutionCommand;
 
 /**
  * A service that receives {@link RUN_COMMAND_SERVICE#ACTION_RUN_COMMAND} intent from third party apps and
@@ -64,8 +63,6 @@ public class RunCommandService extends Service {
         // Run again in case service is already started and onCreate() is not called
         runStartForeground();
 
-        Logger.logVerboseExtended(LOG_TAG, "Intent Received:\n" + IntentUtils.getIntentString(intent));
-
         ExecutionCommand executionCommand = new ExecutionCommand();
         executionCommand.pluginAPIHelp = this.getString(R.string.error_run_command_service_api_help, RUN_COMMAND_SERVICE.RUN_COMMAND_API_HELP_URL);
 
@@ -76,7 +73,7 @@ public class RunCommandService extends Service {
         if (!RUN_COMMAND_SERVICE.ACTION_RUN_COMMAND.equals(intent.getAction())) {
             errmsg = this.getString(R.string.error_run_command_service_invalid_intent_action, intent.getAction());
             executionCommand.setStateFailed(Errno.ERRNO_FAILED.getCode(), errmsg);
-            TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
+            PluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
             return stopService();
         }
 
@@ -104,51 +101,14 @@ public class RunCommandService extends Service {
 
         executionCommand.stdin = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_STDIN, null);
         executionCommand.workingDirectory = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_WORKDIR, null);
-
-        // If EXTRA_RUNNER is passed, use that, otherwise check EXTRA_BACKGROUND and default to Runner.TERMINAL_SESSION
-        executionCommand.runner = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_RUNNER,
-            (intent.getBooleanExtra(RUN_COMMAND_SERVICE.EXTRA_BACKGROUND, false) ? Runner.APP_SHELL.getName() : Runner.TERMINAL_SESSION.getName()));
-        if (Runner.runnerOf(executionCommand.runner) == null) {
-            errmsg = this.getString(R.string.error_run_command_service_invalid_execution_command_runner, executionCommand.runner);
-            executionCommand.setStateFailed(Errno.ERRNO_FAILED.getCode(), errmsg);
-            TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
-            return stopService();
-        }
-
+        executionCommand.inBackground = intent.getBooleanExtra(RUN_COMMAND_SERVICE.EXTRA_BACKGROUND, false);
         executionCommand.backgroundCustomLogLevel = IntentUtils.getIntegerExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_BACKGROUND_CUSTOM_LOG_LEVEL, null);
         executionCommand.sessionAction = intent.getStringExtra(RUN_COMMAND_SERVICE.EXTRA_SESSION_ACTION);
-        executionCommand.shellName = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_SHELL_NAME, null);
-        executionCommand.shellCreateMode = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_SHELL_CREATE_MODE, null);
         executionCommand.commandLabel = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_COMMAND_LABEL, "RUN_COMMAND Execution Intent Command");
         executionCommand.commandDescription = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_COMMAND_DESCRIPTION, null);
         executionCommand.commandHelp = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_COMMAND_HELP, null);
         executionCommand.isPluginExecutionCommand = true;
         executionCommand.resultConfig.resultPendingIntent = intent.getParcelableExtra(RUN_COMMAND_SERVICE.EXTRA_PENDING_INTENT);
-
-        // If "allow-external-apps" property to not set to "true", then just return
-        // We enable force notifications if "allow-external-apps" policy is violated so that the
-        // user knows someone tried to run a command in termux context, since it may be malicious
-        // app or imported (tasker) plugin project and not the user himself. If a pending intent is
-        // also sent, then its creator is also logged and shown.
-        errmsg = TermuxPluginUtils.checkIfAllowExternalAppsPolicyIsViolated(this, LOG_TAG);
-        if (errmsg != null) {
-            executionCommand.setStateFailed(Errno.ERRNO_FAILED.getCode(), errmsg);
-            TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, true);
-            return stopService();
-        }
-
-        // Do not send result back to any file based result config before "allow-external-app"
-        // property has been ensured to be "true", otherwise clients can overwrite files inside
-        // Termux home or prefix, or external storage (if Termux has been granted permission) using
-        // `ResultConfig.resultFileErrorFormat` as `ResultSender.sendCommandResultDataToDirectory()`
-        // uses client controlled format passed to `String.format()` that is used to set the error
-        // file content, which can even be used to overwrite `termux.properties` file to set
-        // `allow-external-app=true` in it or any other shell rc file. The client would still need
-        // to have the `RUN_COMMAND` permission before it could do this.
-        // Note that clients waiting for file based result will hang if "allow-external-app" property
-        // is not "true" if we do not send the result, but a notification will still be shown for
-        // clients to know. A result is still sent if pending intent is used as that does not have
-        // this security issue.
         executionCommand.resultConfig.resultDirectoryPath = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_RESULT_DIRECTORY, null);
         if (executionCommand.resultConfig.resultDirectoryPath != null) {
             executionCommand.resultConfig.resultSingleFile = intent.getBooleanExtra(RUN_COMMAND_SERVICE.EXTRA_RESULT_SINGLE_FILE, false);
@@ -158,13 +118,25 @@ public class RunCommandService extends Service {
             executionCommand.resultConfig.resultFilesSuffix = IntentUtils.getStringExtraIfSet(intent, RUN_COMMAND_SERVICE.EXTRA_RESULT_FILES_SUFFIX, null);
         }
 
+        // If "allow-external-apps" property to not set to "true", then just return
+        // We enable force notifications if "allow-external-apps" policy is violated so that the
+        // user knows someone tried to run a command in termux context, since it may be malicious
+        // app or imported (tasker) plugin project and not the user himself. If a pending intent is
+        // also sent, then its creator is also logged and shown.
+        errmsg = PluginUtils.checkIfAllowExternalAppsPolicyIsViolated(this, LOG_TAG);
+        if (errmsg != null) {
+            executionCommand.setStateFailed(Errno.ERRNO_FAILED.getCode(), errmsg);
+            PluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, true);
+            return stopService();
+        }
+
 
 
         // If executable is null or empty, then exit here instead of getting canonical path which would expand to "/"
         if (executionCommand.executable == null || executionCommand.executable.isEmpty()) {
             errmsg  = this.getString(R.string.error_run_command_service_mandatory_extra_missing, RUN_COMMAND_SERVICE.EXTRA_COMMAND_PATH);
             executionCommand.setStateFailed(Errno.ERRNO_FAILED.getCode(), errmsg);
-            TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
+            PluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
             return stopService();
         }
 
@@ -178,7 +150,7 @@ public class RunCommandService extends Service {
             false);
         if (error != null) {
             executionCommand.setStateFailed(error);
-            TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
+            PluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
             return stopService();
         }
 
@@ -199,7 +171,7 @@ public class RunCommandService extends Service {
                 false, true);
             if (error != null) {
                 executionCommand.setStateFailed(error);
-                TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
+                PluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
                 return stopService();
             }
         }
@@ -224,11 +196,9 @@ public class RunCommandService extends Service {
         execIntent.putExtra(TERMUX_SERVICE.EXTRA_ARGUMENTS, executionCommand.arguments);
         execIntent.putExtra(TERMUX_SERVICE.EXTRA_STDIN, executionCommand.stdin);
         if (executionCommand.workingDirectory != null && !executionCommand.workingDirectory.isEmpty()) execIntent.putExtra(TERMUX_SERVICE.EXTRA_WORKDIR, executionCommand.workingDirectory);
-        execIntent.putExtra(TERMUX_SERVICE.EXTRA_RUNNER, executionCommand.runner);
+        execIntent.putExtra(TERMUX_SERVICE.EXTRA_BACKGROUND, executionCommand.inBackground);
         execIntent.putExtra(TERMUX_SERVICE.EXTRA_BACKGROUND_CUSTOM_LOG_LEVEL, DataUtils.getStringFromInteger(executionCommand.backgroundCustomLogLevel, null));
         execIntent.putExtra(TERMUX_SERVICE.EXTRA_SESSION_ACTION, executionCommand.sessionAction);
-        execIntent.putExtra(TERMUX_SERVICE.EXTRA_SHELL_NAME, executionCommand.shellName);
-        execIntent.putExtra(TERMUX_SERVICE.EXTRA_SHELL_CREATE_MODE, executionCommand.shellCreateMode);
         execIntent.putExtra(TERMUX_SERVICE.EXTRA_COMMAND_LABEL, executionCommand.commandLabel);
         execIntent.putExtra(TERMUX_SERVICE.EXTRA_COMMAND_DESCRIPTION, executionCommand.commandDescription);
         execIntent.putExtra(TERMUX_SERVICE.EXTRA_COMMAND_HELP, executionCommand.commandHelp);

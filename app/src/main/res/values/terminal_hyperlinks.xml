@@ -1,5 +1,0 @@
-<resources>
-    <string name="action_open_link">Open link</string>
-    <string name="action_copy_link">Copy link</string>
-    <string name="msg_link_copied_to_clipboard">Link copied to clipboard</string>
-</resources>

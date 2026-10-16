@@ -27,7 +27,9 @@ import androidx.appcompat.widget.Toolbar;
 import com.termux.shared.interact.ShareUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.R;
+import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.models.TextIOInfo;
+import com.termux.shared.theme.NightMode;
 import com.termux.shared.view.KeyboardUtils;
 
 import org.jetbrains.annotations.NotNull;
@@ -39,7 +41,7 @@ import java.util.Locale;
  *
  * Add Following to `AndroidManifest.xml` to use in an app:
  *
- * {@code ` <activity android:name="com.termux.shared.activities.TextIOActivity" android:theme="@style/Theme.AppCompat.TermuxTextIOActivity" />` }
+ * {@code ` <activity android:name="com.termux.shared.activities.TextIOActivity" android:theme="@style/Theme.MediaViewActivity.DayNight" />` }
  */
 public class TextIOActivity extends AppCompatActivity {
 
@@ -62,6 +64,8 @@ public class TextIOActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Logger.logVerbose(LOG_TAG, "onCreate");
+
+        AppCompatActivityUtils.setNightMode(this, NightMode.getAppNightMode().getName(), true);
 
         setContentView(R.layout.activity_text_io);
 

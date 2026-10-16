@@ -17,13 +17,11 @@ env:
   TERMUX_PACKAGE_VARIANT: apt-android-7
   TERMUX_APP_ABIS: arm64-v8a
   TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS: '1'
-  GHOSTTY_BUILD_JOBS: '2'
 
 jobs:
   build:
     name: Android 12+ arm64-v8a APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
 
     steps:
       - name: Clone repository
@@ -38,23 +36,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 ndk;29.0.14206865 cmake;3.22.1'
-
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v2
-        with:
-          version: '0.16.0'
-
-      - name: Cache pinned native dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            build/native-sources
-            build/zig-cache
-          key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build.gradle', 'gradle.properties', 'native/patches/**', 'scripts/*.sh') }}
-
-      - name: Check terminfo compiler
-        run: command -v tic
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 ndk;29.0.14206865'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -66,7 +48,7 @@ jobs:
           version="$(sed -n 's/^ *versionName "\([^"]*\)"$/\1/p' app/build.gradle)"
           export TERMUX_APP_VERSION_NAME="$version+${BUILD_SHA:0:7}"
           export TERMUX_APK_VERSION_TAG="v${TERMUX_APP_VERSION_NAME}-${TERMUX_PACKAGE_VARIANT}-github-debug"
-          ./gradlew --no-daemon --max-workers=2 :app:assembleDebug
+          ./gradlew --no-daemon :app:assembleDebug
 
           apk_dir=app/build/outputs/apk/debug
           apk_name="mdterm_${TERMUX_APK_VERSION_TAG}_arm64-v8a.apk"
@@ -74,11 +56,7 @@ jobs:
           test "$(find "$apk_dir" -maxdepth 1 -name '*.apk' | wc -l)" -eq 1
           test "$(unzip -Z1 "$apk_dir/$apk_name" | awk -F/ '$1 == "lib" && NF == 3 { print $2 }' | sort -u)" = arm64-v8a
           test "$(apkanalyzer manifest min-sdk "$apk_dir/$apk_name")" -ge 31
-          unzip -Z1 "$apk_dir/$apk_name" | grep -Fx 'assets/ghostty/terminfo/x/xterm-ghostty'
-          unzip -Z1 "$apk_dir/$apk_name" | grep -Fx 'lib/arm64-v8a/libtermux.so'
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$apk_dir/$apk_name"
-          python3 scripts/verify-ghostty-binary.py \
-            --ndk "$ANDROID_HOME/ndk/29.0.14206865" "$apk_dir/$apk_name"
           (cd "$apk_dir" && sha256sum "$apk_name" > "${apk_name%.apk}_sha256sums")
           echo "APK_ARTIFACT_NAME=${apk_name%.apk}" >> "$GITHUB_ENV"
 

@@ -5,10 +5,10 @@ import android.content.SharedPreferences;
 
 import com.termux.R;
 import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
-import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
-import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
+import com.termux.shared.terminal.io.extrakeys.ExtraKeysConstants;
+import com.termux.shared.terminal.io.extrakeys.ExtraKeysInfo;
+import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.settings.properties.TermuxSharedProperties;
 
 import org.json.JSONException;
 
@@ -23,7 +23,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static com.termux.shared.termux.settings.properties.TermuxPropertyConstants.*;
+import static com.termux.shared.settings.properties.TermuxPropertyConstants.*;
 
 /** App-only editor; runtime values and defaults continue to use the upstream properties parser. */
 public final class TermuxPropertiesSettings {
@@ -38,7 +38,7 @@ public final class TermuxPropertiesSettings {
         KEY_EXTRA_KEYS_TEXT_ALL_CAPS, KEY_NIGHT_MODE, KEY_DISABLE_HARDWARE_KEYBOARD_SHORTCUTS,
         KEY_SHORTCUT_CREATE_SESSION, KEY_SHORTCUT_NEXT_SESSION, KEY_SHORTCUT_PREVIOUS_SESSION,
         KEY_SHORTCUT_RENAME_SESSION, KEY_BELL_BEHAVIOUR, KEY_BACK_KEY_BEHAVIOUR,
-        KEY_ENABLE_IME_INPUT, KEY_ENFORCE_CHAR_BASED_INPUT, KEY_USE_CTRL_SPACE_WORKAROUND,
+        KEY_ENFORCE_CHAR_BASED_INPUT, KEY_USE_CTRL_SPACE_WORKAROUND,
         KEY_TERMINAL_MARGIN_HORIZONTAL, KEY_TERMINAL_MARGIN_VERTICAL,
         KEY_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR));
     private final Context context;

@@ -15,9 +15,9 @@ import com.termux.app.terminal.TerminalBookmark;
 import com.termux.app.terminal.TerminalBookmarkStore;
 import com.termux.app.terminal.TerminalDrawerAdapter;
 import com.termux.app.terminal.TerminalDrawerRecyclerView;
-import com.termux.shared.shell.command.ExecutionCommand;
-import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
-import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.models.ExecutionCommand;
+import com.termux.shared.shell.TermuxSession;
+import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;
@@ -151,8 +151,8 @@ public class SessionDrawerTest {
             list.scrollBy(0, Integer.MAX_VALUE);
             assertCardSizesAndSpacing(list);
             Rect card = bounds(drawer, row(list, 5));
-            assertEquals(dp(drawer, 20), card.left);
-            assertEquals(dp(drawer, 20), drawer.getWidth() - card.right);
+            assertEquals(dp(drawer, 16), card.left);
+            assertEquals(dp(drawer, 16), drawer.getWidth() - card.right);
             assertTrue(card.bottom <= action.top);
         }
     }

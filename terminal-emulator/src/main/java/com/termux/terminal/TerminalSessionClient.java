@@ -1,8 +1,5 @@
 package com.termux.terminal;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
 /**
  * The interface for communication between {@link TerminalSession} and its client. It is used to
  * send callbacks to the client when {@link TerminalSession} changes or for sending other
@@ -10,41 +7,25 @@ import androidx.annotation.Nullable;
  */
 public interface TerminalSessionClient {
 
-    void onTextChanged(@NonNull TerminalSession changedSession);
+    void onTextChanged(TerminalSession changedSession);
 
-    void onTitleChanged(@NonNull TerminalSession changedSession);
+    void onTitleChanged(TerminalSession changedSession);
 
-    default void onWorkingDirectoryChanged(@NonNull TerminalSession changedSession,
-                                           @Nullable String workingDirectory) {}
+    void onSessionFinished(TerminalSession finishedSession);
 
-    default void onMouseShapeChanged(@NonNull TerminalSession changedSession, int shape) {}
+    void onCopyTextToClipboard(TerminalSession session, String text);
 
-    default void onDesktopNotification(@NonNull TerminalSession session,
-                                       @Nullable String title, @Nullable String body) {}
+    void onPasteTextFromClipboard(TerminalSession session);
 
-    default void onProgressReport(@NonNull TerminalSession session, int state, int progress) {}
+    void onBell(TerminalSession session);
 
-    default void onProgramStatusChanged(@NonNull TerminalSession session) {}
-
-    void onSessionFinished(@NonNull TerminalSession finishedSession);
-
-    void onCopyTextToClipboard(@NonNull TerminalSession session, String text);
-
-    void onPasteTextFromClipboard(@Nullable TerminalSession session);
-
-    void onBell(@NonNull TerminalSession session);
-
-    void onColorsChanged(@NonNull TerminalSession session);
+    void onColorsChanged(TerminalSession session);
 
     void onTerminalCursorStateChange(boolean state);
-
-    void setTerminalShellPid(@NonNull TerminalSession session, int pid);
 
 
 
     Integer getTerminalCursorStyle();
-
-    default boolean isXtChecksumReportEnabled() { return false; }
 
 
 

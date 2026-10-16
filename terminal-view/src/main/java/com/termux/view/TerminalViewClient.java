@@ -32,7 +32,7 @@ public interface TerminalViewClient {
 
     boolean shouldEnforceCharBasedInput();
 
-    boolean shouldEnableImeInput();
+    boolean shouldEnableImeComposing();
 
     boolean shouldUseCtrlSpaceWorkaround();
 

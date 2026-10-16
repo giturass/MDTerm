@@ -3,12 +3,15 @@ package com.termux.shared.interact;
 import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.text.util.Linkify;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import com.termux.shared.R;
 
 public class MessageDialogUtils {
 
@@ -48,9 +51,21 @@ public class MessageDialogUtils {
                                    final DialogInterface.OnClickListener onNegativeButton,
                                    final DialogInterface.OnDismissListener onDismiss) {
 
-        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context)
-            .setTitle(titleText)
-            .setMessage(messageText);
+        AlertDialog.Builder builder = new MaterialAlertDialogBuilder(context);
+
+        LayoutInflater inflater = (LayoutInflater) context.getSystemService( Context.LAYOUT_INFLATER_SERVICE );
+        View view = inflater.inflate(R.layout.dialog_show_message, null);
+        if (view != null) {
+            builder.setView(view);
+
+            TextView titleView = view.findViewById(R.id.dialog_title);
+            if (titleView != null)
+                titleView.setText(titleText);
+
+            TextView messageView = view.findViewById(R.id.dialog_message);
+            if (messageView != null)
+                messageView.setText(messageText);
+        }
 
         if (positiveText == null)
             positiveText = context.getString(android.R.string.ok);
@@ -63,10 +78,8 @@ public class MessageDialogUtils {
             builder.setOnDismissListener(onDismiss);
 
         AlertDialog dialog = builder.create();
+
         dialog.show();
-        TextView messageView = dialog.findViewById(android.R.id.message);
-        if (messageView != null)
-            Linkify.addLinks(messageView, Linkify.WEB_URLS | Linkify.EMAIL_ADDRESSES);
     }
 
     public static void exitAppWithErrorMessage(Context context, String titleText, String messageText) {

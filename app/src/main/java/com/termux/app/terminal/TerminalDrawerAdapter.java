@@ -16,9 +16,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
-import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.termux.interact.TextInputDialogUtils;
-import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
+import com.termux.shared.interact.TextInputDialogUtils;
+import com.termux.shared.shell.TermuxSession;
 import com.termux.terminal.TerminalSession;
 
 import java.util.ArrayList;
@@ -188,13 +187,7 @@ public final class TerminalDrawerAdapter extends RecyclerView.Adapter<RecyclerVi
             String environment = "proot".equals(bookmark.kind) ? bookmark.distro
                 : "ssh".equals(bookmark.kind) ? (bookmark.sshArgs.isEmpty() ? "SSH"
                     : bookmark.sshArgs.get(bookmark.sshArgs.size() - 1)) : "";
-            String displayPath = bookmark.path;
-            String homePath = TermuxConstants.TERMUX_HOME_DIR_PATH;
-            if ("local".equals(bookmark.kind)
-                && (displayPath.equals(homePath) || displayPath.startsWith(homePath + "/"))) {
-                displayPath = "~" + displayPath.substring(homePath.length());
-            }
-            String label = environment.isEmpty() ? displayPath : environment + " · " + displayPath;
+            String label = environment.isEmpty() ? bookmark.path : environment + " · " + bookmark.path;
             result.add(new Row(BOOKMARK, itemId(bookmark.id), bookmark, null, 0,
                 bookmark.name, label, false, false, 0, 0));
         }

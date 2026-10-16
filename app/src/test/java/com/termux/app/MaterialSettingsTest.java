@@ -17,7 +17,7 @@ import com.termux.app.activities.SettingsActivity;
 import com.termux.app.fragments.settings.MaterialListPreferenceDialog;
 import com.termux.app.fragments.settings.MaterialSwitchPreference;
 import com.termux.app.fragments.settings.TermuxSettingsDataStore;
-import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -80,7 +80,7 @@ public class MaterialSettingsTest {
             String[][] groups = {
                 {"property_toolbar", "terminal_vibration"},
                 {"property_compatibility", "terminal_margin_adjustment"},
-                {"input", "soft_keyboard_enabled", "soft_keyboard_enabled_only_if_no_hardware", "cursor_gestures_enabled"},
+                {"input", "soft_keyboard_enabled", "soft_keyboard_enabled_only_if_no_hardware", "ime_composing_enabled", "cursor_gestures_enabled"},
                 {"diagnostics", "terminal_view_key_logging_enabled"},
                 {"notifications", "plugin_error_notifications_enabled", "crash_report_notifications_enabled"}
             };

@@ -39,16 +39,6 @@
                     android:scrollbarThumbVertical="@drawable/terminal_scroll_shape"
                     android:scrollbars="vertical"
                     tools:ignore="UnusedAttribute" />
-
-                <ProgressBar
-                    android:id="@+id/terminal_progress_bar"
-                    style="?android:attr/progressBarStyleHorizontal"
-                    android:layout_width="match_parent"
-                    android:layout_height="3dp"
-                    android:layout_gravity="top"
-                    android:contentDescription="@string/terminal_progress_description_default"
-                    android:max="100"
-                    android:visibility="gone" />
             </FrameLayout>
 
             <FrameLayout
@@ -117,8 +107,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
                         android:layout_weight="1"
-                        android:paddingStart="20dp"
-                        android:paddingEnd="20dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
                         android:paddingBottom="88dp"
                         android:clipToPadding="false"
                         android:scrollbars="none" />

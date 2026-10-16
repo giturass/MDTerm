@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Environment;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -22,37 +23,35 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.shared.data.UrlUtils;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.interact.MessageDialogUtils;
 import com.termux.shared.interact.ShareUtils;
 import com.termux.shared.shell.ShellUtils;
-import com.termux.shared.termux.TermuxBootstrap;
-import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
-import com.termux.shared.termux.extrakeys.SpecialButton;
-import com.termux.shared.android.AndroidUtils;
+import com.termux.shared.terminal.TermuxTerminalViewClientBase;
+import com.termux.shared.terminal.io.extrakeys.SpecialButton;
+import com.termux.shared.termux.AndroidUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.models.ReportInfo;
 import com.termux.app.models.UserAction;
 import com.termux.app.terminal.io.KeyboardShortcut;
-import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.markdown.MarkdownUtils;
 import com.termux.shared.termux.TermuxUtils;
-import com.termux.shared.termux.data.TermuxUrlUtils;
 import com.termux.shared.view.KeyboardUtils;
 import com.termux.shared.view.ViewUtils;
 import com.termux.terminal.KeyHandler;
-import com.termux.terminal.GhosttyTerminal;
+import com.termux.terminal.TerminalBuffer;
+import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 
 import androidx.drawerlayout.widget.DrawerLayout;
 
@@ -60,7 +59,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     final TermuxActivity mActivity;
 
-    final TermuxTerminalSessionActivityClient mTermuxTerminalSessionActivityClient;
+    final TermuxTerminalSessionClient mTermuxTerminalSessionClient;
 
     /** Keeping track of the special keys acting as Ctrl and Fn for the soft keyboard and other hardware keys. */
     boolean mVirtualControlKeyDown, mVirtualFnKeyDown;
@@ -71,17 +70,12 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     private boolean mShowSoftKeyboardWithDelayOnce;
 
     private boolean mTerminalCursorBlinkerStateAlreadySet;
-    private GhosttyTerminal mCursorBlinkerTerminal;
-
-    private List<KeyboardShortcut> mSessionShortcuts;
-    private final TerminalSearchDialog mTerminalSearch;
 
     private static final String LOG_TAG = "TermuxTerminalViewClient";
 
-    public TermuxTerminalViewClient(TermuxActivity activity, TermuxTerminalSessionActivityClient termuxTerminalSessionActivityClient) {
+    public TermuxTerminalViewClient(TermuxActivity activity, TermuxTerminalSessionClient termuxTerminalSessionClient) {
         this.mActivity = activity;
-        this.mTermuxTerminalSessionActivityClient = termuxTerminalSessionActivityClient;
-        mTerminalSearch = new TerminalSearchDialog(activity);
+        this.mTermuxTerminalSessionClient = termuxTerminalSessionClient;
     }
 
     public TermuxActivity getActivity() {
@@ -92,8 +86,6 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * Should be called when mActivity.onCreate() is called
      */
     public void onCreate() {
-        onReloadProperties();
-
         mActivity.getTerminalView().setTextSize(mActivity.getPreferences().getFontSize());
         mActivity.getTerminalView().setKeepScreenOn(mActivity.getPreferences().shouldKeepScreenOn());
     }
@@ -121,7 +113,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         mTerminalCursorBlinkerStateAlreadySet = false;
 
-        if (mActivity.getTerminalView().getTerminal() != null) {
+        if (mActivity.getTerminalView().mEmulator != null) {
             // Start terminal cursor blinking if enabled
             // If emulator is already set, then start blinker now, otherwise wait for onEmulatorSet()
             // event to start it. This is needed since onEmulatorSet() may not be called after
@@ -135,22 +127,14 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * Should be called when mActivity.onStop() is called
      */
     public void onStop() {
-        dismissTerminalSearch();
         // Stop terminal cursor blinking if enabled
         setTerminalCursorBlinkerState(false);
     }
 
     /**
-     * Should be called when mActivity.reloadProperties() is called
-     */
-    public void onReloadProperties() {
-        setSessionShortcuts();
-    }
-
-    /**
      * Should be called when mActivity.reloadActivityStyling() is called
      */
-    public void onReloadActivityStyling() {
+    public void onReload() {
         // Show the soft keyboard if required
         setSoftKeyboardState(false, true);
 
@@ -159,26 +143,23 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     /**
-     * Should be called when {@link com.termux.view.TerminalView#getTerminal()} is set
+     * Should be called when {@link com.termux.view.TerminalView#mEmulator} is set
      */
     @Override
     public void onEmulatorSet() {
-        dismissTerminalSearchIfSessionChanged();
-        if (!mTerminalCursorBlinkerStateAlreadySet ||
-            mCursorBlinkerTerminal != mActivity.getTerminalView().getTerminal()) {
+        if (!mTerminalCursorBlinkerStateAlreadySet) {
             // Start terminal cursor blinking if enabled
             // We need to wait for the first session to be attached that's set in
             // TermuxActivity.onServiceConnected() and then the multiple calls to TerminalView.updateSize()
-            // where the final one eventually sets the terminal when width/height is not 0. Otherwise
+            // where the final one eventually sets the mEmulator when width/height is not 0. Otherwise
             // blinker will not start again if TermuxActivity is started again after exiting it with
             // double back press. Check TerminalView.setTerminalCursorBlinkerState().
-            setTerminalCursorBlinkerState(mActivity.isVisible());
+            setTerminalCursorBlinkerState(true);
             mTerminalCursorBlinkerStateAlreadySet = true;
         }
     }
 
     public void onSessionDetached() {
-        dismissTerminalSearch();
         setTerminalCursorBlinkerState(false);
         mTerminalCursorBlinkerStateAlreadySet = false;
     }
@@ -199,18 +180,16 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     @Override
     public void onSingleTapUp(MotionEvent e) {
-        TerminalSession session = mActivity.getCurrentSession();
-        GhosttyTerminal term = session == null ? null : session.getTerminal();
-        if (term == null) return;
+        TerminalEmulator term = mActivity.getCurrentSession().getEmulator();
 
         if (mActivity.getProperties().shouldOpenTerminalTranscriptURLOnClick()) {
-            int[] columnAndRow = mActivity.getTerminalView().getColumnAndRow(e);
-            String wordAtTap = term.getWordAt(columnAndRow[0], columnAndRow[1]);
-            LinkedHashSet<CharSequence> urlSet = TermuxUrlUtils.extractUrls(wordAtTap);
+            int[] columnAndRow = mActivity.getTerminalView().getColumnAndRow(e, true);
+            String wordAtTap = term.getScreen().getWordAtLocation(columnAndRow[0], columnAndRow[1]);
+            LinkedHashSet<CharSequence> urlSet = UrlUtils.extractUrls(wordAtTap);
 
             if (!urlSet.isEmpty()) {
                 String url = (String) urlSet.iterator().next();
-                ShareUtils.openUrl(mActivity, url);
+                ShareUtils.openURL(mActivity, url);
                 return;
             }
         }
@@ -234,8 +213,9 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     @Override
-    public boolean shouldEnableImeInput() {
-        return mActivity.getProperties().isImeInputEnabled();
+    public boolean shouldEnableImeComposing() {
+        // The explicit keyboard workaround must take priority over the optional IME preview.
+        return !shouldEnforceCharBasedInput() && mActivity.getPreferences().isImeComposingEnabled();
     }
 
     @Override
@@ -276,7 +256,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         if (handleVirtualKeys(keyCode, e, true)) return true;
 
         if (keyCode == KeyEvent.KEYCODE_ENTER && !currentSession.isRunning()) {
-            mTermuxTerminalSessionActivityClient.removeFinishedSession(currentSession);
+            mTermuxTerminalSessionClient.removeFinishedSession(currentSession);
             return true;
         } else if (!mActivity.getProperties().areHardwareKeyboardShortcutsDisabled() &&
             e.isCtrlPressed() && e.isAltPressed()) {
@@ -284,27 +264,23 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             int unicodeChar = e.getUnicodeChar(0);
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || unicodeChar == 'n'/* next */) {
-                mTermuxTerminalSessionActivityClient.switchToSession(true);
+                mTermuxTerminalSessionClient.switchToSession(true);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP || unicodeChar == 'p' /* previous */) {
-                mTermuxTerminalSessionActivityClient.switchToSession(false);
+                mTermuxTerminalSessionClient.switchToSession(false);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 mActivity.getDrawer().openDrawer(Gravity.LEFT);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                 mActivity.getDrawer().closeDrawers();
-            } else if (keyCode == KeyEvent.KEYCODE_PAGE_UP || keyCode == KeyEvent.KEYCODE_PAGE_DOWN) {
-                mActivity.getTerminalView().scrollToPrompt(keyCode == KeyEvent.KEYCODE_PAGE_UP ? -1 : 1);
             } else if (unicodeChar == 'k'/* keyboard */) {
                 onToggleSoftKeyboardRequest();
             } else if (unicodeChar == 'm'/* menu */) {
                 mActivity.getTerminalView().showContextMenu();
             } else if (unicodeChar == 'r'/* rename */) {
-                mTermuxTerminalSessionActivityClient.renameSession(currentSession);
+                mTermuxTerminalSessionClient.renameSession(currentSession);
             } else if (unicodeChar == 'c'/* create */) {
-                mTermuxTerminalSessionActivityClient.addNewSession(false, null);
+                mTermuxTerminalSessionClient.addNewSession(false, null);
             } else if (unicodeChar == 'u' /* urls */) {
                 showUrlSelection();
-            } else if (unicodeChar == 'f' /* find */) {
-                showTerminalSearch();
             } else if (unicodeChar == 'v') {
                 doPaste();
             } else if (unicodeChar == '+' || e.getUnicodeChar(KeyEvent.META_SHIFT_ON) == '+') {
@@ -315,7 +291,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 changeFontSize(false);
             } else if (unicodeChar >= '1' && unicodeChar <= '9') {
                 int index = unicodeChar - '1';
-                mTermuxTerminalSessionActivityClient.switchToSession(index);
+                mTermuxTerminalSessionClient.switchToSession(index);
             }
             return true;
         }
@@ -330,7 +306,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     public boolean onKeyUp(int keyCode, KeyEvent e) {
         // If emulator is not set, like if bootstrap installation failed and user dismissed the error
         // dialog, then just exit the activity, otherwise they will be stuck in a broken state.
-        if (keyCode == KeyEvent.KEYCODE_BACK && mActivity.getTerminalView().getTerminal() == null) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && mActivity.getTerminalView().mEmulator == null) {
             mActivity.finishActivityIfNotFinishing();
             return true;
         }
@@ -492,18 +468,19 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             }
 
             if (resultingKeyCode != -1) {
-                mActivity.getTerminalView().handleKeyCode(resultingKeyCode, 0);
+                TerminalEmulator term = session.getEmulator();
+                session.write(KeyHandler.getCode(resultingKeyCode, 0, term.isCursorKeysApplicationMode(), term.isKeypadApplicationMode()));
             } else if (resultingCodePoint != -1) {
                 session.writeCodePoint(altDown, resultingCodePoint);
             }
             return true;
         } else if (ctrlDown) {
             if (codePoint == 106 /* Ctrl+j or \n */ && !session.isRunning()) {
-                mTermuxTerminalSessionActivityClient.removeFinishedSession(session);
+                mTermuxTerminalSessionClient.removeFinishedSession(session);
                 return true;
             }
 
-            List<KeyboardShortcut> shortcuts = mSessionShortcuts;
+            List<KeyboardShortcut> shortcuts = mActivity.getProperties().getSessionShortcuts();
             if (shortcuts != null && !shortcuts.isEmpty()) {
                 int codePointLowerCase = Character.toLowerCase(codePoint);
                 for (int i = shortcuts.size() - 1; i >= 0; i--) {
@@ -511,16 +488,16 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                     if (codePointLowerCase == shortcut.codePoint) {
                         switch (shortcut.shortcutAction) {
                             case TermuxPropertyConstants.ACTION_SHORTCUT_CREATE_SESSION:
-                                mTermuxTerminalSessionActivityClient.addNewSession(false, null);
+                                mTermuxTerminalSessionClient.addNewSession(false, null);
                                 return true;
                             case TermuxPropertyConstants.ACTION_SHORTCUT_NEXT_SESSION:
-                                mTermuxTerminalSessionActivityClient.switchToSession(true);
+                                mTermuxTerminalSessionClient.switchToSession(true);
                                 return true;
                             case TermuxPropertyConstants.ACTION_SHORTCUT_PREVIOUS_SESSION:
-                                mTermuxTerminalSessionActivityClient.switchToSession(false);
+                                mTermuxTerminalSessionClient.switchToSession(false);
                                 return true;
                             case TermuxPropertyConstants.ACTION_SHORTCUT_RENAME_SESSION:
-                                mTermuxTerminalSessionActivityClient.renameSession(mActivity.getCurrentSession());
+                                mTermuxTerminalSessionClient.renameSession(mActivity.getCurrentSession());
                                 return true;
                         }
                     }
@@ -530,27 +507,6 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         return false;
     }
-
-    /**
-     * Set the terminal sessions shortcuts.
-     */
-    private void setSessionShortcuts() {
-        mSessionShortcuts = new ArrayList<>();
-
-        // The {@link TermuxPropertyConstants#MAP_SESSION_SHORTCUTS} stores the session shortcut key and action pair
-        for (Map.Entry<String, Integer> entry : TermuxPropertyConstants.MAP_SESSION_SHORTCUTS.entrySet()) {
-            // The mMap stores the code points for the session shortcuts while loading properties
-            Integer codePoint = (Integer) mActivity.getProperties().getInternalPropertyValue(entry.getKey(), true);
-            // If codePoint is null, then session shortcut did not exist in properties or was invalid
-            // as parsed by {@link #getCodePointForSessionShortcuts(String,String)}
-            // If codePoint is not null, then get the action for the MAP_SESSION_SHORTCUTS key and
-            // add the code point to sessionShortcuts
-            if (codePoint != null)
-                mSessionShortcuts.add(new KeyboardShortcut(codePoint, entry.getValue()));
-        }
-    }
-
-
 
 
 
@@ -707,7 +663,6 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
 
     public void setTerminalCursorBlinkerState(boolean start) {
-        mCursorBlinkerTerminal = mActivity.getTerminalView().getTerminal();
         if (start) {
             // If set/update the cursor blinking rate is successful, then enable cursor blinker
             if (mActivity.getTerminalView().setTerminalCursorBlinkerRate(mActivity.getProperties().getTerminalCursorBlinkRate()))
@@ -742,25 +697,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             selectedText, mActivity.getString(R.string.title_share_selected_text_with));
     }
 
-    public void showTerminalSearch() {
-        mTerminalSearch.show();
-    }
-
-    public void dismissTerminalSearch() {
-        mTerminalSearch.dismiss();
-    }
-
-    public void dismissTerminalSearchIfSessionChanged() {
-        mTerminalSearch.dismissIfSessionChanged();
-    }
-
     public void showUrlSelection() {
         TerminalSession session = mActivity.getCurrentSession();
         if (session == null) return;
 
         String text = ShellUtils.getTerminalSessionTranscriptText(session, true, true);
 
-        LinkedHashSet<CharSequence> urlSet = TermuxUrlUtils.extractUrls(text);
+        LinkedHashSet<CharSequence> urlSet = UrlUtils.extractUrls(text);
         if (urlSet.isEmpty()) {
             new MaterialAlertDialogBuilder(mActivity).setMessage(R.string.title_select_url_none_found).show();
             return;
@@ -781,7 +724,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             lv.setOnItemLongClickListener((parent, view, position, id) -> {
                 dialog.dismiss();
                 String url = (String) urls[position];
-                ShareUtils.openUrl(mActivity, url);
+                ShareUtils.openURL(mActivity, url);
                 return true;
             });
         });
@@ -817,19 +760,12 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 reportString.append("\n").append(MarkdownUtils.getMarkdownCodeForString(transcriptText, true));
                 reportString.append("\n##\n");
 
-                if (addTermuxDebugInfo) {
-                    reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(mActivity, TermuxUtils.AppInfoMode.TERMUX_AND_PLUGIN_PACKAGES));
-                } else {
-                    reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(mActivity, TermuxUtils.AppInfoMode.TERMUX_PACKAGE));
-                }
+                reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(mActivity, true));
+                reportString.append("\n\n").append(AndroidUtils.getDeviceInfoMarkdownString(mActivity));
 
-                reportString.append("\n\n").append(AndroidUtils.getDeviceInfoMarkdownString(mActivity, true));
-
-                if (TermuxBootstrap.isAppPackageManagerAPT()) {
-                    String termuxAptInfo = TermuxUtils.geAPTInfoMarkdownString(mActivity);
-                    if (termuxAptInfo != null)
-                        reportString.append("\n\n").append(termuxAptInfo);
-                }
+                String termuxAptInfo = TermuxUtils.geAPTInfoMarkdownString(mActivity);
+                if (termuxAptInfo != null)
+                    reportString.append("\n\n").append(termuxAptInfo);
 
                 if (addTermuxDebugInfo) {
                     String termuxDebugInfo = TermuxUtils.getTermuxDebugMarkdownString(mActivity);
@@ -838,16 +774,14 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 }
 
                 String userActionName = UserAction.REPORT_ISSUE_FROM_TRANSCRIPT.getName();
-
-                ReportInfo reportInfo = new ReportInfo(userActionName,
-                    TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY_NAME, title);
-                reportInfo.setReportString(reportString.toString());
-                reportInfo.setReportStringSuffix("\n\n" + TermuxUtils.getReportIssueMarkdownString(mActivity));
-                reportInfo.setReportSaveFileLabelAndPath(userActionName,
-                    Environment.getExternalStorageDirectory() + "/" +
-                        FileUtils.sanitizeFileName(TermuxConstants.TERMUX_APP_NAME + "-" + userActionName + ".log", true, true));
-
-                ReportActivity.startReportActivity(mActivity, reportInfo);
+                ReportActivity.startReportActivity(mActivity,
+                    new ReportInfo(userActionName,
+                        TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY_NAME, title, null,
+                        reportString.toString(), "\n\n" + TermuxUtils.getReportIssueMarkdownString(mActivity),
+                        false,
+                        userActionName,
+                        Environment.getExternalStorageDirectory() + "/" +
+                            FileUtils.sanitizeFileName(TermuxConstants.TERMUX_APP_NAME + "-" + userActionName + ".log", true, true)));
             }
         }.start();
     }
@@ -859,7 +793,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         String text = ShareUtils.getTextStringFromClipboardIfSet(mActivity, true);
         if (text != null)
-            session.getTerminal().paste(text);
+            session.getEmulator().paste(text);
     }
 
 }

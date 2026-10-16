@@ -27,25 +27,13 @@
 
     <!-- Termux Bootstrap Packages Installation -->
     <string name="bootstrap_installer_body">Installing bootstrap packages…</string>
-    <string name="bootstrap_error_title">&TERMUX_APP_NAME; Bootstrap Error</string>
+    <string name="bootstrap_error_title">Unable to install bootstrap</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; was unable to install the bootstrap packages.</string>
     <string name="bootstrap_error_abort">Abort</string>
     <string name="bootstrap_error_try_again">Try again</string>
-    <string name="bootstrap_error_apk_bootstrap_variant_min_sdk_incompatible">The APK bootstrap variant %1$s
-        of currently installed &TERMUX_APP_NAME; app is not compatible with the Android version %2$s
-        (sdk `%3$d`) of the device and it requires minimum Android version %4$s (sdk `%5$d`).
-        \n\nUninstall the &TERMUX_APP_NAME; app and reinstall the correct APK build variant.</string>
-    <string name="bootstrap_error_apk_bootstrap_variant_max_sdk_incompatible">The APK bootstrap variant %1$s
-        of currently installed &TERMUX_APP_NAME; app is not compatible with the Android version %2$s
-        (sdk `%3$d`) of the device and it requires maximum Android version %4$s (sdk `%5$d`).
-        \n\nUninstall the &TERMUX_APP_NAME; app and reinstall the correct APK build variant.</string>
     <string name="bootstrap_error_not_primary_user_message">&TERMUX_APP_NAME; can only be run as the primary user.
         \nBootstrap binaries compiled for &TERMUX_APP_NAME; have hardcoded $PREFIX path and cannot be installed
-        under any path other than:\n%1$s.</string>
-    <string name="bootstrap_error_installed_on_portable_sd">&TERMUX_APP_NAME; cannot be installed on
-        portable/external/removable sd card on your device.
-        \nBootstrap binaries compiled for &TERMUX_APP_NAME; have hardcoded $PREFIX path and cannot be installed
-        under any path other than:\n%1$s.</string>
+        under any path other than %1$s.</string>
 
 
 
@@ -69,8 +57,6 @@
 
 
     <!-- Terminal Popup -->
-    <string name="action_previous_prompt">Previous prompt</string>
-    <string name="action_next_prompt">Next prompt</string>
     <string name="action_select_url">Select URL</string>
     <string name="title_select_url_dialog">Click URL to copy or long press to open</string>
     <string name="title_select_url_none_found">No URL found in the terminal.</string>
@@ -113,19 +99,14 @@
 
 
     <!-- TermuxService -->
-    <string name="error_display_over_other_apps_permission_not_granted_to_start_terminal">&TERMUX_APP_NAME; requires
+    <string name="error_display_over_other_apps_permission_not_granted">&TERMUX_APP_NAME; requires
         \"Display over other apps\" permission to start terminal sessions from background on Android >= 10.
         Grants it from Settings -> Apps -> &TERMUX_APP_NAME; -> Advanced</string>
-    <string name="error_termux_service_invalid_execution_command_runner">Invalid execution command runner to TermuxService: `%1$s`</string>
-    <string name="error_termux_service_unsupported_execution_command_runner">Unsupported execution command runner to TermuxService: `%1$s`</string>
-    <string name="error_termux_service_unsupported_execution_command_shell_create_mode">Unsupported execution command shell create mode to TermuxService: `%1$s`</string>
-    <string name="error_termux_service_execution_command_shell_name_unset">Shell name not set but `%1$s` shell create mode passed</string>
 
 
 
     <!-- Termux RunCommandService -->
     <string name="error_run_command_service_invalid_intent_action">Invalid intent action to RunCommandService: `%1$s`</string>
-    <string name="error_run_command_service_invalid_execution_command_runner">Invalid execution command runner to RunCommandService: `%1$s`</string>
     <string name="error_run_command_service_mandatory_extra_missing">Mandatory extra missing to RunCommandService: \"%1$s\"</string>
     <string name="error_run_command_service_api_help">Visit %1$s for more info on RUN_COMMAND Intent usage.</string>
 
@@ -139,8 +120,8 @@
 
 
     <!-- Miscellaneous -->
-    <string name="error_termux_service_start_failed_general">Failed to start TermuxService. Check logcat for exception message.</string>
-    <string name="error_termux_service_start_failed_bg">Failed to start TermuxService while app is in background due to android bg restrictions.</string>
+    <string name="error_allow_external_apps_ungranted">%1$s requires `allow-external-apps`
+        property to be set to `true` in `%2$s` file.</string>
 
 
 
@@ -196,6 +177,11 @@
                     hardware keyboard is connected. (Default)</string>
                 <string name="termux_soft_keyboard_enabled_only_if_no_hardware_on">Soft keyboard will be enabled only if
                     no hardware keyboard is connected.</string>
+
+                <!-- IME Composing -->
+                <string name="termux_ime_composing_enabled_title">IME Composing Preview</string>
+                <string name="termux_ime_composing_enabled_off">Composing text is invisible until commit. (Default)</string>
+                <string name="termux_ime_composing_enabled_on">Show composing text as an inline preview at the cursor.</string>
 
         <!-- Terminal View Preferences -->
         <string name="termux_terminal_view_preferences_title">Terminal View</string>

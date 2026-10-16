@@ -80,8 +80,6 @@ public final class TermuxPropertiesPreferences {
             R.string.mdterm_prop_margin_summary, "0–100 dp", false);
 
         PreferenceScreen input = section("input", R.string.mdterm_settings_input, 40);
-        toggle(input, "enable-ime-input", R.string.mdterm_prop_ime_input,
-            R.string.mdterm_prop_ime_input_summary);
         list(input, "back-key", R.string.mdterm_prop_back_key, 0,
             R.array.mdterm_prop_back_entries, "back", "escape");
         list(input, "volume-keys", R.string.mdterm_prop_volume_keys, 0,

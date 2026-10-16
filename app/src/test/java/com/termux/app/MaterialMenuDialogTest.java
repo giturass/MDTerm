@@ -19,9 +19,9 @@ import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
 import com.termux.app.ui.MaterialMenuDialog;
-import com.termux.shared.termux.interact.TextInputDialogUtils;
-import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.interact.TextInputDialogUtils;
+import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalSession;
 import com.termux.view.TerminalView;
 

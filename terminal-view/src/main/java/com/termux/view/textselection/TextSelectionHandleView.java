@@ -68,12 +68,11 @@ public class TextSelectionHandleView extends View {
             android.R.attr.textSelectHandleWindowStyle);
         mHandle.setSplitTouchEnabled(true);
         mHandle.setClippingEnabled(false);
+        mHandle.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
         mHandle.setWidth(ViewGroup.LayoutParams.WRAP_CONTENT);
         mHandle.setHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
         mHandle.setBackgroundDrawable(null);
         mHandle.setAnimationStyle(0);
-
-        mHandle.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
         mHandle.setEnterTransition(null);
         mHandle.setExitTransition(null);
         mHandle.setContentView(this);
@@ -304,7 +303,6 @@ public class TextSelectionHandleView extends View {
                 final float newPosY = rawY - mTouchToWindowOffsetY + mHotspotY + mTouchOffsetY;
 
                 mCursorController.updatePosition(this, Math.round(newPosX), Math.round(newPosY));
-                mCursorController.render();
                 break;
             }
 

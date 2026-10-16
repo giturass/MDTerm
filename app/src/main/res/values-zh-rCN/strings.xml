@@ -55,8 +55,6 @@
 
 
     <!-- Terminal Popup -->
-    <string name="action_previous_prompt">上一个提示符</string>
-    <string name="action_next_prompt">下一个提示符</string>
     <string name="action_select_url">选择链接</string>
     <string name="title_select_url_dialog">点按链接复制，长按打开</string>
     <string name="title_select_url_none_found">终端中未找到链接。</string>
@@ -177,6 +175,11 @@
                 <string name="termux_soft_keyboard_enabled_only_if_no_hardware_title">仅在未连接实体键盘时启用软键盘</string>
                 <string name="termux_soft_keyboard_enabled_only_if_no_hardware_off">连接实体键盘时也启用软键盘。（默认）</string>
                 <string name="termux_soft_keyboard_enabled_only_if_no_hardware_on">仅在未连接实体键盘时启用软键盘。</string>
+
+                <!-- IME Composing -->
+                <string name="termux_ime_composing_enabled_title">输入法组合文本预览</string>
+                <string name="termux_ime_composing_enabled_off">输入法尚未提交的组合文本不可见。（默认）</string>
+                <string name="termux_ime_composing_enabled_on">在光标处预览输入法尚未提交的组合文本。</string>
 
         <!-- Terminal View Preferences -->
         <string name="termux_terminal_view_preferences_title">终端显示</string>
