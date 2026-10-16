@@ -362,7 +362,7 @@ public class ShadowGhosttyTerminal {
     protected void detachSurface() { }
 
     @Implementation
-    protected int[] selectWordOrOutput(int column, int viewportRow) {
+    protected int[] selectWord(int column, int viewportRow) {
         int[] word = wordSelection(column, viewportRow);
         if (word == null) return null;
         selection = word;

@@ -1656,8 +1656,8 @@ public final class TerminalView extends SurfaceView implements SurfaceHolder.Cal
     }
 
     @Nullable
-    public int[] selectWordOrOutput(int column, int row) {
-        return mTerminal == null ? null : mTerminal.selectWordOrOutput(column, row);
+    public int[] selectWord(int column, int row) {
+        return mTerminal == null ? null : mTerminal.selectWord(column, row);
     }
 
     public void clearNativeSelection() {
