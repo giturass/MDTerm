@@ -4,6 +4,7 @@ MDTerm for Android 12+ (arm64-v8a), based on Termux v0.118.3.
 - Retain the MDTerm interface and interactions from 7e410325, including bookmarks and the unified session drawer.
 - Material Design 3 interface, wallpaper dynamic colors, and Simplified Chinese.
 - Updated terminal controls, settings, session management, and IME composing preview.
+- Always request Android 11+ All Files Access during storage setup so Android 14 grants full shared-storage access.
 - Official Termux packages run directly with the `com.termux` package name; no bundled PRoot runtime.
 - Built with the release build type, code shrinking enabled, and a dedicated MDTerm signing key.
 
