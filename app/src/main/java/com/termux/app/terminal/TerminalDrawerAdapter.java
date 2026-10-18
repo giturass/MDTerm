@@ -16,8 +16,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
-import com.termux.shared.interact.TextInputDialogUtils;
-import com.termux.shared.shell.TermuxSession;
+import com.termux.shared.termux.interact.TextInputDialogUtils;
+import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.terminal.TerminalSession;
 

@@ -19,16 +19,16 @@ import com.termux.R;
 import com.termux.app.terminal.TerminalBookmark;
 import com.termux.app.terminal.TerminalBookmarkStore;
 import com.termux.app.terminal.TerminalDrawerAdapter;
-import com.termux.app.terminal.TermuxTerminalSessionClient;
+import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
-import com.termux.shared.models.ExecutionCommand;
+import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.settings.preferences.TermuxPreferenceConstants;
-import com.termux.app.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.settings.properties.TermuxPropertyConstants;
-import com.termux.shared.shell.TermuxSession;
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
@@ -76,9 +76,11 @@ public class BookmarkStartupTest {
             .putBoolean(TermuxPreferenceConstants.TERMUX_APP.KEY_SHOW_TERMINAL_TOOLBAR, true)
             .putBoolean(TermuxPreferenceConstants.TERMUX_APP.KEY_SOFT_KEYBOARD_ENABLED, true)
             .commit());
-        new TermuxAppSharedProperties(application).loadTermuxPropertiesFromDisk();
+        TermuxAppSharedProperties.init(application).loadTermuxPropertiesFromDisk();
         bookmarks = new TerminalBookmarkStore(application);
         service = Robolectric.buildService(TermuxService.class).get();
+        ReflectionHelpers.setField(service, "mShellManager",
+            new com.termux.shared.termux.shell.TermuxShellManager(RuntimeEnvironment.getApplication()));
         ShadowInstaller.calls = 0;
         ShadowInstaller.pending = null;
     }
@@ -324,12 +326,12 @@ public class BookmarkStartupTest {
         assertNotNull(preferences);
         assertTrue(preferences.shouldShowTerminalToolbar());
         ReflectionHelpers.setField(activity, "mPreferences", preferences);
-        ReflectionHelpers.setField(activity, "mProperties", new TermuxAppSharedProperties(activity));
+        ReflectionHelpers.setField(activity, "mProperties", TermuxAppSharedProperties.init(activity));
         ReflectionHelpers.setField(activity, "mIsVisible", true);
         ReflectionHelpers.setField(activity, "mIsActivityRecreated", recreated);
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
-        TermuxTerminalSessionClient client = new TermuxTerminalSessionClient(activity);
-        ReflectionHelpers.setField(activity, "mTermuxTerminalSessionClient", client);
+        TermuxTerminalSessionActivityClient client = new TermuxTerminalSessionActivityClient(activity);
+        ReflectionHelpers.setField(activity, "mTermuxTerminalSessionActivityClient", client);
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, client);
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
         activity.mTerminalView.setTextSize(20);
@@ -447,9 +449,9 @@ public class BookmarkStartupTest {
             ClassParameter.from(TerminalSession.class, terminal),
             ClassParameter.from(ExecutionCommand.class, command),
             ClassParameter.from(TermuxSession.TermuxSessionClient.class,
-                (TermuxSession.TermuxSessionClient) service.mTermuxSessions::remove),
+                (TermuxSession.TermuxSessionClient) service.getTermuxSessions()::remove),
             ClassParameter.from(boolean.class, false));
-        service.mTermuxSessions.add(session);
+        service.getTermuxSessions().add(session);
         return session;
     }
 
@@ -471,12 +473,11 @@ public class BookmarkStartupTest {
         final List<ExecutionCommand> created = new ArrayList<>();
 
         @Implementation
-        protected TermuxSession createTermuxSession(ExecutionCommand command, String sessionName) {
-            // The stable service accepts the session name separately from ExecutionCommand.
-            // Intercept this overload before it discovers device SELinux state or starts a PTY.
+        protected TermuxSession createTermuxSession(ExecutionCommand command) {
+            // Intercept the beta3 execution request before device discovery or starting a PTY.
             created.add(command);
             TermuxSession session = syntheticSession(service, command);
-            session.getTerminalSession().mSessionName = sessionName;
+            session.getTerminalSession().mSessionName = command.shellName;
             return session;
         }
     }

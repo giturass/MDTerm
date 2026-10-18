@@ -23,20 +23,21 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
-import com.termux.shared.data.UrlUtils;
+import com.termux.shared.termux.data.TermuxUrlUtils;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.interact.MessageDialogUtils;
 import com.termux.shared.interact.ShareUtils;
 import com.termux.shared.shell.ShellUtils;
-import com.termux.shared.terminal.TermuxTerminalViewClientBase;
-import com.termux.shared.terminal.io.extrakeys.SpecialButton;
-import com.termux.shared.termux.AndroidUtils;
+import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
+import com.termux.shared.termux.extrakeys.SpecialButton;
+import com.termux.shared.android.AndroidUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.models.ReportInfo;
 import com.termux.app.models.UserAction;
+import com.termux.shared.termux.TermuxBootstrap;
 import com.termux.app.terminal.io.KeyboardShortcut;
-import com.termux.shared.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.markdown.MarkdownUtils;
@@ -49,6 +50,8 @@ import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -59,7 +62,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     final TermuxActivity mActivity;
 
-    final TermuxTerminalSessionClient mTermuxTerminalSessionClient;
+    final TermuxTerminalSessionActivityClient mTermuxTerminalSessionActivityClient;
 
     /** Keeping track of the special keys acting as Ctrl and Fn for the soft keyboard and other hardware keys. */
     boolean mVirtualControlKeyDown, mVirtualFnKeyDown;
@@ -71,11 +74,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
     private boolean mTerminalCursorBlinkerStateAlreadySet;
 
+    private List<KeyboardShortcut> mSessionShortcuts;
+
     private static final String LOG_TAG = "TermuxTerminalViewClient";
 
-    public TermuxTerminalViewClient(TermuxActivity activity, TermuxTerminalSessionClient termuxTerminalSessionClient) {
+    public TermuxTerminalViewClient(TermuxActivity activity, TermuxTerminalSessionActivityClient termuxTerminalSessionClient) {
         this.mActivity = activity;
-        this.mTermuxTerminalSessionClient = termuxTerminalSessionClient;
+        this.mTermuxTerminalSessionActivityClient = termuxTerminalSessionClient;
     }
 
     public TermuxActivity getActivity() {
@@ -86,6 +91,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * Should be called when mActivity.onCreate() is called
      */
     public void onCreate() {
+        onReloadProperties();
         mActivity.getTerminalView().setTextSize(mActivity.getPreferences().getFontSize());
         mActivity.getTerminalView().setKeepScreenOn(mActivity.getPreferences().shouldKeepScreenOn());
     }
@@ -135,6 +141,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * Should be called when mActivity.reloadActivityStyling() is called
      */
     public void onReload() {
+        onReloadProperties();
         // Show the soft keyboard if required
         setSoftKeyboardState(false, true);
 
@@ -185,11 +192,11 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         if (mActivity.getProperties().shouldOpenTerminalTranscriptURLOnClick()) {
             int[] columnAndRow = mActivity.getTerminalView().getColumnAndRow(e, true);
             String wordAtTap = term.getScreen().getWordAtLocation(columnAndRow[0], columnAndRow[1]);
-            LinkedHashSet<CharSequence> urlSet = UrlUtils.extractUrls(wordAtTap);
+            LinkedHashSet<CharSequence> urlSet = TermuxUrlUtils.extractUrls(wordAtTap);
 
             if (!urlSet.isEmpty()) {
                 String url = (String) urlSet.iterator().next();
-                ShareUtils.openURL(mActivity, url);
+                ShareUtils.openUrl(mActivity, url);
                 return;
             }
         }
@@ -256,7 +263,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         if (handleVirtualKeys(keyCode, e, true)) return true;
 
         if (keyCode == KeyEvent.KEYCODE_ENTER && !currentSession.isRunning()) {
-            mTermuxTerminalSessionClient.removeFinishedSession(currentSession);
+            mTermuxTerminalSessionActivityClient.removeFinishedSession(currentSession);
             return true;
         } else if (!mActivity.getProperties().areHardwareKeyboardShortcutsDisabled() &&
             e.isCtrlPressed() && e.isAltPressed()) {
@@ -264,9 +271,9 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             int unicodeChar = e.getUnicodeChar(0);
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || unicodeChar == 'n'/* next */) {
-                mTermuxTerminalSessionClient.switchToSession(true);
+                mTermuxTerminalSessionActivityClient.switchToSession(true);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP || unicodeChar == 'p' /* previous */) {
-                mTermuxTerminalSessionClient.switchToSession(false);
+                mTermuxTerminalSessionActivityClient.switchToSession(false);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 mActivity.getDrawer().openDrawer(Gravity.LEFT);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
@@ -276,9 +283,9 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             } else if (unicodeChar == 'm'/* menu */) {
                 mActivity.getTerminalView().showContextMenu();
             } else if (unicodeChar == 'r'/* rename */) {
-                mTermuxTerminalSessionClient.renameSession(currentSession);
+                mTermuxTerminalSessionActivityClient.renameSession(currentSession);
             } else if (unicodeChar == 'c'/* create */) {
-                mTermuxTerminalSessionClient.addNewSession(false, null);
+                mTermuxTerminalSessionActivityClient.addNewSession(false, null);
             } else if (unicodeChar == 'u' /* urls */) {
                 showUrlSelection();
             } else if (unicodeChar == 'v') {
@@ -291,7 +298,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 changeFontSize(false);
             } else if (unicodeChar >= '1' && unicodeChar <= '9') {
                 int index = unicodeChar - '1';
-                mTermuxTerminalSessionClient.switchToSession(index);
+                mTermuxTerminalSessionActivityClient.switchToSession(index);
             }
             return true;
         }
@@ -476,11 +483,11 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             return true;
         } else if (ctrlDown) {
             if (codePoint == 106 /* Ctrl+j or \n */ && !session.isRunning()) {
-                mTermuxTerminalSessionClient.removeFinishedSession(session);
+                mTermuxTerminalSessionActivityClient.removeFinishedSession(session);
                 return true;
             }
 
-            List<KeyboardShortcut> shortcuts = mActivity.getProperties().getSessionShortcuts();
+            List<KeyboardShortcut> shortcuts = mSessionShortcuts;
             if (shortcuts != null && !shortcuts.isEmpty()) {
                 int codePointLowerCase = Character.toLowerCase(codePoint);
                 for (int i = shortcuts.size() - 1; i >= 0; i--) {
@@ -488,16 +495,16 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                     if (codePointLowerCase == shortcut.codePoint) {
                         switch (shortcut.shortcutAction) {
                             case TermuxPropertyConstants.ACTION_SHORTCUT_CREATE_SESSION:
-                                mTermuxTerminalSessionClient.addNewSession(false, null);
+                                mTermuxTerminalSessionActivityClient.addNewSession(false, null);
                                 return true;
                             case TermuxPropertyConstants.ACTION_SHORTCUT_NEXT_SESSION:
-                                mTermuxTerminalSessionClient.switchToSession(true);
+                                mTermuxTerminalSessionActivityClient.switchToSession(true);
                                 return true;
                             case TermuxPropertyConstants.ACTION_SHORTCUT_PREVIOUS_SESSION:
-                                mTermuxTerminalSessionClient.switchToSession(false);
+                                mTermuxTerminalSessionActivityClient.switchToSession(false);
                                 return true;
                             case TermuxPropertyConstants.ACTION_SHORTCUT_RENAME_SESSION:
-                                mTermuxTerminalSessionClient.renameSession(mActivity.getCurrentSession());
+                                mTermuxTerminalSessionActivityClient.renameSession(mActivity.getCurrentSession());
                                 return true;
                         }
                     }
@@ -509,6 +516,26 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
 
+
+    public void onReloadProperties() {
+        setSessionShortcuts();
+    }
+
+    private void setSessionShortcuts() {
+        mSessionShortcuts = new ArrayList<>();
+
+        // The {@link TermuxPropertyConstants#MAP_SESSION_SHORTCUTS} stores the session shortcut key and action pair
+        for (Map.Entry<String, Integer> entry : TermuxPropertyConstants.MAP_SESSION_SHORTCUTS.entrySet()) {
+            // The mMap stores the code points for the session shortcuts while loading properties
+            Integer codePoint = (Integer) mActivity.getProperties().getInternalPropertyValue(entry.getKey(), true);
+            // If codePoint is null, then session shortcut did not exist in properties or was invalid
+            // as parsed by {@link #getCodePointForSessionShortcuts(String,String)}
+            // If codePoint is not null, then get the action for the MAP_SESSION_SHORTCUTS key and
+            // add the code point to sessionShortcuts
+            if (codePoint != null)
+                mSessionShortcuts.add(new KeyboardShortcut(codePoint, entry.getValue()));
+        }
+    }
 
     public void changeFontSize(boolean increase) {
         mActivity.getPreferences().changeFontSize(increase);
@@ -703,7 +730,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         String text = ShellUtils.getTerminalSessionTranscriptText(session, true, true);
 
-        LinkedHashSet<CharSequence> urlSet = UrlUtils.extractUrls(text);
+        LinkedHashSet<CharSequence> urlSet = TermuxUrlUtils.extractUrls(text);
         if (urlSet.isEmpty()) {
             new MaterialAlertDialogBuilder(mActivity).setMessage(R.string.title_select_url_none_found).show();
             return;
@@ -724,7 +751,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             lv.setOnItemLongClickListener((parent, view, position, id) -> {
                 dialog.dismiss();
                 String url = (String) urls[position];
-                ShareUtils.openURL(mActivity, url);
+                ShareUtils.openUrl(mActivity, url);
                 return true;
             });
         });
@@ -760,12 +787,19 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 reportString.append("\n").append(MarkdownUtils.getMarkdownCodeForString(transcriptText, true));
                 reportString.append("\n##\n");
 
-                reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(mActivity, true));
-                reportString.append("\n\n").append(AndroidUtils.getDeviceInfoMarkdownString(mActivity));
+                if (addTermuxDebugInfo) {
+                    reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(mActivity, TermuxUtils.AppInfoMode.TERMUX_AND_PLUGIN_PACKAGES));
+                } else {
+                    reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(mActivity, TermuxUtils.AppInfoMode.TERMUX_PACKAGE));
+                }
 
-                String termuxAptInfo = TermuxUtils.geAPTInfoMarkdownString(mActivity);
-                if (termuxAptInfo != null)
-                    reportString.append("\n\n").append(termuxAptInfo);
+                reportString.append("\n\n").append(AndroidUtils.getDeviceInfoMarkdownString(mActivity, true));
+
+                if (TermuxBootstrap.isAppPackageManagerAPT()) {
+                    String termuxAptInfo = TermuxUtils.geAPTInfoMarkdownString(mActivity);
+                    if (termuxAptInfo != null)
+                        reportString.append("\n\n").append(termuxAptInfo);
+                }
 
                 if (addTermuxDebugInfo) {
                     String termuxDebugInfo = TermuxUtils.getTermuxDebugMarkdownString(mActivity);
@@ -774,14 +808,16 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 }
 
                 String userActionName = UserAction.REPORT_ISSUE_FROM_TRANSCRIPT.getName();
-                ReportActivity.startReportActivity(mActivity,
-                    new ReportInfo(userActionName,
-                        TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY_NAME, title, null,
-                        reportString.toString(), "\n\n" + TermuxUtils.getReportIssueMarkdownString(mActivity),
-                        false,
-                        userActionName,
-                        Environment.getExternalStorageDirectory() + "/" +
-                            FileUtils.sanitizeFileName(TermuxConstants.TERMUX_APP_NAME + "-" + userActionName + ".log", true, true)));
+
+                ReportInfo reportInfo = new ReportInfo(userActionName,
+                    TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY_NAME, title);
+                reportInfo.setReportString(reportString.toString());
+                reportInfo.setReportStringSuffix("\n\n" + TermuxUtils.getReportIssueMarkdownString(mActivity));
+                reportInfo.setReportSaveFileLabelAndPath(userActionName,
+                    Environment.getExternalStorageDirectory() + "/" +
+                        FileUtils.sanitizeFileName(TermuxConstants.TERMUX_APP_NAME + "-" + userActionName + ".log", true, true));
+
+                ReportActivity.startReportActivity(mActivity, reportInfo);
             }
         }.start();
     }

@@ -7,8 +7,8 @@ import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
-import com.termux.shared.terminal.TermuxTerminalViewClientBase;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 

@@ -4,9 +4,11 @@ import android.app.Application;
 import android.content.Intent;
 import android.net.Uri;
 
-import com.termux.shared.models.ExecutionCommand;
-import com.termux.shared.shell.TermuxTask;
+import com.termux.shared.shell.command.ExecutionCommand;
+import com.termux.shared.shell.command.ExecutionCommand.Runner;
+import com.termux.shared.shell.command.runner.app.AppShell;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_SERVICE;
+import com.termux.shared.termux.shell.TermuxShellManager;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,12 +50,14 @@ public class TermuxServiceUriTest {
 
     private static ExecutionCommand execute(Uri uri) {
         TermuxService service = Robolectric.buildService(TermuxService.class).get();
+        ReflectionHelpers.setField(service, "mShellManager", new TermuxShellManager(service));
         Intent intent = new Intent(TERMUX_SERVICE.ACTION_SERVICE_EXECUTE, uri)
             .putExtra(TERMUX_SERVICE.EXTRA_BACKGROUND, true)
             .putExtra(TERMUX_SERVICE.EXTRA_ARGUMENTS, new String[]{"argument"});
         ReflectionHelpers.callInstanceMethod(service, "actionServiceExecute", ClassParameter.from(Intent.class, intent));
         RecordingTaskService shadow = Shadow.extract(service);
         assertNotNull(shadow.command);
+        assertEquals(Runner.APP_SHELL.getName(), shadow.command.runner);
         return shadow.command;
     }
 
@@ -62,7 +66,7 @@ public class TermuxServiceUriTest {
         ExecutionCommand command;
 
         @Implementation
-        protected TermuxTask createTermuxTask(ExecutionCommand command) {
+        protected AppShell createTermuxTask(ExecutionCommand command) {
             // Capture intent parsing before starting any real process or inspecting device state.
             this.command = command;
             return null;

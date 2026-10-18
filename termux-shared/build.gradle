@@ -9,6 +9,7 @@ android {
     }
 
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
+    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
 
     dependencies {
         implementation "androidx.appcompat:appcompat:1.6.1"
@@ -30,12 +31,23 @@ android {
         implementation "commons-io:commons-io:2.5"
 
         implementation project(":terminal-view")
+        implementation "com.termux:termux-am-library:v2.0.0"
     }
 
     defaultConfig {
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters(*rootProject.ext.termuxAppAbis)
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path file("src/main/cpp/Android.mk")
+        }
     }
 
     buildTypes {
@@ -53,6 +65,10 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+
     publishing {
         multipleVariants {
             withSourcesJar()
@@ -64,6 +80,7 @@ android {
 
 dependencies {
     testImplementation "junit:junit:4.13.2"
+    testImplementation "org.robolectric:robolectric:4.10"
     androidTestImplementation "androidx.test.ext:junit:1.1.5"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.1.5"
 }
@@ -81,7 +98,7 @@ afterEvaluate {
                 from components.default
                 groupId = 'com.termux'
                 artifactId = 'termux-shared'
-                version = '0.118.3'
+                version = '0.119.0-beta.3'
                 artifact(sourceJar)
             }
         }

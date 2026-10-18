@@ -8,17 +8,17 @@ import androidx.annotation.NonNull;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.app.TermuxActivity;
-import com.termux.app.terminal.TermuxTerminalSessionClient;
+import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.logger.Logger;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeysConstants;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeysInfo;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeyButton;
-import com.termux.shared.terminal.io.extrakeys.SpecialButton;
+import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
+import com.termux.shared.termux.extrakeys.ExtraKeyButton;
+import com.termux.shared.termux.extrakeys.SpecialButton;
 import com.google.android.material.button.MaterialButton;
-import com.termux.shared.settings.properties.TermuxPropertyConstants;
-import com.termux.shared.settings.properties.TermuxSharedProperties;
-import com.termux.shared.terminal.io.TerminalExtraKeys;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
+import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
 import com.termux.view.TerminalView;
 
 import org.json.JSONArray;
@@ -36,7 +36,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
     private final TermuxActivity mActivity;
 
     TermuxTerminalViewClient mTermuxTerminalViewClient;
-    TermuxTerminalSessionClient mTermuxTerminalSessionClient;
+    TermuxTerminalSessionActivityClient mTermuxTerminalSessionActivityClient;
 
     private static final String LOG_TAG = "TermuxTerminalExtraKeys";
 
@@ -48,11 +48,11 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
 
     public TermuxTerminalExtraKeys(TermuxActivity activity, @NonNull TerminalView terminalView,
                                    TermuxTerminalViewClient termuxTerminalViewClient,
-                                   TermuxTerminalSessionClient termuxTerminalSessionClient) {
+                                   TermuxTerminalSessionActivityClient termuxTerminalSessionClient) {
         super(terminalView);
         mActivity = activity;
         mTermuxTerminalViewClient = termuxTerminalViewClient;
-        mTermuxTerminalSessionClient = termuxTerminalSessionClient;
+        mTermuxTerminalSessionActivityClient = termuxTerminalSessionClient;
 
         reload();
     }
@@ -166,8 +166,8 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             else
                 drawerLayout.openDrawer(Gravity.LEFT);
         } else if ("PASTE".equals(key)) {
-            if(mTermuxTerminalSessionClient != null)
-                mTermuxTerminalSessionClient.onPasteTextFromClipboard(null);
+            if(mTermuxTerminalSessionActivityClient != null)
+                mTermuxTerminalSessionActivityClient.onPasteTextFromClipboard(null);
         } else {
             super.onTerminalExtraKeyButtonClick(view, key, ctrlDown, altDown, shiftDown, fnDown);
         }

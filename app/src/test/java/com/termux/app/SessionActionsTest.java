@@ -22,14 +22,14 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.termux.R;
 import com.termux.app.terminal.TerminalBookmarkStore;
 import com.termux.app.terminal.TerminalDrawerAdapter;
-import com.termux.app.terminal.TermuxTerminalSessionClient;
+import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
-import com.termux.shared.models.ExecutionCommand;
-import com.termux.shared.shell.TermuxSession;
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
-import com.termux.app.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.settings.properties.TermuxPropertyConstants;
-import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.shell.command.ExecutionCommand;
+import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Before;
@@ -37,6 +37,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.android.controller.ActivityController;
@@ -59,7 +60,7 @@ public class SessionActionsTest {
     private ActivityController<TermuxActivity> controller;
     private TermuxActivity activity;
     private TermuxService service;
-    private TermuxTerminalSessionClient client;
+    private TermuxTerminalSessionActivityClient client;
 
     @Before
     public void setUp() {
@@ -74,17 +75,28 @@ public class SessionActionsTest {
         activity.mTerminalView.setVisibility(View.GONE);
         ReflectionHelpers.setField(activity, "mPreferences", TermuxAppSharedPreferences.build(activity));
         service = Robolectric.buildService(TermuxService.class).get();
+        ReflectionHelpers.setField(service, "mShellManager",
+            new com.termux.shared.termux.shell.TermuxShellManager(RuntimeEnvironment.getApplication()));
         ReflectionHelpers.setField(activity, "mTermuxService", service);
-        client = new TermuxTerminalSessionClient(activity) {
+        client = new TermuxTerminalSessionActivityClient(activity) {
             @Override public void setCurrentSession(TerminalSession session) {
                 // Avoid attaching a native PTY while exercising session selection.
                 activity.mTerminalView.mTermSession = session;
             }
         };
-        ReflectionHelpers.setField(activity, "mTermuxTerminalSessionClient", client);
+        ReflectionHelpers.setField(activity, "mTermuxTerminalSessionActivityClient", client);
         activity.mTermuxTerminalViewClient = new TermuxTerminalViewClient(activity, client);
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
         ReflectionHelpers.callInstanceMethod(activity, "setAdaptiveDrawerLayout");
+    }
+
+    @Test
+    public void foregroundShellPidIsRecordedOnItsExecutionCommand() {
+        TermuxSession session = addSession(true);
+
+        client.setTerminalShellPid(session.getTerminalSession(), 12345);
+
+        assertEquals(12345, session.getExecutionCommand().mPid);
     }
 
     @Test
@@ -92,7 +104,7 @@ public class SessionActionsTest {
         TermuxSession session = addSession(true);
         client.setCurrentSession(session.getTerminalSession());
         ReflectionHelpers.setField(activity, "mIsVisible", true);
-        TermuxAppSharedProperties properties = new TermuxAppSharedProperties(activity);
+        TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
         properties.loadTermuxPropertiesFromDisk();
         ReflectionHelpers.setField(activity, "mProperties", properties);
         Object shared = ReflectionHelpers.getField(properties, "mSharedProperties");
@@ -448,6 +460,7 @@ public class SessionActionsTest {
             rename.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertEquals("Renamed target", first.getTerminalSession().mSessionName);
+            assertEquals("Renamed target", first.getExecutionCommand().shellName);
             assertNull(current.getTerminalSession().mSessionName);
 
             menuButton.performClick();
@@ -544,7 +557,7 @@ public class SessionActionsTest {
         measure(drawer, 320, 640);
         activity.getDrawer().openDrawer(Gravity.START, false);
         measure(drawer, 320, 640);
-        service.mTermuxSessions.remove(removed);
+        service.getTermuxSessions().remove(removed);
         activity.termuxSessionListNotifyUpdated();
         remaining.getTerminalSession().mSessionName = "Remaining session";
         // Both callbacks can arrive before RecyclerView lays out the structural update.
@@ -617,9 +630,9 @@ public class SessionActionsTest {
             ClassParameter.from(TerminalSession.class, terminal),
             ClassParameter.from(ExecutionCommand.class, command),
             ClassParameter.from(TermuxSession.TermuxSessionClient.class,
-                (TermuxSession.TermuxSessionClient) service.mTermuxSessions::remove),
+                (TermuxSession.TermuxSessionClient) service.getTermuxSessions()::remove),
             ClassParameter.from(boolean.class, false));
-        service.mTermuxSessions.add(session);
+        service.getTermuxSessions().add(session);
         return session;
     }
 

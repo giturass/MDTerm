@@ -25,8 +25,8 @@ import com.termux.R;
 import com.termux.app.terminal.TerminalBookmark;
 import com.termux.app.terminal.TerminalBookmarkStore;
 import com.termux.app.terminal.TerminalDrawerAdapter;
-import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalSession;
 
 import org.junit.Test;

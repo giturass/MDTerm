@@ -10,10 +10,10 @@ import android.system.ErrnoException;
 import android.system.OsConstants;
 import android.system.StructStat;
 
-import com.termux.app.utils.PluginUtils;
-import com.termux.shared.models.ExecutionCommand;
+import com.termux.shared.termux.plugins.TermuxPluginUtils;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.RUN_COMMAND_SERVICE;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_SERVICE;
+import com.termux.shared.termux.TermuxUtils;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -134,7 +134,7 @@ public class RunCommandServiceSecurityTest {
 
     // Replace only the policy source and UI notification. Command parsing, error dispatch,
     // PendingIntent delivery and result-file handling all exercise their production code.
-    @Implements(PluginUtils.class)
+    @Implements(TermuxPluginUtils.class)
     public static class Policy {
         static boolean allowed;
         static int notifications;
@@ -147,7 +147,9 @@ public class RunCommandServiceSecurityTest {
 
         @Implementation
         protected static void sendPluginCommandErrorNotification(Context context, String logTag,
-                ExecutionCommand command, String notificationText) {
+                CharSequence title, String notificationText, String message, boolean forceNotification,
+                boolean showToast, TermuxUtils.AppInfoMode appInfoMode, boolean addDeviceInfo,
+                String callingPackageName) {
             notifications++;
             lastNotification = notificationText;
         }

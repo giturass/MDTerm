@@ -1,10 +1,19 @@
 # MDTerm native runtime
 
-The upstream baseline is [Termux v0.118.3](https://github.com/termux/termux-app/tree/v0.118.3).
-MDTerm's interface, bookmarks, cursor gestures and optional IME composing preview
-are carried over from [7e410325](https://github.com/giturass/MDTerm/commit/7e41032575e1e8f0e5e4be7497ff6114f5e55be2)
-and adapted to that baseline. Terminal emulation uses the upstream Java emulator
-and Canvas renderer; sessions and background tasks use the v0.118.3 shell APIs.
+The upstream baseline is official [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3),
+commit [`e634d8f981f48b6b89202cf0e04533f0889e03b3`](https://github.com/termux/termux-app/commit/e634d8f981f48b6b89202cf0e04533f0889e03b3).
+The existing MDTerm interface, settings, bookmarks, session drawer, cursor
+gestures, text selection and optional IME composing preview are preserved.
+Terminal emulation uses that release's Java emulator and Canvas renderer.
+The additional Sixel, iTerm2 inline-image and Bitmap graphics extensions
+introduced after beta.1 have been removed from the working tree.
+
+The shared library and app runtime now use beta.3's `TermuxShellManager`,
+`TermuxSession`, `AppShell`, runner and shell-creation APIs. Shared properties,
+preferences, file/URI utilities, crash reports, plugin results and Android
+permission handling follow the same source baseline, with MDTerm's interface
+and existing security fixes carried forward. See the [baseline map](upstream-baseline.md)
+and [retained fixes](upstream-fixes.md).
 
 MDTerm uses `com.termux` for its Android application ID, Java namespace and
 shared user ID. Its app name and Material Design interface remain MDTerm.
@@ -15,11 +24,14 @@ prefix, `/data/data/com.termux/files/usr`, and home directory,
 `/data/data/com.termux/files/home`. Interactive sessions launch their shell
 through the terminal JNI layer; background commands use `Runtime.exec`.
 Login-shell arguments, executable shebang handling and the system-shell
-failsafe follow the upstream Termux v0.118.3 implementation.
+failsafe follow the upstream Termux v0.119.0-beta.3 implementation.
 
 There is no bundled PRoot runtime, path translation, command wrapper or Intent
 rewriting. Package commands such as `termux-open` and `termux-setup-storage`
-target `com.termux` directly.
+target `com.termux` directly. The app initializes beta.3's shell environment
+and writes its environment file; package-update and boot events use the
+upstream shared shell manager. Bootstrap initialization restores the environment
+file after installing the prefix.
 
 ## Building
 
@@ -27,18 +39,22 @@ The existing `downloadBootstraps` task supplies the checksum-verified official
 bootstrap before native compilation. It uses the `aarch64` archive from
 [`2026.02.12-r1+apt.android-7`](https://github.com/termux/termux-packages/releases/tag/bootstrap-2026.02.12-r1%2Bapt.android-7).
 The build targets Android 12+ and arm64, with only `apt-android-7` packages.
-No Python runtime preparation or additional
-PRoot package downloads are required. The build uses JDK 17 or newer, Gradle
+Its expected SHA-256 is
+`ea2aeba8819e517db711f8c32369e89e7c52cee73e07930ff91185e1ab93f4f3`.
+No Python runtime preparation or additional PRoot package downloads are required.
+The build uses JDK 17 or newer, Gradle
 9.2.1, Android Gradle Plugin 8.13.2, Android SDK 36 and NDK 29.0.14206865.
 These build tools support the MDTerm interface dependencies independently of
-the upstream runtime baseline.
+the upstream runtime baseline. The application keeps `minSdkVersion=31` and
+`targetSdkVersion=28`; bootstrap compatibility metadata records Android 7
+(API 24) as the package variant's minimum, separately from the app minimum.
 
 ```sh
 ./gradlew :app:assembleDebug testDebugUnitTest
 ```
 
 The APK is written to `app/build/outputs/apk/debug/`. The debug build uses the
-repository's test signing key. The default app and library version is `0.118.3`;
+repository's test signing key. The default app and library version is `0.119.0-beta.3`;
 MDTerm retains Android version code `1022` so the baseline change does not
 require downgrading that code for existing installations.
 
@@ -155,7 +171,22 @@ An unavailable directory or timed-out query is reported without saving a guessed
 path. Arbitrary SSH remote commands and unidentified PRoot distributions cannot
 be restored as interactive bookmarks.
 
-## Device checks
+## Storage permissions
+
+Storage setup and report export use beta.3's shared Android permission APIs.
+On supported Android versions, MDTerm requests All Files Access and rechecks
+the grant when returning from system settings. Legacy storage permission
+callbacks remain handled by the shared API. Storage symlinks are created only
+after permission is granted. The setup includes beta.3's documents, podcasts,
+audiobooks and external/media directory links.
+
+## Validation and device checks
+
+The build command above is a validation procedure, not a report that this
+migration has completed a full build. Local Java/resource checks with a temporary
+SDK 35 environment do not establish that the configured SDK 36/NDK 29 release
+APK builds or runs successfully. Report the actual CI and device results for
+the revision being released.
 
 After installation, check a fresh terminal and a failsafe session, create and
 close multiple sessions, and run `pkg update`, `termux-open` and

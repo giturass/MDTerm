@@ -4,10 +4,13 @@ import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import com.termux.app.terminal.io.KeyboardShortcut;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeysConstants;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeysInfo;
-import com.termux.shared.settings.properties.TermuxPropertyConstants;
+import com.termux.app.TermuxActivity;
+import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
+import com.termux.app.terminal.TermuxTerminalViewClient;
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -15,6 +18,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Robolectric;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.util.ReflectionHelpers;
@@ -24,7 +28,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
-import java.util.List;
 import java.util.Properties;
 
 import static org.junit.Assert.*;
@@ -62,18 +65,34 @@ public class TermuxPropertiesSettingsTest {
 
     @Test public void firstRuntimeLoadKeepsConfiguredSessionShortcuts() throws Exception {
         write(primary, "shortcut.next-session=ctrl + n\n");
-        TermuxAppSharedProperties runtime = new TermuxAppSharedProperties(context) {
-            @Override public void loadTermuxPropertiesFromDisk() {
-                ReflectionHelpers.setField(this, "mPropertiesFilePaths",
-                    Collections.singletonList(primary.getAbsolutePath()));
-                super.loadTermuxPropertiesFromDisk();
+        TermuxAppSharedProperties runtime = TermuxAppSharedProperties.init(context);
+        ReflectionHelpers.setField(runtime, "mPropertiesFilePaths",
+            Collections.singletonList(primary.getAbsolutePath()));
+        runtime.loadTermuxPropertiesFromDisk();
+        assertEquals(Integer.valueOf('n'), runtime.getInternalPropertyValue(
+            "shortcut.next-session", true));
+
+        TermuxActivity activity = Robolectric.buildActivity(TermuxActivity.class).get();
+        ReflectionHelpers.setField(activity, "mProperties", runtime);
+        int[] nextSessionRequests = {0};
+        TermuxTerminalSessionActivityClient sessionClient = new TermuxTerminalSessionActivityClient(activity) {
+            @Override public void switchToSession(boolean forward) {
+                assertTrue(forward);
+                nextSessionRequests[0]++;
             }
         };
-        List<KeyboardShortcut> shortcuts = runtime.getSessionShortcuts();
-        assertEquals(1, shortcuts.size());
-        assertEquals('n', shortcuts.get(0).codePoint);
-        assertEquals(TermuxPropertyConstants.ACTION_SHORTCUT_NEXT_SESSION,
-            shortcuts.get(0).shortcutAction);
+        TermuxTerminalViewClient input = new TermuxTerminalViewClient(activity, sessionClient);
+        input.onReloadProperties();
+        assertTrue(input.onCodePoint('n', true, null));
+        assertFalse(input.onCodePoint('m', true, null));
+        assertEquals(1, nextSessionRequests[0]);
+
+        write(primary, "shortcut.next-session=ctrl + m\n");
+        runtime.loadTermuxPropertiesFromDisk();
+        input.onReloadProperties();
+        assertFalse(input.onCodePoint('n', true, null));
+        assertTrue(input.onCodePoint('m', true, null));
+        assertEquals(2, nextSessionRequests[0]);
     }
 
     @Test public void secondaryConfigurationRemainsTheSingleSourceUntilPrimaryExists() throws Exception {

@@ -17,7 +17,7 @@ import com.termux.app.activities.SettingsActivity;
 import com.termux.app.fragments.settings.MaterialListPreferenceDialog;
 import com.termux.app.fragments.settings.MaterialSwitchPreference;
 import com.termux.app.fragments.settings.TermuxSettingsDataStore;
-import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;

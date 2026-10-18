@@ -24,11 +24,11 @@ import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
-import com.termux.app.terminal.TermuxTerminalSessionClient;
+import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
-import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.app.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
@@ -69,7 +69,7 @@ public class TerminalTextSelectionTest {
         activity = controller.get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         ReflectionHelpers.setField(activity, "mPreferences", TermuxAppSharedPreferences.build(activity));
-        TermuxAppSharedProperties properties = new TermuxAppSharedProperties(activity);
+        TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
         properties.loadTermuxPropertiesFromDisk();
         ReflectionHelpers.setField(activity, "mProperties", properties);
         ReflectionHelpers.setField(activity, "mIsVisible", true);
@@ -107,7 +107,7 @@ public class TerminalTextSelectionTest {
         ReflectionHelpers.setField(session, "mShellPid", 1);
         view.mTermSession = session;
         view.mEmulator = emulator;
-        session.updateTerminalSessionClient(new TermuxTerminalSessionClient(activity));
+        session.updateTerminalSessionClient(new TermuxTerminalSessionActivityClient(activity));
         clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
         clipboard.clearPrimaryClip();
     }

@@ -3,7 +3,7 @@ package com.termux.app.fragments.settings;
 import android.content.Context;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceDataStore;
-import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 /** Adapter for the existing terminal preferences; no migration or duplicate storage. */
 public final class TermuxSettingsDataStore extends PreferenceDataStore {
@@ -26,8 +26,8 @@ public final class TermuxSettingsDataStore extends PreferenceDataStore {
             case "ime_composing_enabled": return preferences.isImeComposingEnabled();
             case "cursor_gestures_enabled": return preferences.isCursorGesturesEnabled();
             case "terminal_view_key_logging_enabled": return preferences.isTerminalViewKeyLoggingEnabled();
-            case "plugin_error_notifications_enabled": return preferences.arePluginErrorNotificationsEnabled();
-            case "crash_report_notifications_enabled": return preferences.areCrashReportNotificationsEnabled();
+            case "plugin_error_notifications_enabled": return preferences.arePluginErrorNotificationsEnabled(true);
+            case "crash_report_notifications_enabled": return preferences.areCrashReportNotificationsEnabled(true);
             default: return defaultValue;
         }
     }

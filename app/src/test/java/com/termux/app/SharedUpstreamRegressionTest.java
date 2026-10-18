@@ -6,13 +6,14 @@ import android.app.Application;
 import android.content.Context;
 
 import com.termux.shared.file.FileUtils;
-import com.termux.shared.models.ExecutionCommand;
-import com.termux.shared.packages.PermissionUtils;
-import com.termux.shared.shell.ShellEnvironmentClient;
-import com.termux.shared.shell.TermuxSession;
-import com.termux.shared.shell.TermuxShellEnvironmentClient;
-import com.termux.shared.shell.TermuxTask;
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.shell.command.ExecutionCommand;
+import com.termux.shared.shell.command.ExecutionCommand.Runner;
+import com.termux.shared.android.PermissionUtils;
+import com.termux.shared.shell.command.environment.IShellEnvironment;
+import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
+import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
+import com.termux.shared.shell.command.runner.app.AppShell;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -26,6 +27,7 @@ import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowActivity;
 
 import java.io.File;
+import java.util.HashMap;
 
 import static org.junit.Assert.*;
 
@@ -77,10 +79,10 @@ public class SharedUpstreamRegressionTest {
     public void missingBackgroundExecutableReturnsAnErrorInsteadOfCrashing() {
         for (String executable : new String[]{null, ""}) {
             ExecutionCommand command = new ExecutionCommand(-1, executable, null, null,
-                temporary.getRoot().getAbsolutePath(), true, false);
+                temporary.getRoot().getAbsolutePath(), Runner.APP_SHELL.getName(), false);
 
-            TermuxTask task = TermuxTask.execute(RuntimeEnvironment.getApplication(), command, null,
-                new TermuxShellEnvironmentClient(), true);
+            AppShell task = AppShell.execute(RuntimeEnvironment.getApplication(), command, null,
+                new TermuxShellEnvironment(), null, true);
 
             assertNull(task);
             assertTrue(command.isStateFailed());
@@ -90,18 +92,19 @@ public class SharedUpstreamRegressionTest {
 
     @Test
     public void emptyAndNullTerminalExecutablesBothSelectTheDefaultShell() {
-        ShellEnvironmentClient environment = new TermuxShellEnvironmentClient() {
+        IShellEnvironment environment = new TermuxShellEnvironment() {
             @Override public String getDefaultBinPath() { return temporary.getRoot().getAbsolutePath(); }
-            @Override public String[] buildEnvironment(Context context, boolean failsafe, String workingDirectory) {
-                return new String[0];
+            @Override public HashMap<String, String> setupShellCommandEnvironment(Context context,
+                                                                                 ExecutionCommand command) {
+                return new HashMap<>();
             }
-            @Override public String[] setupProcessArgs(String executable, String[] arguments) {
+            @Override public String[] setupShellCommandArguments(String executable, String[] arguments) {
                 return new String[]{executable};
             }
         };
         for (String executable : new String[]{null, ""}) {
             ExecutionCommand command = new ExecutionCommand(-1, executable, null, null,
-                temporary.getRoot().getAbsolutePath(), false, true);
+                temporary.getRoot().getAbsolutePath(), Runner.TERMINAL_SESSION.getName(), true);
 
             TermuxSession session = TermuxSession.execute(RuntimeEnvironment.getApplication(), command,
                 new TermuxTerminalSessionClientBase(), null, environment, null, false);
@@ -118,19 +121,22 @@ public class SharedUpstreamRegressionTest {
             shell = new File("/system/bin/sh").canExecute() ? "/system/bin/sh" : "/bin/sh";
         ExecutionCommand command = new ExecutionCommand(-1, shell,
             new String[]{"-c", "printf '%s' \"$MDTERM_TEST_ENV\""}, null,
-            temporary.getRoot().getAbsolutePath(), true, failsafe);
-        ShellEnvironmentClient environment = new ShellEnvironmentClient() {
+            temporary.getRoot().getAbsolutePath(), Runner.APP_SHELL.getName(), failsafe);
+        IShellEnvironment environment = new IShellEnvironment() {
             @Override public String getDefaultWorkingDirectoryPath() { return temporary.getRoot().getAbsolutePath(); }
             @Override public String getDefaultBinPath() { return "/"; }
-            @Override public String[] buildEnvironment(Context context, boolean isFailSafe, String workingDirectory) {
-                return new String[]{"MDTERM_TEST_ENV=" + (isFailSafe ? "failsafe" : "normal")};
+            @Override public HashMap<String, String> setupShellCommandEnvironment(Context context,
+                                                                                 ExecutionCommand command) {
+                HashMap<String, String> environment = new HashMap<>();
+                environment.put("MDTERM_TEST_ENV", command.isFailsafe ? "failsafe" : "normal");
+                return environment;
             }
-            @Override public String[] setupProcessArgs(String executable, String[] arguments) {
+            @Override public String[] setupShellCommandArguments(String executable, String[] arguments) {
                 return new String[]{executable, arguments[0], arguments[1]};
             }
         };
 
-        TermuxTask task = TermuxTask.execute(RuntimeEnvironment.getApplication(), command, null, environment, true);
+        AppShell task = AppShell.execute(RuntimeEnvironment.getApplication(), command, null, environment, null, true);
 
         assertNotNull(task);
         assertEquals(Integer.valueOf(0), command.resultData.exitCode);

@@ -49,8 +49,6 @@ public final class TerminalRow {
     final long[] mStyle;
     /** If this row might contain chars with width != 1, used for deactivating fast path */
     boolean mHasNonOneWidthOrSurrogateChars;
-    /** If this row has a {@link TerminalBitmap}. Used for performance only. */
-    public boolean mHasTerminalBitmap;
 
     /** Construct a blank row (containing only whitespace, ' ') with a specified style. */
     public TerminalRow(int columns, long style) {
@@ -148,7 +146,6 @@ public final class TerminalRow {
         Arrays.fill(mStyle, style);
         mSpaceUsed = mColumns;
         mHasNonOneWidthOrSurrogateChars = false;
-        mHasTerminalBitmap = false;
     }
 
     // https://github.com/steven676/Android-Terminal-Emulator/commit/9a47042620bec87617f0b4f5d50568535668fe26
@@ -157,10 +154,6 @@ public final class TerminalRow {
             throw new IllegalArgumentException("TerminalRow.setChar(): columnToSet=" + columnToSet + ", codePoint=" + codePoint + ", style=" + style);
 
         mStyle[columnToSet] = style;
-
-        if (!mHasTerminalBitmap && TextStyle.isTerminalBitmap(style)) {
-            mHasTerminalBitmap = true;
-        }
 
         final int newCodePointDisplayWidth = WcWidth.width(codePoint);
 

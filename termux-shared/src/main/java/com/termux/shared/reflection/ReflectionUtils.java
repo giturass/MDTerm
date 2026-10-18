@@ -82,6 +82,8 @@ public class ReflectionUtils {
     /**
      * Get a value for a {@link Field} of an object for the specified class.
      *
+     * Trying to access {@code null} fields will result in {@link NoSuchFieldException}.
+     *
      * @param clazz The {@link Class} to which the object belongs to.
      * @param fieldName The name of the {@link Field}.
      * @param object The {@link Object} instance from which to get the field value.
@@ -91,7 +93,7 @@ public class ReflectionUtils {
      * {@link Object} value.
      */
     @NonNull
-    public static <T> FieldInvokeResult invokeField(@NonNull Class<T> clazz, @NonNull String fieldName, T object) {
+    public static <T> FieldInvokeResult invokeField(@NonNull Class<? extends T> clazz, @NonNull String fieldName, T object) {
         try {
             Field field = getDeclaredField(clazz, fieldName);
             if (field == null) return new FieldInvokeResult(false, null);

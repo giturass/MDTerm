@@ -1,6 +1,7 @@
 package com.termux.shared.activities;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -10,7 +11,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -22,7 +22,7 @@ import com.termux.shared.data.DataUtils;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.file.filesystem.FileType;
 import com.termux.shared.logger.Logger;
-import com.termux.shared.models.errors.Error;
+import com.termux.shared.errors.Error;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.markdown.MarkdownUtils;
 import com.termux.shared.interact.ShareUtils;
@@ -39,7 +39,7 @@ import io.noties.markwon.recycler.SimpleEntry;
 /**
  * An activity to show reports in markdown format as per CommonMark spec based on config passed as {@link ReportInfo}.
  * Add Following to `AndroidManifest.xml` to use in an app:
- * {@code `<activity android:name="com.termux.shared.activities.ReportActivity" android:theme="@style/Theme.MarkdownViewActivity.DayNight" android:documentLaunchMode="intoExisting" />` }
+ * {@code `<activity android:name="com.termux.shared.activities.ReportActivity" android:theme="@style/Theme.AppCompat.TermuxReportActivity" android:documentLaunchMode="intoExisting" />` }
  * and
  * {@code `<receiver android:name="com.termux.shared.activities.ReportActivity$ReportActivityBroadcastReceiver"  android:exported="false" />` }
  * Receiver **must not** be `exported="true"`!!!
@@ -228,16 +228,24 @@ public class ReportActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            Logger.logInfo(LOG_TAG, "Storage permission granted by user on request.");
-            if (requestCode == REQUEST_GRANT_STORAGE_PERMISSION_FOR_SAVE_FILE) {
-                ShareUtils.saveTextToFile(this, mReportInfo.reportSaveFileLabel,
-                    mReportInfo.reportSaveFilePath, ReportInfo.getReportInfoMarkdownString(mReportInfo),
-                    true, -1);
-            }
-        } else {
-            Logger.logInfo(LOG_TAG, "Storage permission denied by user on request.");
-        }
+        if (requestCode == REQUEST_GRANT_STORAGE_PERMISSION_FOR_SAVE_FILE)
+            saveReportAfterPermissionRequest();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_GRANT_STORAGE_PERMISSION_FOR_SAVE_FILE)
+            saveReportAfterPermissionRequest();
+    }
+
+    private void saveReportAfterPermissionRequest() {
+        if (mReportInfo == null) return;
+        // Settings returns no grant result for All Files Access. Recheck the actual permission,
+        // and never reopen the permission request after the user returns or cancels.
+        ShareUtils.saveTextToFile(this, mReportInfo.reportSaveFileLabel,
+            mReportInfo.reportSaveFilePath, ReportInfo.getReportInfoMarkdownString(mReportInfo),
+            true, -1);
     }
 
     /**

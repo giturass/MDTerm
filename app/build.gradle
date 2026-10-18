@@ -3,8 +3,12 @@ plugins {
 }
 
 ext {
-    // Termux v0.118.3 uses the Android 7+ bootstrap. MDTerm targets Android 12+.
+    // Termux v0.119.0-beta.3 bootstrap metadata; MDTerm targets Android 12+.
     packageVariant = System.getenv("TERMUX_PACKAGE_VARIANT") ?: "apt-android-7"
+    bootstrapMinSdk = 24
+    bootstrapMinRelease = "7.0"
+    bootstrapMaxSdk = null
+    bootstrapMaxRelease = null
 }
 if (project.ext.packageVariant != "apt-android-7") {
     throw new GradleException("MDTerm supports only TERMUX_PACKAGE_VARIANT=apt-android-7")
@@ -44,10 +48,18 @@ android {
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
         // Keep MDTerm's version code when changing the upstream baseline.
         versionCode 1022
-        versionName "0.118.3"
+        versionName "0.119.0-beta.3"
 
         if (appVersionName) versionName = appVersionName
         validateVersionName(versionName)
+
+        buildConfigField "Integer", "TERMUX_APP__BOOTSTRAP_MIN_SDK", project.ext.bootstrapMinSdk.toString()
+        buildConfigField "String", "TERMUX_APP__BOOTSTRAP_MIN_RELEASE",
+                project.ext.bootstrapMinRelease ? "\"" + project.ext.bootstrapMinRelease + "\"" : "null"
+        buildConfigField "Integer", "TERMUX_APP__BOOTSTRAP_MAX_SDK", project.ext.bootstrapMaxSdk.toString()
+        buildConfigField "String", "TERMUX_APP__BOOTSTRAP_MAX_RELEASE",
+                project.ext.bootstrapMaxRelease ? "\"" + project.ext.bootstrapMaxRelease + "\"" : "null"
+        buildConfigField "String", "TERMUX_PACKAGE_VARIANT", "\"" + project.ext.packageVariant + "\"" // Used by TermuxApplication class
 
         manifestPlaceholders.TERMUX_PACKAGE_NAME = "com.termux"
         manifestPlaceholders.TERMUX_APP_NAME = "MDTerm"

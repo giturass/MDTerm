@@ -3,15 +3,15 @@
 [![Release APK](https://github.com/giturass/MDTerm/actions/workflows/release.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/release.yml)
 [![Unit tests](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml/badge.svg)](https://github.com/giturass/MDTerm/actions/workflows/run_tests.yml)
 
-MDTerm 是基于 [Termux v0.118.3](https://github.com/termux/termux-app/tree/v0.118.3) 的 Android 终端应用，面向 **Android 12 及以上的 ARM64 设备**，在保留 Termux 原生运行环境的基础上，重新设计界面、配色和日常操作。
+MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/tree/v0.119.0-beta.3) 的 Android 终端应用，面向 **Android 12 及以上的 ARM64 设备**，直接采用该版本的 Java 终端、Canvas 渲染和共享运行库，并保留 MDTerm 现有的界面、配色和日常操作。
 
 这是独立维护的衍生项目。应用使用原版包名 `com.termux`，会替代原版 Termux，不能与其共存。安装前请阅读下方的[安装与迁移](#安装与迁移)。
 
-[下载发布版](https://github.com/giturass/MDTerm/releases) · [反馈问题](https://github.com/giturass/MDTerm/issues) · [运行环境与签名说明](docs/mdterm-runtime.md)
+[下载发布版](https://github.com/giturass/MDTerm/releases) · [反馈问题](https://github.com/giturass/MDTerm/issues) · [运行环境与签名说明](docs/mdterm-runtime.md) · [上游基线与保留项](docs/upstream-baseline.md)
 
 ## 与上游 Termux 的区别
 
-以下对照以上游 v0.118.3 为基础。
+以下对照以上游 v0.119.0-beta.3 为基础。
 
 | 方面 | 上游 Termux | MDTerm 当前实现 |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ MDTerm 是基于 [Termux v0.118.3](https://github.com/termux/termux-app/tree/v0.
 | 应用界面 | 原有终端界面、菜单和偏好设置 | Material Design 3 风格，重做会话列表、菜单、设置、图标与通知样式 |
 | 配色 | 使用原有主题与终端颜色配置 | 支持壁纸动态配色，统一终端、控件与设置颜色，并调整浅色模式下默认 ANSI 颜色的可读性 |
 | 会话与终端操作 | 原有会话和终端操作入口 | 提供会话卡片、活动指示、长按改名、光标滑动手势、横向滚动工具栏和 MD3 操作菜单 |
-| 设置组织 | 原有多层偏好设置 | 将终端设置集中到一级设置页，按显示、键盘与输入等类别组织 |
+| 设置组织 | 原有偏好设置 | 保留 MDTerm 的分类设置页和属性编辑器，按显示、键盘与输入等类别组织 |
 | 输入法预编辑 | 不包含组合文本预览 | 已移植上游 [PR #5242](https://github.com/termux/termux-app/pull/5242) 的可选组合文本预览，默认关闭 |
 | APK 发布 | 由各上游分发渠道构建和签名 | 本仓库 Actions 构建，发布版使用独立 MDTerm 签名，并提供 SHA-256 校验文件 |
 
@@ -29,12 +29,17 @@ MDTerm 是基于 [Termux v0.118.3](https://github.com/termux/termux-app/tree/v0.
 
 ### 沿用的运行环境
 
-MDTerm 使用 Termux v0.118.3 的 Java 终端模拟器、Canvas 渲染、会话与软件包运行方式：
+本次迁移的源码基线是官方 [v0.119.0-beta.3 / `e634d8f9`](https://github.com/termux/termux-app/commit/e634d8f981f48b6b89202cf0e04533f0889e03b3)。终端模拟器与渲染器采用该版本的 Java/Canvas 实现；共享库、会话管理、后台命令、环境变量和权限处理也迁移到该版本的 API。现有书签、会话抽屉、手势、文本选择、快捷键与可选输入法预编辑继续保留。
+
+额外的 Sixel、iTerm2 内联图片和相关 Bitmap 图形扩展已移除，终端以官方 beta.3 的文本渲染路径为基础。
+
+运行环境保持：
 
 - Android 包名为 `com.termux`。
 - 软件包前缀为 `/data/data/com.termux/files/usr`，主目录为 `/data/data/com.termux/files/home`。
 - 官方 Termux 软件包直接在应用自身的运行环境中执行，使用 `pkg` / `apt` 管理。
-- 首次初始化使用官方 bootstrap；构建时下载并校验其 SHA-256。
+- 首次初始化使用官方 `2026.02.12-r1+apt.android-7` 的 `aarch64` bootstrap；构建时下载并校验其 SHA-256。
+- 外部命令继续遵守 `allow-external-apps`，并保留拒绝未授权文件结果写入、限制共享文件路径等安全修复。
 - 不内置 PRoot 兼容层，不进行路径翻译或 Intent 重写。
 
 因此，MDTerm 的主要变化在应用界面与交互层，并未建立独立的软件包仓库。软件包相关资料仍可参考 [Termux 软件包项目](https://github.com/termux/termux-packages)和[包管理文档](https://github.com/termux/termux-packages/wiki/Package-Management)。
@@ -81,7 +86,7 @@ Termux 插件仍需满足 Android 的签名及共享用户 ID 要求；包名相
 - **纵向光标操作**：手势控制开启时，点击工具栏中的上下箭头＋锁头图标（“纵向光标手势”）启用后，在终端内容区域上下滑动会发送上、下方向键；在 Shell 中通常用于切换历史命令，在编辑器中按程序规则移动光标。再次点击图标关闭，恢复普通纵向滚动。此开关会保持启用，不会因按下其他按键自动关闭。
 - **工具栏滚动**：在工具栏区域横向滑动，可查看未显示的快捷键；光标手势在终端内容区域操作。
 - **文本选择与复制粘贴**：双击或长按终端文字可直接选词，拖动两端选择手柄调整范围，再点击浮动工具栏中的“复制”或“粘贴”；点击“更多”可打开终端操作菜单。单击终端仍可呼出键盘；终端程序启用鼠标跟踪时，使用长按选择文字。
-- **终端偏好**：打开设置，在一级页面中调整显示、键盘与输入等选项。
+- **终端偏好**：打开设置，在对应分类中调整显示、键盘与输入等选项。
 - **输入法组合文本预览**：在“设置 → 键盘与输入”中启用“输入法组合文本预览”，即可在光标处预览中文等输入法尚未提交的文字。该功能默认关闭。
 - **自定义终端颜色**：编辑 `~/.termux/colors.properties`；显式设置的颜色优先。
 

@@ -21,7 +21,7 @@ import com.termux.app.fragments.settings.MaterialEditTextPreferenceDialog;
 import com.termux.app.fragments.settings.MaterialListPreferenceDialog;
 import com.termux.app.fragments.settings.MaterialSwitchPreference;
 import com.termux.app.fragments.settings.TermuxPropertiesPreferences;
-import com.termux.shared.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 
 import org.junit.Rule;
 import org.junit.Test;

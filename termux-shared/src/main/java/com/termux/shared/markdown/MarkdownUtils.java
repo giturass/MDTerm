@@ -106,6 +106,10 @@ public class MarkdownUtils {
 
 
 
+    public static String getLiteralSingleLineMarkdownStringEntry(String label, Object object, String def) {
+        return "**" + label + "**: " + (object != null ? object.toString() : def) +  "  ";
+    }
+
     public static String getSingleLineMarkdownStringEntry(String label, Object object, String def) {
         if (object != null)
             return "**" + label + "**: " + getMarkdownCodeForString(object.toString(), false) +  "  ";
@@ -153,8 +157,10 @@ public class MarkdownUtils {
 
                 @Override
                 public void configureSpansFactory(@NonNull MarkwonSpansFactory.Builder builder) {
+                    // Do not change color for night themes
                     if (!ThemeUtils.isNightModeEnabled(context)) {
                         builder
+                            // set color for inline code
                             .setFactory(Code.class, (configuration, props) -> new Object[]{
                                 new BackgroundColorSpan(ContextCompat.getColor(context, R.color.background_markdown_code_inline)),
                             });

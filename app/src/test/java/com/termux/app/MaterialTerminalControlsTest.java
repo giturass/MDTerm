@@ -33,18 +33,18 @@ import com.termux.shared.termux.TermuxConstants;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
 import com.termux.app.settings.properties.TermuxPropertiesSettings;
-import com.termux.app.settings.properties.TermuxAppSharedProperties;
-import com.termux.shared.settings.properties.TermuxPropertyConstants;
-import com.termux.shared.settings.properties.TermuxSharedProperties;
-import com.termux.shared.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.settings.preferences.TermuxPreferenceConstants;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeysConstants;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeyButton;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeysInfo;
-import com.termux.shared.terminal.io.extrakeys.ExtraKeysView;
-import com.termux.shared.terminal.io.extrakeys.SpecialButton;
-import com.termux.shared.terminal.io.TerminalExtraKeys;
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
+import com.termux.shared.termux.extrakeys.ExtraKeyButton;
+import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
+import com.termux.shared.termux.extrakeys.ExtraKeysView;
+import com.termux.shared.termux.extrakeys.SpecialButton;
+import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 
@@ -492,7 +492,7 @@ public class MaterialTerminalControlsTest {
             }
         };
         activity.mTerminalView.setTerminalViewClient(activity.mTermuxTerminalViewClient);
-        ReflectionHelpers.setField(activity, "mProperties", new TermuxAppSharedProperties(activity));
+        ReflectionHelpers.setField(activity, "mProperties", TermuxAppSharedProperties.init(activity));
         TermuxTerminalExtraKeys extraKeys = new TermuxTerminalExtraKeys(activity, activity.mTerminalView,
             activity.mTermuxTerminalViewClient, null);
         ExtraKeysView keys = activity.findViewById(R.id.terminal_toolbar_extra_keys);
@@ -548,7 +548,7 @@ public class MaterialTerminalControlsTest {
         assertNotNull(preferences);
         assertEquals(showToolbar, preferences.shouldShowTerminalToolbar());
         ReflectionHelpers.setField(activity, "mPreferences", preferences);
-        TermuxAppSharedProperties properties = new TermuxAppSharedProperties(activity);
+        TermuxAppSharedProperties properties = TermuxAppSharedProperties.init(activity);
         properties.loadTermuxPropertiesFromDisk();
         ReflectionHelpers.setField(activity, "mProperties", properties);
         activity.mTerminalView = activity.findViewById(R.id.terminal_view);
@@ -629,7 +629,7 @@ public class MaterialTerminalControlsTest {
         HorizontalScrollView toolbar = root.findViewById(R.id.terminal_toolbar);
         toolbar.setVisibility(View.VISIBLE);
         ExtraKeysView keys = toolbar.findViewById(R.id.terminal_toolbar_extra_keys);
-        keys.reload(new ExtraKeysInfo(com.termux.shared.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
+        keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
             "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
         measure(toolbar, context, 304, 52);
         String[] labels = {"ESC", "CTRL", "ALT", "/", "TAB", "", "", "HOME", "END", "PGUP", "PGDN"};
@@ -674,7 +674,7 @@ public class MaterialTerminalControlsTest {
         HorizontalScrollView toolbar = root.findViewById(R.id.terminal_toolbar);
         toolbar.setVisibility(View.VISIBLE);
         ExtraKeysView keys = toolbar.findViewById(R.id.terminal_toolbar_extra_keys);
-        keys.reload(new ExtraKeysInfo(com.termux.shared.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
+        keys.reload(new ExtraKeysInfo(com.termux.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
             "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES), 52);
         measure(toolbar, context, 304, 52);
         View ctrl = keys.getChildAt(1);
