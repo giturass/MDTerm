@@ -74,8 +74,7 @@ public class OperatingSystemControlTest extends TerminalTestCase {
 			StringBuilder input = new StringBuilder("\033]0;");
 			for (int i = 2; i < argsLength; i++) input.append('a');
 			input.append("\033xOK");
-			String expectedFirstLine = argsLength == 16384 ? "xOK" : "OK ";
-			enterString(input.toString()).assertLinesAre(expectedFirstLine, "   ", "   ");
+			enterString(input.toString()).assertLinesAre("OK ", "   ", "   ");
 			assertNull(mTerminal.getTitle());
 			enterString("\033]0;next\007");
 			assertEquals("next", mTerminal.getTitle());
