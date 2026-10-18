@@ -1,6 +1,5 @@
 package com.termux.app;
 
-import android.Manifest;
 import android.annotation.SuppressLint;
 
 import android.content.ActivityNotFoundException;
@@ -1026,23 +1025,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * For processes to access shared internal storage (/sdcard) we need this permission.
      */
     public boolean ensureStoragePermissionGranted() {
-        if (PermissionUtils.checkPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+        int requestCode = PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION;
+        if (PermissionUtils.checkAndRequestStoragePermission(this, requestCode, true)) {
             return true;
         } else {
             Logger.logInfo(LOG_TAG, "Storage permission not granted, requesting permission.");
-            PermissionUtils.requestPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE, PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION);
+            return false;
+        }
+    }
+
+    private boolean checkStoragePermissionAfterRequest() {
+        if (PermissionUtils.checkAndRequestStoragePermission(this, -1, true)) {
+            Logger.logInfo(LOG_TAG, "Storage permission granted by user on request.");
+            TermuxInstaller.setupStorageSymlinks(this);
+            return true;
+        } else {
+            Logger.logInfo(LOG_TAG, "Storage permission denied by user on request.");
             return false;
         }
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION)
+            checkStoragePermissionAfterRequest();
+    }
+
+    @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            Logger.logInfo(LOG_TAG, "Storage permission granted by user on request.");
-            TermuxInstaller.setupStorageSymlinks(this);
-        } else {
-            Logger.logInfo(LOG_TAG, "Storage permission denied by user on request.");
-        }
+        if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION)
+            checkStoragePermissionAfterRequest();
     }
 
 

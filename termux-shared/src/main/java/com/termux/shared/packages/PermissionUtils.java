@@ -1,5 +1,6 @@
 package com.termux.shared.packages;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
@@ -7,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.os.PowerManager;
 import android.provider.Settings;
 
@@ -70,6 +72,62 @@ public class PermissionUtils {
                 }
                 break;
             }
+        }
+    }
+
+    public static boolean checkStoragePermission(Context context, boolean prioritizeManageExternalStoragePermission) {
+        if (prioritizeManageExternalStoragePermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            return Environment.isExternalStorageManager();
+
+        return checkPermissions(context, new String[]{
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        });
+    }
+
+    public static boolean checkAndRequestStoragePermission(Activity activity, int requestCode,
+                                                           boolean prioritizeManageExternalStoragePermission) {
+        if (activity == null) return false;
+
+        if (checkStoragePermission(activity, prioritizeManageExternalStoragePermission))
+            return true;
+
+        if (requestCode < 0)
+            return false;
+
+        if (prioritizeManageExternalStoragePermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            requestManageStorageExternalPermission(activity, requestCode);
+        } else {
+            requestPermissions(activity, new String[]{
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            }, requestCode);
+        }
+
+        return false;
+    }
+
+    public static void requestManageStorageExternalPermission(Activity activity, int requestCode) {
+        if (activity == null) return;
+
+        Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+        intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.setData(Uri.parse("package:" + activity.getPackageName()));
+
+        try {
+            activity.startActivityForResult(intent, requestCode);
+            return;
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG,
+                "Failed to request manage external storage permission with app-specific settings intent", e);
+        }
+
+        intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+        try {
+            activity.startActivityForResult(intent, requestCode);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG,
+                "Failed to request manage external storage permission with all files settings intent", e);
         }
     }
 
