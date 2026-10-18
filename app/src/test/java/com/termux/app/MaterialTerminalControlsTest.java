@@ -4,6 +4,7 @@ import android.app.Application;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.TypedArray;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.ResolveInfo;
@@ -218,6 +219,33 @@ public class MaterialTerminalControlsTest {
         assertEquals(1, extraKeys.getExtraKeysInfo().getMatrix().length);
         assertEquals(2, extraKeys.getExtraKeysInfo().getMatrix()[0].length);
         assertEquals("A", extraKeys.getExtraKeysInfo().getMatrix()[0][0].getKey());
+    }
+
+    @Test
+    @Config(qualifiers = "zh-rCN-w320dp-h640dp-night")
+    public void darkTerminalToolbarUsesMaterial3ThemeColors() {
+        Context context = themedContext();
+        int[] buttonAttrs = {
+            com.termux.shared.R.attr.extraKeysButtonTextColor,
+            com.termux.shared.R.attr.extraKeysButtonActiveTextColor,
+            com.termux.shared.R.attr.extraKeysButtonBackgroundColor,
+            com.termux.shared.R.attr.extraKeysButtonActiveBackgroundColor
+        };
+        int[] paletteAttrs = {
+            com.google.android.material.R.attr.colorOnSurfaceVariant,
+            com.google.android.material.R.attr.colorOnPrimary,
+            com.google.android.material.R.attr.colorSurfaceContainerHigh,
+            com.google.android.material.R.attr.colorPrimary
+        };
+        TypedArray buttons = context.obtainStyledAttributes(buttonAttrs);
+        TypedArray palette = context.obtainStyledAttributes(paletteAttrs);
+        try {
+            for (int i = 0; i < buttonAttrs.length; i++)
+                assertEquals("Toolbar color attr " + i, palette.getColor(i, 0), buttons.getColor(i, 0));
+        } finally {
+            buttons.recycle();
+            palette.recycle();
+        }
     }
 
     @Test
