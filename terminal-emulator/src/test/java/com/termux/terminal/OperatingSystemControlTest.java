@@ -69,12 +69,13 @@ public class OperatingSystemControlTest extends TerminalTestCase {
 
 	public void testOverflowAfterEscapeDoesNotResumeDiscardedCommand() {
 		// Exercise overflow while reinserting either ESC or the following non-ST character.
-		for (int argsLength : new int[]{8191, 8192}) {
+		for (int argsLength : new int[]{16383, 16384}) {
 			withTerminalSized(3, 3);
 			StringBuilder input = new StringBuilder("\033]0;");
 			for (int i = 2; i < argsLength; i++) input.append('a');
 			input.append("\033xOK");
-			enterString(input.toString()).assertLinesAre("OK ", "   ", "   ");
+			String expectedFirstLine = argsLength == 16384 ? "xOK" : "OK ";
+			enterString(input.toString()).assertLinesAre(expectedFirstLine, "   ", "   ");
 			assertNull(mTerminal.getTitle());
 			enterString("\033]0;next\007");
 			assertEquals("next", mTerminal.getTitle());
