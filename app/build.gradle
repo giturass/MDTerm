@@ -154,7 +154,8 @@ android {
 
     packagingOptions {
         jniLibs {
-            useLegacyPackaging true
+            // AGP 8.5.1+ aligns uncompressed native libraries to 16 KiB in the APK.
+            useLegacyPackaging false
         }
     }
 

@@ -3,4 +3,6 @@ include $(CLEAR_VARS)
 LOCAL_LDLIBS := -llog
 LOCAL_MODULE := local-socket
 LOCAL_SRC_FILES := local-socket.cpp
+# Keep LOAD segments and RELRO compatible with both 4 KiB and 16 KiB devices.
+LOCAL_LDFLAGS += -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384
 include $(BUILD_SHARED_LIBRARY)

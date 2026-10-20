@@ -123,6 +123,8 @@ jobs:
             echo 'Unexpected coexistence runtime in APK' >&2
             exit 1
           fi
+          python3 tools/check_16k_alignment.py "$apk" app/src/main/cpp/bootstrap-aarch64.zip
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$apk"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
           (cd "$apk_dir" && sha256sum "$APK_NAME" > "${APK_NAME%.apk}_sha256sums")
 

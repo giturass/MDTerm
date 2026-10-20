@@ -50,6 +50,7 @@ MDTerm 是基于 [Termux v0.119.0-beta.3](https://github.com/termux/termux-app/t
 
 - Android 12 或更高版本。
 - ARM64（`arm64-v8a`）设备；当前构建不提供 ARM32 或 x86 APK。
+- 原生库按 16 KiB 对齐构建，兼容 4 KiB 与 16 KiB 内存页；构建检查与设备验证方式见[运行环境说明](docs/mdterm-runtime.md#16-kib-memory-pages)。
 - 首次使用及安装软件包时需要准备可用的网络连接。
 
 从 [MDTerm Releases](https://github.com/giturass/MDTerm/releases) 下载发布 APK，可使用同一版本附带的 SHA-256 文件校验下载内容。安装并完成初始化后，可运行：

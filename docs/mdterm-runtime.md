@@ -58,6 +58,41 @@ repository's test signing key. The default app and library version is `0.119.0-b
 MDTerm retains Android version code `1022` so the baseline change does not
 require downgrading that code for existing installations.
 
+## 16 KiB memory pages
+
+The three JNI libraries (`libtermux.so`, `liblocal-socket.so` and
+`libtermux-bootstrap.so`) explicitly link with
+`-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384`. NDK 29 also
+supports 16 KiB pages by default. These libraries remain compatible with
+4 KiB devices. The native sources do not assume a fixed memory page size;
+the Java terminal's 4096-byte I/O buffers are independent of memory pages.
+
+The APK uses uncompressed native libraries (`useLegacyPackaging false`).
+AGP 8.13.2 aligns them to 16 KiB ZIP boundaries, allowing Android to load
+them directly from the APK. The pinned official bootstrap also has
+16 KiB-aligned ARM64 ELF executables and shared libraries, so its archive
+does not need to be replaced.
+
+Both APK workflows check every packaged native library and every ELF file
+inside the bootstrap, including executables without a `.so` extension.
+The verifier rejects incompatible LOAD segments and RELRO protection that
+would overlap writable data on 16 KiB pages. SDK `zipalign` separately checks
+the final APK's ZIP alignment before it is uploaded or published:
+
+```sh
+python3 tools/check_16k_alignment.py path/to/mdterm.apk app/src/main/cpp/bootstrap-aarch64.zip
+"$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 path/to/mdterm.apk
+```
+
+For device validation, use an ARM64 device or emulator where
+`adb shell getconf PAGE_SIZE` returns `16384`. Disable **Run app with page size
+compat mode** in the app's system settings if available. Check a fresh
+bootstrap installation, normal and failsafe sessions, multiple sessions,
+`pkg update`, `pkg upgrade` and the Android integrations listed below.
+Repeat the session checks on a 4 KiB device. APK alignment checks do not
+replace these device checks. Existing or subsequently installed third-party
+native binaries also need to support the device's page size.
+
 ## Release signing
 
 The [release workflow](../.github/workflows/release.yml) runs tests and builds

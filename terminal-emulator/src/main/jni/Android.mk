@@ -2,4 +2,6 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 LOCAL_MODULE:= libtermux
 LOCAL_SRC_FILES:= termux.c
+# Keep LOAD segments and RELRO compatible with both 4 KiB and 16 KiB devices.
+LOCAL_LDFLAGS += -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384
 include $(BUILD_SHARED_LIBRARY)

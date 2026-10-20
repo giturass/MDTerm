@@ -7,6 +7,7 @@ MDTerm for Android 12+ (arm64-v8a), based directly on official Termux v0.119.0-b
 - Keep security fixes for external-command file results, shared-file path boundaries, URI fragments and empty executable handling.
 - Keep the official `2026.02.12-r1+apt.android-7` aarch64 bootstrap and SHA-256 validation, with beta.3 package-variant metadata.
 - Keep Android 12+, ARM64, the `com.termux` package and native package paths, and the independent MDTerm release signing configuration.
+- Add explicit 16 KiB ELF alignment for all JNI libraries and 16 KiB ZIP alignment for uncompressed APK libraries. Debug and release workflows verify the APK and every ELF file in the bundled bootstrap for 16 KiB compatibility.
 
 Release APKs and SHA-256 files are produced by the release workflow. These notes do not assert that a full build or installed-device validation has completed for this migration; use the workflow results for the published revision.
 

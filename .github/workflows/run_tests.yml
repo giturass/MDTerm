@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v6
+      - name: Test 16 KiB ELF verifier
+        run: python3 -B -m unittest discover -s tests -p 'test_check_16k_alignment.py'
       - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
