@@ -122,9 +122,12 @@ public class TerminalSessionNotificationsTest {
         notifications.show(session, 1, " \000\033 ");
         assertNull(notification(session));
         StringBuilder message = new StringBuilder();
-        for (int i = 0; i < 1999; i++) message.append('a');
+        for (int i = 0; i < 1023; i++) message.append('a');
         notifications.show(session, 1, message + "🔔tail");
         assertEquals(message.toString(), notification(session).extras.getString(Notification.EXTRA_TEXT));
+        message.setLength(1022);
+        notifications.show(session, 1, message + "🔔tail");
+        assertEquals(message + "🔔", notification(session).extras.getString(Notification.EXTRA_TEXT));
     }
 
     @Test

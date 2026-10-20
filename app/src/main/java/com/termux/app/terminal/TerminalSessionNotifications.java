@@ -23,6 +23,9 @@ public final class TerminalSessionNotifications {
     private static final String TAG_PREFIX = "terminal-session:";
     private static final int NOTIFICATION_ID = 1;
     private static final long ALERT_INTERVAL_MILLIS = 5000;
+    // Android 12 Notification.Builder truncates at 1024 UTF-16 units. Bound text ourselves
+    // so its subsequent truncation cannot split a surrogate pair.
+    private static final int MAX_MESSAGE_LENGTH = 1024;
 
     private final Context context;
     private final NotificationManager manager;
@@ -39,7 +42,7 @@ public final class TerminalSessionNotifications {
     }
 
     public void show(TerminalSession session, int sessionNumber, String text) {
-        String message = notificationText(text, 2000);
+        String message = notificationText(text, MAX_MESSAGE_LENGTH);
         if (message.isEmpty() || !manager.areNotificationsEnabled()) return;
         NotificationChannel channel = manager.getNotificationChannel(CHANNEL_ID);
         if (channel == null || channel.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
