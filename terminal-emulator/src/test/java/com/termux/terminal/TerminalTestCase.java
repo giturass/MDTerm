@@ -21,6 +21,7 @@ public abstract class TerminalTestCase extends TestCase {
 		public final List<ChangedTitle> titleChanges = new ArrayList<>();
 		public final List<String> clipboardPuts = new ArrayList<>();
 		public final List<String> bookmarkLocations = new ArrayList<>();
+		public final List<String> notifications = new ArrayList<>();
 		public int bellsRung = 0;
 		public int colorsChanged = 0;
 
@@ -49,6 +50,11 @@ public abstract class TerminalTestCase extends TestCase {
 		public void onBookmarkLocation(String payload) {
 			bookmarkLocations.add(payload);
 		}
+
+        @Override
+        public void onNotification(String text) {
+            notifications.add(text);
+        }
 
         @Override
         public void onPasteTextFromClipboard() {

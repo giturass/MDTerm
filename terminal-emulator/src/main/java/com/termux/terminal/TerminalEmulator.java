@@ -2034,6 +2034,14 @@ public final class TerminalEmulator {
         }
 
         switch (value) {
+            case 9: // iTerm2 desktop notification: OSC 9 ; message ST (or BEL).
+                // OSC 9;4 is also used for progress reporting, including its abbreviated reset.
+                // https://iterm2.com/documentation-escape-codes.html
+                if (!textParameter.trim().isEmpty() && !textParameter.equals("4")
+                    && !textParameter.startsWith("4;")) {
+                    mSession.onNotification(textParameter);
+                }
+                break;
             case 777: // Private, nonce-correlated MDTerm bookmark location reply.
                 mSession.onBookmarkLocation(textParameter);
                 break;

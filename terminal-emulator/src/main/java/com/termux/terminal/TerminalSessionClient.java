@@ -22,6 +22,9 @@ public interface TerminalSessionClient {
 
     void onBell(@NonNull TerminalSession session);
 
+    /** A desktop notification requested by a program in this session. */
+    default void onNotification(@NonNull TerminalSession session, String text) {}
+
     void onColorsChanged(@NonNull TerminalSession session);
 
     void onTerminalCursorStateChange(boolean state);

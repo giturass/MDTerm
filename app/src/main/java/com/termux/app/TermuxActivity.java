@@ -212,6 +212,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
     private static final String ARG_WAITING_FOR_SESSION = "waiting_for_session";
+    public static final String ACTION_OPEN_SESSION = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.OPEN_SESSION";
+    public static final String EXTRA_SESSION_HANDLE = "session_handle";
     private static final String EXTRA_RECREATE_ACTIVITY =
         TERMUX_ACTIVITY.EXTRA_RECREATE_ACTIVITY;
 
@@ -291,7 +293,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setAdaptiveDrawerLayout();
 
-        if (mIsWaitingForSession || (!mIsActivityRecreated && hasBookmarks() && !isNewSessionIntent(getIntent()))) {
+        if (mIsWaitingForSession || (!mIsActivityRecreated && hasBookmarks()
+            && !isNewSessionIntent(getIntent()) && !isSessionNotificationIntent(getIntent()))) {
             // Show navigation before the service binds, without briefly revealing terminal input.
             mIsWaitingForSession = true;
             updateSessionUi();
@@ -382,6 +385,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (mIsInvalidState || !isSessionNotificationIntent(intent)) return;
+        if (mTermuxService == null) {
+            // The service connection will consume this intent, including on a cold launch.
+            setIntent(intent);
+        } else {
+            openSessionFromNotification(intent);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && !mIsInvalidState && mTermuxTerminalSessionActivityClient != null)
+            mTermuxTerminalSessionActivityClient.dismissVisibleSessionNotification();
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
 
@@ -456,9 +478,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         final Intent intent = getIntent();
         setIntent(null);
         final boolean launchNewSession = isNewSessionIntent(intent);
-        final boolean showSessionDrawer = (hasBookmarks() || mIsWaitingForSession) && !launchNewSession;
+        final boolean fromNotification = isSessionNotificationIntent(intent);
+        final boolean showSessionDrawer = (hasBookmarks() || mIsWaitingForSession)
+            && !launchNewSession && !fromNotification;
 
-        if (mTermuxService.isTermuxSessionsEmpty()) {
+        if (fromNotification) {
+            if (!openSessionFromNotification(intent)) {
+                if (mTermuxService.isTermuxSessionsEmpty()) {
+                    // A stale notification must never start a replacement shell.
+                    mIsWaitingForSession = true;
+                    updateSessionUi();
+                } else {
+                    mTermuxTerminalSessionActivityClient.setCurrentSession(
+                        mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast());
+                }
+            }
+        } else if (mTermuxService.isTermuxSessionsEmpty()) {
             if (mIsVisible) {
                 if (showSessionDrawer) updateSessionUi();
                 TermuxInstaller.setupBootstrapIfNeeded(TermuxActivity.this, () -> {
@@ -502,6 +537,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private boolean hasBookmarks() {
         return mBookmarkStore != null && !mBookmarkStore.getAll().isEmpty();
+    }
+
+    private static boolean isSessionNotificationIntent(@Nullable Intent intent) {
+        return intent != null && ACTION_OPEN_SESSION.equals(intent.getAction());
+    }
+
+    private boolean openSessionFromNotification(Intent intent) {
+        String handle = intent.getStringExtra(EXTRA_SESSION_HANDLE);
+        TerminalSession session = mTermuxService.getTerminalSessionForHandle(handle);
+        mTermuxService.dismissSessionNotification(handle);
+        if (session == null) {
+            showToast(getString(R.string.session_notification_session_gone), true);
+            return false;
+        }
+        mTermuxTerminalSessionActivityClient.setCurrentSession(session);
+        // onStart() may run after onNewIntent() and restore this selection.
+        mTermuxTerminalSessionActivityClient.setCurrentStoredSession();
+        getDrawer().closeDrawer(Gravity.START, false);
+        setDrawerInputCollapsed(false);
+        return true;
     }
 
     private boolean isNewSessionIntent(@Nullable Intent intent) {
@@ -686,6 +741,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     return;
                 }
                 setDrawerInputCollapsed(false);
+                getDrawer().post(() -> mTermuxTerminalSessionActivityClient.dismissVisibleSessionNotification());
             }
         });
 

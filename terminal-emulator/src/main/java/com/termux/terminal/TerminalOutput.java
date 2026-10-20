@@ -30,6 +30,9 @@ public abstract class TerminalOutput {
     /** Notify the terminal client that a bell character (ASCII 7, bell, BEL, \a, ^G)) has been received. */
     public abstract void onBell();
 
+    /** A desktop notification requested with OSC 9. Optional for terminal hosts. */
+    public void onNotification(String text) {}
+
     public abstract void onColorsChanged();
 
 }

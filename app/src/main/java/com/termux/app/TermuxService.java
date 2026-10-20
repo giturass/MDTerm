@@ -21,6 +21,7 @@ import androidx.annotation.Nullable;
 
 import com.termux.R;
 import com.termux.app.event.SystemEventReceiver;
+import com.termux.app.terminal.TerminalSessionNotifications;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalSessionServiceClient;
 import com.termux.shared.termux.plugins.TermuxPluginUtils;
@@ -99,6 +100,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
      */
     private TermuxShellManager mShellManager;
 
+    private TerminalSessionNotifications mSessionNotifications;
+
     /** The wake lock and wifi lock are always acquired and released together. */
     private PowerManager.WakeLock mWakeLock;
     private WifiManager.WifiLock mWifiLock;
@@ -118,6 +121,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         mShellManager = TermuxShellManager.getShellManager();
 
+        getSessionNotifications().clearAll();
         runStartForeground();
 
         SystemEventReceiver.registerPackageUpdateEvents(this);
@@ -170,6 +174,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     public void onDestroy() {
         Logger.logVerbose(LOG_TAG, "onDestroy");
 
+        if (mSessionNotifications != null) mSessionNotifications.clearAll();
         TermuxShellUtils.clearTermuxTMPDIR(true);
 
         actionReleaseWakeLock(false);
@@ -223,6 +228,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     /** Process action to stop service. */
     private void actionStopService() {
         mWantsToStop = true;
+        if (mSessionNotifications != null) mSessionNotifications.clearAll();
         killAllTermuxExecutionCommands();
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onServiceStopped();
@@ -634,6 +640,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         int index = getIndexOfSession(sessionToClose);
         if (index < 0) return index;
 
+        dismissSessionNotification(sessionToClose.mHandle);
         TermuxSession session = mShellManager.mTermuxSessions.get(index);
         // Removed sessions must not retain an activity while waiting for the shell to exit.
         sessionToClose.updateTerminalSessionClient(mTermuxTerminalSessionServiceClient);
@@ -649,8 +656,10 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     public synchronized int removeTermuxSession(TerminalSession sessionToRemove) {
         int index = getIndexOfSession(sessionToRemove);
 
-        if (index >= 0)
+        if (index >= 0) {
+            dismissSessionNotification(sessionToRemove.mHandle);
             mShellManager.mTermuxSessions.get(index).finish();
+        }
 
         return index;
     }
@@ -659,6 +668,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     @Override
     public void onTermuxSessionExited(final TermuxSession termuxSession) {
         if (termuxSession != null) {
+            dismissSessionNotification(termuxSession.getTerminalSession().mHandle);
             ExecutionCommand executionCommand = termuxSession.getExecutionCommand();
 
             Logger.logVerbose(LOG_TAG, "The onTermuxSessionExited() callback called for \"" + executionCommand.getCommandIdAndLabelLogString() + "\" TermuxSession command");
@@ -798,6 +808,24 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
 
 
+
+    /** Both terminal clients route OSC notifications here, including when no activity is bound. */
+    public synchronized void showSessionNotification(TerminalSession session, String text) {
+        int index = getIndexOfSession(session);
+        if (mWantsToStop || index < 0 || !session.isRunning()) return;
+        if (mTermuxTerminalSessionActivityClient != null
+            && mTermuxTerminalSessionActivityClient.isSessionVisible(session)) return;
+        getSessionNotifications().show(session, index + 1, text);
+    }
+
+    public synchronized void dismissSessionNotification(String sessionHandle) {
+        if (mSessionNotifications != null) mSessionNotifications.dismiss(sessionHandle);
+    }
+
+    private TerminalSessionNotifications getSessionNotifications() {
+        if (mSessionNotifications == null) mSessionNotifications = new TerminalSessionNotifications(this);
+        return mSessionNotifications;
+    }
 
     private Notification buildNotification() {
         Resources res = getResources();

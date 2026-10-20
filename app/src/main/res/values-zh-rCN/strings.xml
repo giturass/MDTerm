@@ -90,6 +90,10 @@
 
     <!-- Termux Notifications -->
     <string name="notification_action_exit">退出</string>
+    <string name="session_notification_channel">会话提醒</string>
+    <string name="session_notification_channel_description">终端会话中运行的程序发送的通知</string>
+    <string name="session_notification_title">会话 %1$d</string>
+    <string name="session_notification_session_gone">此会话已关闭。</string>
     <string name="notification_action_wake_lock">保持唤醒</string>
     <string name="notification_action_wake_unlock">取消保持唤醒</string>
 

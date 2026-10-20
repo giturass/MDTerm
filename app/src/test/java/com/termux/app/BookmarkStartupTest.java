@@ -2,6 +2,8 @@ package com.termux.app;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -49,6 +51,7 @@ import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,6 +64,7 @@ import static org.junit.Assert.*;
     shadows = {BookmarkStartupTest.ShadowInstaller.class,
         BookmarkStartupTest.ShadowSessionService.class, BookmarkStartupTest.ShadowNativeSession.class})
 public class BookmarkStartupTest {
+    private ActivityController<TermuxActivity> controller;
     private TermuxActivity activity;
     private TermuxService service;
     private TerminalBookmarkStore bookmarks;
@@ -316,9 +320,139 @@ public class BookmarkStartupTest {
         assertTerminalVisible();
     }
 
+    @Test
+    public void oscNotificationWithoutAnActivityOpensItsSessionDespiteReordering() {
+        bookmarks.add(localBookmark(existingDirectory()));
+        TermuxSession first = existingSession();
+        TerminalSession target = existingSession().getTerminalSession();
+        service.unsetTermuxTerminalSessionClient();
+        sendNotification(target);
+        Notification notification = notification(target);
+        assertNotNull(notification);
+        assertEquals("Action required", notification.extras.getString(Notification.EXTRA_TEXT));
+        Intent intent = Shadows.shadowOf(notification.contentIntent).getSavedIntent();
+        service.getTermuxSessions().remove(first);
+
+        host(intent, false);
+        connect();
+
+        assertSame(target, activity.getCurrentSession());
+        assertTerminalVisible();
+        assertNull(notification(target));
+        assertTrue(createdCommands().isEmpty());
+        assertEquals(0, ShadowInstaller.calls);
+    }
+
+    @Test
+    public void notificationReceivedBeforeBindingIsConsumedOnceServiceConnects() {
+        TerminalSession target = existingSession().getTerminalSession();
+        existingSession();
+        host(new Intent(Intent.ACTION_MAIN), false);
+
+        activity.onNewIntent(sessionIntent(target.mHandle));
+        connect();
+
+        assertSame(target, activity.getCurrentSession());
+        assertTerminalVisible();
+        assertEquals(2, service.getTermuxSessionsSize());
+    }
+
+    @Test
+    public void notificationTapOnExistingActivityPersistsSelectionAcrossOnStart() {
+        TerminalSession target = existingSession().getTerminalSession();
+        TerminalSession current = existingSession().getTerminalSession();
+        host(new Intent(Intent.ACTION_MAIN), false);
+        activity.getPreferences().setCurrentSession(current.mHandle);
+        connect();
+        sendNotification(target);
+        Intent intent = Shadows.shadowOf(notification(target).contentIntent).getSavedIntent();
+
+        activity.onNewIntent(intent);
+        activity.getTermuxTerminalSessionClient().onStart();
+
+        assertSame(target, activity.getCurrentSession());
+        assertEquals(target.mHandle, activity.getPreferences().getCurrentSession());
+        assertNull(notification(target));
+        assertTerminalVisible();
+        assertEquals(2, service.getTermuxSessionsSize());
+    }
+
+    @Test
+    public void focusedSessionIsQuietButOtherSessionsAndBackgroundActivityNotify() {
+        TerminalSession other = existingSession().getTerminalSession();
+        TerminalSession current = existingSession().getTerminalSession();
+        host(new Intent(Intent.ACTION_MAIN), false);
+        activity.getPreferences().setCurrentSession(current.mHandle);
+        connect();
+        controller.windowFocusChanged(true);
+        assertTrue(activity.hasWindowFocus());
+
+        sendNotification(current);
+        assertNull(notification(current));
+        sendNotification(other);
+        assertNotNull(notification(other));
+        activity.getTermuxTerminalSessionClient().setCurrentSession(other);
+        assertNull(notification(other));
+
+        controller.windowFocusChanged(false);
+        ReflectionHelpers.setField(activity, "mIsVisible", false);
+        sendNotification(other);
+        assertNotNull(notification(other));
+        ReflectionHelpers.setField(activity, "mIsVisible", true);
+        controller.windowFocusChanged(true);
+        assertNull(notification(other));
+    }
+
+    @Test
+    public void staleNotificationDoesNotBootstrapOrCreateAReplacementSession() {
+        host(sessionIntent("closed-session"), false);
+        connect();
+
+        assertEmptyNavigation();
+        assertEquals(0, ShadowInstaller.calls);
+        assertTrue(createdCommands().isEmpty());
+    }
+
+    @Test
+    public void finishedAndRemovedSessionsClearTheirNotifications() {
+        TerminalSession finished = existingSession().getTerminalSession();
+        TerminalSession closed = existingSession().getTerminalSession();
+        service.unsetTermuxTerminalSessionClient();
+        sendNotification(finished);
+        sendNotification(closed);
+        assertNotNull(notification(finished));
+        assertNotNull(notification(closed));
+
+        ReflectionHelpers.setField(finished, "mShellPid", -1);
+        service.getTermuxTerminalSessionClient().onSessionFinished(finished);
+        assertNull(notification(finished));
+        assertNotNull(notification(closed));
+        ReflectionHelpers.setField(closed, "mShellPid", -1);
+        service.closeTermuxSession(closed);
+        assertNull(notification(closed));
+        // A late OSC callback from a removed session cannot recreate its reminder.
+        sendNotification(closed);
+        assertNull(notification(closed));
+    }
+
+    private static Intent sessionIntent(String handle) {
+        return new Intent(TermuxActivity.ACTION_OPEN_SESSION)
+            .putExtra(TermuxActivity.EXTRA_SESSION_HANDLE, handle);
+    }
+
+    private static void sendNotification(TerminalSession session) {
+        byte[] bytes = "\033]9;Action required\007".getBytes(StandardCharsets.UTF_8);
+        session.getEmulator().append(bytes, bytes.length);
+    }
+
+    private Notification notification(TerminalSession session) {
+        NotificationManager manager = service.getSystemService(NotificationManager.class);
+        return Shadows.shadowOf(manager).getNotification("terminal-session:" + session.mHandle, 1);
+    }
+
     private void host(Intent intent, boolean recreated) {
         // Exercise the real binding, clients and views without starting the foreground service.
-        ActivityController<TermuxActivity> controller = Robolectric.buildActivity(TermuxActivity.class, intent);
+        controller = Robolectric.buildActivity(TermuxActivity.class, intent);
         activity = controller.get();
         activity.setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         activity.setContentView(R.layout.activity_termux);

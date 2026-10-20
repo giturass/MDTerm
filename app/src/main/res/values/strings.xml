@@ -93,6 +93,10 @@
 
     <!-- Termux Notifications -->
     <string name="notification_action_exit">Exit</string>
+    <string name="session_notification_channel">Session reminders</string>
+    <string name="session_notification_channel_description">Notifications sent by programs running in terminal sessions</string>
+    <string name="session_notification_title">Session %1$d</string>
+    <string name="session_notification_session_gone">This session has already closed.</string>
     <string name="notification_action_wake_lock">Acquire wakelock</string>
     <string name="notification_action_wake_unlock">Release wakelock</string>
 

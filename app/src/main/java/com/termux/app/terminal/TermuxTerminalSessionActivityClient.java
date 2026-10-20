@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.text.TextUtils;
+import android.view.Gravity;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -92,6 +93,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // the first time bell key is pressed and play() is called, since sound may not be loaded
         // quickly enough before the call to play(). https://stackoverflow.com/questions/35435625
         loadBellSoundPool();
+        dismissVisibleSessionNotification();
     }
 
     /**
@@ -153,6 +155,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     public void onSessionFinished(final TerminalSession finishedSession) {
         TermuxService service = mActivity.getTermuxService();
 
+        if (service != null) service.dismissSessionNotification(finishedSession.mHandle);
         if (service == null || service.wantsToStop()) {
             // The service wants to stop as soon as possible.
             mActivity.finishActivityIfNotFinishing();
@@ -229,6 +232,24 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                 // Ignore the bell character.
                 break;
         }
+    }
+
+    @Override
+    public void onNotification(@NonNull TerminalSession session, String text) {
+        TermuxService service = mActivity.getTermuxService();
+        if (service != null) service.showSessionNotification(session, text);
+    }
+
+    public boolean isSessionVisible(TerminalSession session) {
+        return session != null && mActivity.isVisible() && mActivity.hasWindowFocus()
+            && !mActivity.isWaitingForSession() && mActivity.getCurrentSession() == session
+            && !mActivity.getDrawer().isDrawerVisible(Gravity.START);
+    }
+
+    public void dismissVisibleSessionNotification() {
+        TerminalSession session = mActivity.getCurrentSession();
+        TermuxService service = mActivity.getTermuxService();
+        if (service != null && isSessionVisible(session)) service.dismissSessionNotification(session.mHandle);
     }
 
     @Override
@@ -316,6 +337,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // be stale, like current session not selected or scrolled to.
         checkAndScrollToSession(session);
         updateBackgroundColor();
+        dismissVisibleSessionNotification();
     }
 
     void notifyOfSessionChange() {
