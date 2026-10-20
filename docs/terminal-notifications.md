@@ -45,6 +45,13 @@ notification_condition = "always"
 由 MDTerm 判断当前会话是否正在查看。如果还需要每轮完成提醒，可将 `notifications` 改为
 `["approval-requested", "agent-turn-complete"]`。终端复用器需要配置为透传 OSC 9。
 
+如果 Codex 在后台或其他会话中仍没有审批提醒，先核对上述配置是否已写入**运行 Codex 的
+环境**中的 `~/.codex/config.toml`，并重启 Codex。安装或更新 MDTerm 不会自动修改 Codex 配置。
+Codex 默认的 `auto` 通知方式可能退回普通 BEL；MDTerm 尚未实现 DECSET 1004 焦点事件上报，
+因此还需要 `notification_condition = "always"`，避免 Codex 等待收不到的失焦事件。
+可以先运行本页开头的延时 OSC 9 命令并切到后台：若命令能提醒，而 Codex 不能，继续检查
+Codex 配置和控制序列透传；若命令也不能提醒，再检查系统通知权限与“会话提醒”渠道。
+
 ## 验证
 
 现有 GitHub Actions 的 `testDebugUnitTest` 会包含以下回归测试：
