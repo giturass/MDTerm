@@ -127,7 +127,7 @@ public final class TermuxPropertiesPreferences {
         toggle(compatibility, "use-fullscreen-workaround", R.string.mdterm_prop_fullscreen_workaround,
             R.string.mdterm_prop_fullscreen_workaround_summary);
 
-        PreferenceScreen integration = section("property_integration", R.string.mdterm_prop_integration, 0);
+        PreferenceScreen integration = section("property_integration", R.string.mdterm_prop_integration, 80);
         toggle(integration, "allow-external-apps", R.string.mdterm_prop_external_apps,
             R.string.mdterm_prop_external_apps_summary);
         PreferenceScreen notifications = section("notifications", R.string.mdterm_settings_notifications, 10);

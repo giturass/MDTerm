@@ -136,9 +136,9 @@ coexistence build's data automatically.
 
 ## Terminal settings
 
-Settings opens a list of categories: external applications, notifications,
-appearance, sessions, keyboard and input, hardware keyboard shortcuts, terminal
-toolbar, compatibility, and diagnostics. Tap a category to open its settings.
+Settings opens a list of categories: notifications, appearance, sessions,
+keyboard and input, hardware keyboard shortcuts, terminal toolbar, compatibility,
+external applications, and diagnostics. Tap a category to open its settings.
 Keyboard toggle behavior and haptic feedback are under terminal toolbar;
 terminal bell behavior is under notifications.
 

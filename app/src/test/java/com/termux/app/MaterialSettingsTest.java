@@ -40,8 +40,8 @@ public class MaterialSettingsTest {
             assertNull(fragment.findPreference("about"));
             assertNull(fragment.findPreference("donate"));
             assertNull(fragment.findPreference("termux"));
-            String[] categories = {"property_integration", "notifications", "appearance", "property_sessions",
-                "input", "property_shortcuts", "property_toolbar", "property_compatibility", "diagnostics"};
+            String[] categories = {"notifications", "appearance", "property_sessions",
+                "input", "property_shortcuts", "property_toolbar", "property_compatibility", "property_integration", "diagnostics"};
             PreferenceGroupAdapter adapter = (PreferenceGroupAdapter) fragment.getListView().getAdapter();
             assertEquals(categories.length, adapter.getItemCount());
             assertEquals(categories.length + 1, fragment.getPreferenceScreen().getPreferenceCount());
@@ -57,6 +57,7 @@ public class MaterialSettingsTest {
             assertEquals("property_toolbar", fragment.findPreference("soft-keyboard-toggle-behaviour").getParent().getKey());
             assertEquals("notifications", fragment.findPreference("bell-character").getParent().getKey());
             assertEquals("input", fragment.findPreference("cursor_gestures_enabled").getParent().getKey());
+            assertEquals("property_integration", fragment.findPreference("allow-external-apps").getParent().getKey());
 
             String homeTitle = title(activity);
             for (String category : categories) {

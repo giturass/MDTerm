@@ -83,10 +83,16 @@ public class TermuxPropertiesUiTest {
             }
             assertEquals(27, PROPERTY_KEYS.length);
             assertNull(screen.fragment.findPreference("termux_properties_information"));
-            assertSame(screen.fragment.findPreference("property_integration"),
+            assertSame(screen.fragment.findPreference("notifications"),
                 screen.fragment.getPreferenceScreen().getPreference(0));
+            assertSame(screen.fragment.findPreference("property_integration"),
+                screen.fragment.getPreferenceScreen().getPreference(7));
+            assertTrue(screen.fragment.findPreference("property_compatibility").getOrder()
+                < screen.fragment.findPreference("property_integration").getOrder());
             assertTrue(screen.fragment.findPreference("property_integration").getOrder()
-                < screen.fragment.findPreference("appearance").getOrder());
+                < screen.fragment.findPreference("diagnostics").getOrder());
+            assertSame(screen.fragment.findPreference("property_integration"),
+                screen.fragment.findPreference("allow-external-apps").getParent());
             assertSame(screen.fragment.findPreference("property_compatibility"),
                 screen.fragment.findPreference("terminal_margin_adjustment").getParent());
             PreferenceScreen appearance = screen.fragment.findPreference("appearance");
