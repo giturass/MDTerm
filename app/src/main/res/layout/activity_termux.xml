@@ -62,6 +62,7 @@
                         android:layout_marginTop="12dp"
                         android:gravity="center_vertical"
                         android:paddingStart="12dp"
+                        android:paddingEnd="16dp"
                         android:paddingTop="12dp"
                         android:paddingBottom="12dp"
                         android:orientation="horizontal">
@@ -80,16 +81,6 @@
                             android:text="@string/application_name"
                             android:textAppearance="?attr/textAppearanceHeadlineSmall"
                             android:textColor="?attr/colorOnSurface" />
-
-                        <ImageButton
-                            android:id="@+id/file_system_button"
-                            android:layout_width="48dp"
-                            android:layout_height="48dp"
-                            android:padding="12dp"
-                            android:src="@drawable/ic_folder"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/action_open_file_system"
-                            app:tint="?attr/termuxActivityDrawerImageTint" />
 
                         <ImageButton
                             android:id="@+id/settings_button"

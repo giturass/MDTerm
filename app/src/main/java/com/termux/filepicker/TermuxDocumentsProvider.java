@@ -4,11 +4,9 @@ import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.graphics.Point;
-import android.net.Uri;
 import android.os.CancellationSignal;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract.Document;
-import android.provider.DocumentsContract;
 import android.provider.DocumentsContract.Root;
 import android.provider.DocumentsProvider;
 import android.webkit.MimeTypeMap;
@@ -38,12 +36,6 @@ public class TermuxDocumentsProvider extends DocumentsProvider {
     private static final String ALL_MIME_TYPES = "*/*";
 
     private static final File BASE_DIR = TermuxConstants.TERMUX_FILES_DIR;
-
-    public static Uri getRootUri() {
-        return DocumentsContract.buildRootUri(TermuxConstants.TERMUX_PACKAGE_NAME + ".documents",
-            getDocIdForFile(BASE_DIR));
-    }
-
 
     // The default columns to return information about a root if no specific
     // columns are requested in a query.

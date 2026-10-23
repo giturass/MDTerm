@@ -10,12 +10,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.provider.DocumentsContract;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -35,7 +32,6 @@ import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.termux.R;
-import com.termux.filepicker.TermuxDocumentsProvider;
 import com.termux.app.ui.MaterialMenuDialog;
 import com.termux.app.settings.properties.TermuxPropertiesSettings;
 import com.termux.app.terminal.TermuxActivityRootView;
@@ -80,7 +76,6 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
-import java.util.List;
 import java.io.IOException;
 
 /**
@@ -284,8 +279,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
 
         setNewSessionButtonView();
-
-        setFileSystemView();
 
         mBookmarkStore = new TerminalBookmarkStore(this);
         mDrawerAdapter = new TerminalDrawerAdapter(this, mBookmarkStore,
@@ -686,27 +679,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 R.string.action_new_session_failsafe, text -> mTermuxTerminalSessionActivityClient.addNewSession(true, text),
                 -1, null, null);
             return true;
-        });
-    }
-
-    private void setFileSystemView() {
-        findViewById(R.id.file_system_button).setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_VIEW)
-                .setDataAndType(TermuxDocumentsProvider.getRootUri(), DocumentsContract.Root.MIME_TYPE_ITEM);
-            List<ResolveInfo> managers = getPackageManager().queryIntentActivities(intent,
-                PackageManager.MATCH_DEFAULT_ONLY | PackageManager.MATCH_SYSTEM_ONLY);
-            if (managers.isEmpty()) {
-                showToast(getString(R.string.error_system_file_manager_unavailable), true);
-                return;
-            }
-            ResolveInfo manager = managers.get(0);
-            intent.setClassName(manager.activityInfo.packageName, manager.activityInfo.name);
-            try {
-                startActivity(intent);
-            } catch (ActivityNotFoundException | SecurityException e) {
-                showToast(getString(R.string.error_system_file_manager_unavailable), true);
-            }
-            if (!mIsWaitingForSession) getDrawer().closeDrawers();
         });
     }
 

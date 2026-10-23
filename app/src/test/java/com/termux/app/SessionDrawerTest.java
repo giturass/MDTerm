@@ -126,9 +126,9 @@ public class SessionDrawerTest {
         activity.getDrawer().openDrawer(Gravity.START, false);
         ViewGroup content = activity.getDrawer(), drawer = activity.findViewById(R.id.left_drawer);
         View fab = activity.findViewById(R.id.new_session_button);
-        View settings = activity.findViewById(R.id.settings_button), files = activity.findViewById(R.id.file_system_button);
+        View settings = activity.findViewById(R.id.settings_button);
         TerminalDrawerRecyclerView list = list(activity);
-        int previousWidth = 0, previousSettingsRight = 0, previousFilesRight = 0;
+        int previousWidth = 0, previousSettingsRight = 0;
         for (int[] size : new int[][]{{320, 640}, {600, 320}, {360, 720}, {320, 320}}) {
             measure(content, size[0], size[1]);
             assertEquals(content.getWidth(), drawer.getWidth());
@@ -139,14 +139,12 @@ public class SessionDrawerTest {
             assertEquals(dp(drawer, 56), action.height());
             assertEquals(dp(drawer, 16), drawer.getWidth() - action.right);
             assertEquals(dp(drawer, 16), drawer.getHeight() - action.bottom);
-            int settingsRight = bounds(drawer, settings).right, filesRight = bounds(drawer, files).right;
+            int settingsRight = bounds(drawer, settings).right;
             if (previousWidth != 0) {
                 assertEquals(drawer.getWidth() - previousWidth, settingsRight - previousSettingsRight);
-                assertEquals(drawer.getWidth() - previousWidth, filesRight - previousFilesRight);
             }
             previousWidth = drawer.getWidth();
             previousSettingsRight = settingsRight;
-            previousFilesRight = filesRight;
             assertCardSizesAndSpacing(list);
             list.scrollBy(0, Integer.MAX_VALUE);
             assertCardSizesAndSpacing(list);
@@ -154,6 +152,8 @@ public class SessionDrawerTest {
             assertEquals(dp(drawer, 20), card.left);
             assertEquals(dp(drawer, 20), drawer.getWidth() - card.right);
             assertTrue(card.bottom <= action.top);
+            View menu = row(list, 5).findViewById(R.id.session_menu_button);
+            assertEquals(bounds(drawer, settings).centerX(), bounds(drawer, menu).centerX());
         }
     }
 

@@ -18,6 +18,7 @@
 
         <com.termux.app.fragments.settings.MaterialSwitchPreference
             app:key="ime_composing_enabled"
+            app:defaultValue="true"
             app:summaryOff="@string/termux_ime_composing_enabled_off"
             app:summaryOn="@string/termux_ime_composing_enabled_on"
             app:title="@string/termux_ime_composing_enabled_title" />

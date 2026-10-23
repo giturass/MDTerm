@@ -177,8 +177,8 @@
 
                 <!-- IME Composing -->
                 <string name="termux_ime_composing_enabled_title">输入法组合文本预览</string>
-                <string name="termux_ime_composing_enabled_off">输入法尚未提交的组合文本不可见。（默认）</string>
-                <string name="termux_ime_composing_enabled_on">在光标处预览输入法尚未提交的组合文本。</string>
+                <string name="termux_ime_composing_enabled_off">输入法尚未提交的组合文本不可见。</string>
+                <string name="termux_ime_composing_enabled_on">在光标处预览输入法尚未提交的组合文本。（默认）</string>
 
         <!-- Terminal View Preferences -->
         <string name="termux_terminal_view_preferences_title">终端显示</string>

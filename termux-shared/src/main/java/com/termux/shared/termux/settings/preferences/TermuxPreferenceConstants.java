@@ -1,7 +1,7 @@
 package com.termux.shared.termux.settings.preferences;
 
 /*
- * Version: v0.16.0
+ * Version: v0.17.0
  *
  * Changelog
  *
@@ -69,6 +69,9 @@ package com.termux.shared.termux.settings.preferences;
  * - 0.16.0 (2022-06-11)
  *      - Added following to `TERMUX_APP`:
  *          `KEY_APP_SHELL_NUMBER_SINCE_BOOT` and `KEY_TERMINAL_SESSION_NUMBER_SINCE_BOOT`.
+ *
+ * - 0.17.0 (2026-10-23)
+ *      - Change `TERMUX_APP.DEFAULT_VALUE_KEY_IME_COMPOSING_ENABLED` to `true`.
  */
 
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -88,7 +91,7 @@ public final class TermuxPreferenceConstants {
     public static final class TERMUX_APP {
         public static final String KEY_TERMINAL_VIBRATION = "terminal_vibration";
         public static final String KEY_IME_COMPOSING_ENABLED = "ime_composing_enabled";
-        public static final boolean DEFAULT_VALUE_KEY_IME_COMPOSING_ENABLED = false;
+        public static final boolean DEFAULT_VALUE_KEY_IME_COMPOSING_ENABLED = true;
         public static final String KEY_CURSOR_GESTURES_ENABLED = "cursor_gestures_enabled";
         public static final boolean DEFAULT_VALUE_KEY_CURSOR_GESTURES_ENABLED = true;
 

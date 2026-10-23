@@ -5,10 +5,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.TypedArray;
-import android.content.pm.ActivityInfo;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.ResolveInfo;
-import android.provider.DocumentsContract;
 import android.graphics.drawable.Drawable;
 import android.view.Gravity;
 import android.view.ContextThemeWrapper;
@@ -29,7 +25,6 @@ import androidx.fragment.app.FragmentController;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.termux.R;
-import com.termux.filepicker.TermuxDocumentsProvider;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
@@ -418,30 +413,6 @@ public class MaterialTerminalControlsTest {
     }
 
     @Test
-    public void fileButtonOpensSystemFileManagerAtMdtermRoot() {
-        TermuxActivity activity = drawerActivity(true);
-        Intent browse = new Intent(Intent.ACTION_VIEW).setDataAndType(
-            TermuxDocumentsProvider.getRootUri(), DocumentsContract.Root.MIME_TYPE_ITEM);
-        ResolveInfo manager = new ResolveInfo();
-        manager.activityInfo = new ActivityInfo();
-        manager.activityInfo.packageName = "com.android.documentsui";
-        manager.activityInfo.name = "com.android.documentsui.files.FilesActivity";
-        manager.activityInfo.applicationInfo = new ApplicationInfo();
-        manager.activityInfo.applicationInfo.flags = ApplicationInfo.FLAG_SYSTEM;
-        Shadows.shadowOf(activity.getPackageManager()).addResolveInfoForIntent(browse, manager);
-        ReflectionHelpers.callInstanceMethod(activity, "setFileSystemView");
-
-        activity.findViewById(R.id.file_system_button).performClick();
-        Intent launched = Shadows.shadowOf(activity).getNextStartedActivity();
-        assertNotNull(launched);
-        assertEquals(Intent.ACTION_VIEW, launched.getAction());
-        assertEquals("com.android.documentsui", launched.getComponent().getPackageName());
-        assertEquals(DocumentsContract.Root.MIME_TYPE_ITEM, launched.getType());
-        assertEquals(TermuxConstants.TERMUX_PACKAGE_NAME + ".documents", launched.getData().getAuthority());
-        assertEquals(TermuxConstants.TERMUX_FILES_DIR_PATH, DocumentsContract.getRootId(launched.getData()));
-    }
-
-    @Test
     public void cursorToggleIsIndependentOfCtrlAndStaysActiveAcrossKeyPresses() throws Exception {
         TermuxActivity activity = drawerActivity(true);
         ExtraKeysView keys = (ExtraKeysView) LayoutInflater.from(activity)
@@ -632,22 +603,20 @@ public class MaterialTerminalControlsTest {
     public void drawerIconActionsFitNarrowAndCompactLayouts() {
         TermuxActivity activity = drawerActivity(true);
         FloatingActionButton newSession = activity.findViewById(R.id.new_session_button);
-        ImageButton files = activity.findViewById(R.id.file_system_button);
         ImageButton settings = activity.findViewById(R.id.settings_button);
         for (int height : new int[]{640, 320, 640}) {
             measure(activity.getDrawer(), activity, 320, height);
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             measure(activity.getDrawer(), activity, 320, height);
-            assertSame(settings.getParent(), files.getParent());
-            assertEquals(settings.getTop(), files.getTop());
-            assertTrue(files.getRight() <= settings.getLeft());
+            assertEquals(settings.getWidth(), settings.getHeight());
+            assertEquals(Math.round(48 * activity.getResources().getDisplayMetrics().density), settings.getWidth());
             assertEquals(newSession.getWidth(), newSession.getHeight());
             assertEquals(Math.round(56 * activity.getResources().getDisplayMetrics().density), newSession.getWidth());
         }
         assertEquals(activity.getString(R.string.action_new_session), newSession.getContentDescription());
-        assertEquals(activity.getString(R.string.action_open_file_system), files.getContentDescription());
+        assertEquals(activity.getString(R.string.action_open_settings), settings.getContentDescription());
         assertNotNull(newSession.getDrawable());
-        assertNotNull(files.getDrawable());
+        assertNotNull(settings.getDrawable());
     }
 
     @Test
