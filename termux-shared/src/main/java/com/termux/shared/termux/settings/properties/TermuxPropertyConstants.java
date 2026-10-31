@@ -95,8 +95,6 @@ import java.util.Set;
  */
 public final class TermuxPropertyConstants {
 
-    private static final String LOG_TAG = "TermuxPropertyConstants";
-
     /* boolean */
 
     /** Defines the key for whether file share receiver of the app is enabled. */

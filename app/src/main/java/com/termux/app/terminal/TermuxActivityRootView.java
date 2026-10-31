@@ -132,8 +132,7 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
 
         // Skip in multi/floating window mode as the soft keyboard is detached from
         // the app window and wrong calculations may cause flicker.
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N &&
-            mActivity.isInMultiWindowMode()) {
+        if (mActivity.isInMultiWindowMode()) {
             if (params.bottomMargin != 0) {
                 if (root_view_logging_enabled)
                     Logger.logVerbose(LOG_TAG, "Resetting bottom margin in multi-window mode");

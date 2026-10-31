@@ -135,9 +135,6 @@
     <string name="title_activity_termux_settings">&TERMUX_APP_NAME; Settings</string>
 
     <!-- Termux App Preferences -->
-    <string name="termux_preferences_title">&TERMUX_APP_NAME;</string>
-    <string name="termux_preferences_summary">Preferences for &TERMUX_APP_NAME; app</string>
-
         <!-- Debugging Preferences -->
         <string name="termux_debugging_preferences_title">Debugging</string>
         <string name="termux_debugging_preferences_summary">Preferences for debugging</string>
@@ -166,11 +163,7 @@
 
 
         <!-- Terminal IO Preferences -->
-        <string name="termux_terminal_io_preferences_title">Terminal I/O</string>
-        <string name="termux_terminal_io_preferences_summary">Preferences for terminal I/O</string>
-
             <!-- Keyboard Category -->
-            <string name="termux_keyboard_header">Keyboard</string>
 
                 <!-- Soft Keyboard -->
                 <string name="termux_soft_keyboard_enabled_title">Soft Keyboard Enabled</string>
@@ -190,12 +183,6 @@
                 <string name="termux_ime_composing_enabled_on">Show composing text as an inline preview at the cursor. (Default)</string>
 
         <!-- Terminal View Preferences -->
-        <string name="termux_terminal_view_preferences_title">Terminal View</string>
-        <string name="termux_terminal_view_preferences_summary">Preferences for terminal view</string>
-
-            <!-- View Category -->
-            <string name="termux_terminal_view_view_header">View</string>
-
                 <!-- Terminal View Margin Adjustment -->
                 <string name="termux_terminal_view_terminal_margin_adjustment_title">Terminal Margin Adjustment</string>
                 <string name="termux_terminal_view_terminal_margin_adjustment_off">Terminal margin adjustment will be disabled.</string>

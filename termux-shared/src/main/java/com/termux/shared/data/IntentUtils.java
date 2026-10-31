@@ -10,8 +10,6 @@ import java.util.Arrays;
 
 public class IntentUtils {
 
-    private static final String LOG_TAG = "IntentUtils";
-
 
     /**
      * Get a {@link String} extra from an {@link Intent} if its not {@code null} or empty.

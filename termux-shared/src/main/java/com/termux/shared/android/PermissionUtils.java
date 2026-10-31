@@ -283,13 +283,8 @@ public class PermissionUtils {
         Logger.logVerbose(LOG_TAG, "Checking storage permission");
 
         String errmsg;
-        Boolean requestLegacyStoragePermission = null;
-
-        if (prioritizeManageExternalStoragePermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-            requestLegacyStoragePermission = false;
-
-        if (requestLegacyStoragePermission == null)
-            requestLegacyStoragePermission = isLegacyExternalStoragePossible(context);
+        boolean requestLegacyStoragePermission = !prioritizeManageExternalStoragePermission &&
+            isLegacyExternalStoragePossible(context);
 
         boolean checkIfHasRequestedLegacyExternalStorage = checkIfHasRequestedLegacyExternalStorage(context);
 
@@ -313,10 +308,10 @@ public class PermissionUtils {
         if (showErrorMessage)
             Logger.showToast(context, errmsg, false);
 
-        if (requestCode < 0 || Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
+        if (requestCode < 0)
             return false;
 
-        if (requestLegacyStoragePermission || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        if (requestLegacyStoragePermission) {
             requestLegacyStorageExternalPermission(context, requestCode);
         } else {
             requestManageStorageExternalPermission(context, requestCode);
@@ -338,7 +333,7 @@ public class PermissionUtils {
      * @return Returns {@code true} if permission is granted, otherwise {@code false}.
      */
     public static boolean checkStoragePermission(@NonNull Context context, boolean checkLegacyStoragePermission) {
-        if (checkLegacyStoragePermission || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        if (checkLegacyStoragePermission) {
             return checkPermissions(context,
                 new String[]{Manifest.permission.READ_EXTERNAL_STORAGE,
                     Manifest.permission.WRITE_EXTERNAL_STORAGE});
@@ -413,13 +408,12 @@ public class PermissionUtils {
     }
 
     /**
-     * If app is targeting targetSdkVersion 30 (android 11) and running on sdk 30 (android 11) or
-     * higher, then {@link android.R.attr#requestLegacyExternalStorage} attribute is ignored.
+     * Apps targeting Android 11 or higher cannot use legacy storage on supported Android versions;
+     * the {@link android.R.attr#requestLegacyExternalStorage} attribute is ignored.
      * https://developer.android.com/training/data-storage/use-cases#opt-out-scoped-storage
      */
     public static boolean isLegacyExternalStoragePossible(@NonNull Context context) {
-        return !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            PackageUtils.getTargetSDKForPackage(context) >= Build.VERSION_CODES.R);
+        return PackageUtils.getTargetSDKForPackage(context) < Build.VERSION_CODES.R;
     }
 
     /**
@@ -428,21 +422,10 @@ public class PermissionUtils {
      * permissions are to be requested based on if {@link #isLegacyExternalStoragePossible(Context)}
      * return {@code true}.
      *
-     * If app is targeting targetSdkVersion 30 (android 11), then legacy storage can only be
-     * requested if running on sdk 29 (android 10).
-     * If app is targeting targetSdkVersion 29 (android 10), then legacy storage can only be
-     * requested if running on sdk 29 (android 10) and higher.
+     * On supported Android versions, only apps targeting Android 10 need this manifest opt-in.
      */
     public static boolean checkIfHasRequestedLegacyExternalStorage(@NonNull Context context) {
-        int targetSdkVersion = PackageUtils.getTargetSDKForPackage(context);
-
-        if (targetSdkVersion >= Build.VERSION_CODES.R) {
-            return Build.VERSION.SDK_INT == Build.VERSION_CODES.Q;
-        } else if (targetSdkVersion == Build.VERSION_CODES.Q) {
-            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q;
-        } else {
-            return false;
-        }
+        return PackageUtils.getTargetSDKForPackage(context) == Build.VERSION_CODES.Q;
     }
 
     /**
@@ -479,10 +462,7 @@ public class PermissionUtils {
      * @return Returns {@code true} if permission is granted, otherwise {@code false}.
      */
     public static boolean checkDisplayOverOtherAppsPermission(@NonNull Context context) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M)
-            return Settings.canDrawOverlays(context);
-        else
-            return true;
+        return Settings.canDrawOverlays(context);
     }
 
     /** Wrapper for {@link #requestDisplayOverOtherAppsPermission(Context, int)}. */
@@ -504,9 +484,6 @@ public class PermissionUtils {
     public static Error requestDisplayOverOtherAppsPermission(@NonNull Context context, int requestCode) {
         Logger.logInfo(LOG_TAG, "Requesting display over apps permission");
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
-            return null;
-
         Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
         intent.setData(Uri.parse("package:" + context.getPackageName()));
 
@@ -522,8 +499,7 @@ public class PermissionUtils {
     }
 
     /**
-     * Check if running on sdk 29 (android 10) or higher and {@link Manifest.permission#SYSTEM_ALERT_WINDOW}
-     * permission has been granted or not.
+     * Check if {@link Manifest.permission#SYSTEM_ALERT_WINDOW} permission has been granted.
      *
      * @param context The context for operations.
      * @param logResults If it should be logged that permission has been granted or not.
@@ -531,8 +507,6 @@ public class PermissionUtils {
      */
     public static boolean validateDisplayOverOtherAppsPermissionForPostAndroid10(@NonNull Context context,
                                                                                  boolean logResults) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
-
         if (!checkDisplayOverOtherAppsPermission(context)) {
             if (logResults)
                 Logger.logWarn(LOG_TAG, context.getPackageName() + " does not have Display over other apps (SYSTEM_ALERT_WINDOW) permission");
@@ -556,11 +530,8 @@ public class PermissionUtils {
      * @return Returns {@code true} if permission is granted, otherwise {@code false}.
      */
     public static boolean checkIfBatteryOptimizationsDisabled(@NonNull Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-            return powerManager.isIgnoringBatteryOptimizations(context.getPackageName());
-        } else
-            return true;
+        PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return powerManager.isIgnoringBatteryOptimizations(context.getPackageName());
     }
 
     /** Wrapper for {@link #requestDisableBatteryOptimizations(Context, int)}. */
@@ -583,9 +554,6 @@ public class PermissionUtils {
     @SuppressLint("BatteryLife")
     public static Error requestDisableBatteryOptimizations(@NonNull Context context, int requestCode) {
         Logger.logInfo(LOG_TAG, "Requesting to disable battery optimizations");
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
-            return null;
 
         Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
         intent.setData(Uri.parse("package:" + context.getPackageName()));

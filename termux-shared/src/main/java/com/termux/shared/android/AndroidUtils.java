@@ -53,11 +53,9 @@ public class AndroidUtils {
             AndroidUtils.appendPropertyToMarkdown(markdownString,"FILES_DIR", filesDir);
 
 
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            Long userId = PackageUtils.getUserIdForPackage(context);
-            if (userId == null || userId != 0)
-                AndroidUtils.appendPropertyToMarkdown(markdownString, "USER_ID", userId);
-        }
+        Long userId = PackageUtils.getUserIdForPackage(context);
+        if (userId == null || userId != 0)
+            AndroidUtils.appendPropertyToMarkdown(markdownString, "USER_ID", userId);
 
         AndroidUtils.appendPropertyToMarkdownIfSet(markdownString,"PROFILE_OWNER", PackageUtils.getProfileOwnerPackageNameForUser(context));
 
@@ -140,17 +138,14 @@ public class AndroidUtils {
         appendPropertyToMarkdown(markdownString, "TYPE", Build.TYPE);
         appendPropertyToMarkdown(markdownString, "TAGS", Build.TAGS);
 
-        // If on Android >= 12
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) {
-            Integer maxPhantomProcesses = PhantomProcessUtils.getActivityManagerMaxPhantomProcesses(context);
-            if (maxPhantomProcesses != null)
-                appendPropertyToMarkdown(markdownString, "MAX_PHANTOM_PROCESSES", maxPhantomProcesses);
-            else
-                appendLiteralPropertyToMarkdown(markdownString, "MAX_PHANTOM_PROCESSES", "- (*" + context.getString(R.string.msg_requires_dump_and_package_usage_stats_permissions) + "*)");
+        Integer maxPhantomProcesses = PhantomProcessUtils.getActivityManagerMaxPhantomProcesses(context);
+        if (maxPhantomProcesses != null)
+            appendPropertyToMarkdown(markdownString, "MAX_PHANTOM_PROCESSES", maxPhantomProcesses);
+        else
+            appendLiteralPropertyToMarkdown(markdownString, "MAX_PHANTOM_PROCESSES", "- (*" + context.getString(R.string.msg_requires_dump_and_package_usage_stats_permissions) + "*)");
 
-            appendPropertyToMarkdown(markdownString, "MONITOR_PHANTOM_PROCS", PhantomProcessUtils.getFeatureFlagMonitorPhantomProcsValueString(context).getName());
-            appendPropertyToMarkdown(markdownString, "DEVICE_CONFIG_SYNC_DISABLED", PhantomProcessUtils.getSettingsGlobalDeviceConfigSyncDisabled(context));
-        }
+        appendPropertyToMarkdown(markdownString, "MONITOR_PHANTOM_PROCS", PhantomProcessUtils.getFeatureFlagMonitorPhantomProcsValueString(context).getName());
+        appendPropertyToMarkdown(markdownString, "DEVICE_CONFIG_SYNC_DISABLED", PhantomProcessUtils.getSettingsGlobalDeviceConfigSyncDisabled(context));
 
         markdownString.append("\n\n### Hardware\n");
         appendPropertyToMarkdown(markdownString, "MANUFACTURER", Build.MANUFACTURER);

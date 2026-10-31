@@ -1253,10 +1253,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
-    private void reloadActivityStyling() {
-        reloadActivityStyling(false);
-    }
-
     private void reloadActivityStyling(boolean recreateActivity) {
         if (mProperties!= null) {
             String oldNightMode = mProperties.getNightMode();

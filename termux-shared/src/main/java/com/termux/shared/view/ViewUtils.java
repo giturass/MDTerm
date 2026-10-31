@@ -6,7 +6,6 @@ import android.content.ContextWrapper;
 import android.content.res.Configuration;
 import android.graphics.Point;
 import android.graphics.Rect;
-import android.os.Build;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
@@ -81,11 +80,11 @@ public class ViewUtils {
         if (context instanceof AppCompatActivity) {
             ActionBar actionBar = ((AppCompatActivity) context).getSupportActionBar();
             if (actionBar != null) actionBarHeight = actionBar.getHeight();
-            isInMultiWindowMode = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) && ((AppCompatActivity) context).isInMultiWindowMode();
+            isInMultiWindowMode = ((AppCompatActivity) context).isInMultiWindowMode();
         } else if (context instanceof Activity) {
             android.app.ActionBar actionBar = ((Activity) context).getActionBar();
             if (actionBar != null) actionBarHeight = actionBar.getHeight();
-            isInMultiWindowMode = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) && ((Activity) context).isInMultiWindowMode();
+            isInMultiWindowMode = ((Activity) context).isInMultiWindowMode();
         }
 
         int displayOrientation = getDisplayOrientation(context);

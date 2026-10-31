@@ -129,9 +129,6 @@
     <string name="title_activity_termux_settings">&TERMUX_APP_NAME; 设置</string>
 
     <!-- Termux App Preferences -->
-    <string name="termux_preferences_title">&TERMUX_APP_NAME;</string>
-    <string name="termux_preferences_summary">&TERMUX_APP_NAME; 应用设置</string>
-
         <!-- Debugging Preferences -->
         <string name="termux_debugging_preferences_title">调试</string>
         <string name="termux_debugging_preferences_summary">调试设置</string>
@@ -159,11 +156,7 @@
 
 
         <!-- Terminal IO Preferences -->
-        <string name="termux_terminal_io_preferences_title">终端输入与输出</string>
-        <string name="termux_terminal_io_preferences_summary">终端输入与输出设置</string>
-
             <!-- Keyboard Category -->
-            <string name="termux_keyboard_header">键盘</string>
 
                 <!-- Soft Keyboard -->
                 <string name="termux_soft_keyboard_enabled_title">启用软键盘</string>
@@ -181,12 +174,6 @@
                 <string name="termux_ime_composing_enabled_on">在光标处预览输入法尚未提交的组合文本。（默认）</string>
 
         <!-- Terminal View Preferences -->
-        <string name="termux_terminal_view_preferences_title">终端显示</string>
-        <string name="termux_terminal_view_preferences_summary">终端显示设置</string>
-
-            <!-- View Category -->
-            <string name="termux_terminal_view_view_header">显示</string>
-
                 <!-- Terminal View Margin Adjustment -->
                 <string name="termux_terminal_view_terminal_margin_adjustment_title">调整终端边距</string>
                 <string name="termux_terminal_view_terminal_margin_adjustment_off">不自动调整终端边距。</string>

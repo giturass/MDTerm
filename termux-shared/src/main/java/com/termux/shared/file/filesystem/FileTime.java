@@ -62,12 +62,6 @@ public final class FileTime {
      */
     private final long value;
 
-
-    /**
-     * The value return by toString (created lazily)
-     */
-    private String valueAsString;
-
     /**
      * Initializes a new instance of this class.
      */

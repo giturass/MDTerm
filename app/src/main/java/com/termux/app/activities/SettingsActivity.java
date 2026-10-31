@@ -18,7 +18,7 @@ import com.termux.R;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.TermuxSettingsDataStore;
 import com.termux.app.fragments.settings.TermuxPropertiesPreferences;
-import com.termux.app.fragments.settings.termux.DebuggingPreferencesFragment;
+import com.termux.app.fragments.settings.LogLevelPreferenceUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAPIAppSharedPreferences;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.settings.preferences.TermuxFloatAppSharedPreferences;
@@ -86,7 +86,7 @@ public class SettingsActivity extends AppCompatActivity
             ListPreference logLevel = findPreference("log_level");
             TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, true);
             if (preferences != null)
-                DebuggingPreferencesFragment.setLogLevelListPreferenceData(logLevel, context, preferences.getLogLevel());
+                LogLevelPreferenceUtils.setLogLevelListPreferenceData(logLevel, context, preferences.getLogLevel());
 
             // Preference visibility must be updated on the main thread.
             boolean extensionsVisible = setExtensionVisible("termux_api", TermuxAPIAppSharedPreferences.build(context, false) != null);

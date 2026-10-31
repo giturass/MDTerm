@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
@@ -386,8 +385,7 @@ public final class ExtraKeysView extends GridLayout {
      * Reload this instance of {@link ExtraKeysView} with the info passed in {@code extraKeysInfo}.
      *
      * @param extraKeysInfo The {@link ExtraKeysInfo} that defines the necessary info for the extra keys.
-     * @param heightPx The height in pixels of the parent surrounding the {@link ExtraKeysView}. It must
-     *                 be a single child.
+     * @param heightPx Retained for source compatibility; key heights follow the parent layout.
      */
     @SuppressLint("ClickableViewAccessibility")
     public void reload(ExtraKeysInfo extraKeysInfo, float heightPx) {
@@ -490,11 +488,7 @@ public final class ExtraKeysView extends GridLayout {
                 LayoutParams param = new GridLayout.LayoutParams();
                 // Let a horizontal scroll container retain readable key widths on narrow screens.
                 param.width = LayoutParams.WRAP_CONTENT;
-                if(Build.VERSION.SDK_INT == Build.VERSION_CODES.LOLLIPOP) {
-                   param.height = (int)(heightPx + 0.5);
-                } else {
-                    param.height = 0;
-                }
+                param.height = 0;
                 param.setMargins(dp(1), dp(2), dp(1), dp(2));
                 param.columnSpec = GridLayout.spec(col, GridLayout.FILL, 1.f);
                 param.rowSpec = GridLayout.spec(row, GridLayout.FILL, 1.f);
@@ -571,14 +565,7 @@ public final class ExtraKeysView extends GridLayout {
         if (Settings.System.getInt(getContext().getContentResolver(),
             Settings.System.HAPTIC_FEEDBACK_ENABLED, 0) != 0) {
 
-            if (Build.VERSION.SDK_INT >= 28) {
-                button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-            } else {
-                // Perform haptic feedback only if no total silence mode enabled.
-                if (Settings.Global.getInt(getContext().getContentResolver(), "zen_mode", 0) != 2) {
-                    button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-                }
-            }
+            button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         }
     }
 

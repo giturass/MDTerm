@@ -1,50 +1,35 @@
 package com.termux.shared.file.tests;
 
-import android.content.Context;
-
 import androidx.annotation.NonNull;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.termux.shared.errors.Errno;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.file.FileUtilsErrno;
-import com.termux.shared.logger.Logger;
 import com.termux.shared.errors.Error;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.List;
 
+/** File operations need Android's real filesystem and android.system.Os implementation. */
+@RunWith(AndroidJUnit4.class)
 public class FileUtilsTests {
 
-    private static final String LOG_TAG = "FileUtilsTests";
+    @Rule
+    public final TemporaryFolder testDirectory = new TemporaryFolder(
+        InstrumentationRegistry.getInstrumentation().getTargetContext().getCacheDir());
 
-    /**
-     * Run basic tests for {@link FileUtils} class.
-     *
-     * Move tests need to be written, specially for failures.
-     *
-     * The log level must be set to verbose.
-     *
-     * Run at app startup like in an activity
-     * FileUtilsTests.runTests(this, TermuxConstants.TERMUX_HOME_DIR_PATH + "/FileUtilsTests");
-     *
-     * @param context The {@link Context} for operations.
-     */
-    public static void runTests(@NonNull final Context context, @NonNull final String testRootDirectoryPath) {
-        try {
-            Logger.logInfo(LOG_TAG, "Running tests");
-            Logger.logInfo(LOG_TAG, "testRootDirectoryPath: \"" + testRootDirectoryPath + "\"");
-
-            String fileUtilsTestsDirectoryCanonicalPath = FileUtils.getCanonicalPath(testRootDirectoryPath, null);
-            assertEqual("FileUtilsTests directory path is not a canonical path", testRootDirectoryPath, fileUtilsTestsDirectoryCanonicalPath);
-
-            runTestsInner(testRootDirectoryPath);
-            Logger.logInfo(LOG_TAG, "All tests successful");
-        } catch (Exception e) {
-            Logger.logErrorExtended(LOG_TAG, e.getMessage());
-            Logger.showToast(context, e.getMessage() != null ? e.getMessage().replaceAll("(?s)\nFull Error:\n.*", "") : null, true);
-        }
+    @Test
+    public void fileOperationsPreserveContentsAndSymlinks() throws Exception {
+        runTestsInner(testDirectory.getRoot().getCanonicalPath());
     }
 
     private static void runTestsInner(@NonNull final String testRootDirectoryPath) throws Exception {

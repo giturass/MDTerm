@@ -66,7 +66,6 @@ public final class TerminalView extends View {
     private Handler mTerminalCursorBlinkerHandler;
     private TerminalCursorBlinkerRunnable mTerminalCursorBlinkerRunnable;
     private int mTerminalCursorBlinkerRate;
-    private boolean mCursorInvisibleIgnoreOnce;
     public static final int TERMINAL_CURSOR_BLINK_RATE_MIN = 100;
     public static final int TERMINAL_CURSOR_BLINK_RATE_MAX = 2000;
 
@@ -1369,8 +1368,6 @@ public final class TerminalView extends View {
     }
 
     public AutofillManager getAutoFillManagerService() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null;
-
         try {
             Context context = getContext();
             if (context == null) return null;
@@ -1382,8 +1379,6 @@ public final class TerminalView extends View {
     }
 
     public boolean isAutoFillEnabled() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false;
-
         try {
             AutofillManager autofillManager = getAutoFillManagerService();
             return autofillManager != null && autofillManager.isEnabled();
@@ -1394,19 +1389,14 @@ public final class TerminalView extends View {
     }
 
     public synchronized void requestAutoFillUsername() {
-        requestAutoFill(
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? new String[]{View.AUTOFILL_HINT_USERNAME} :
-                null);
+        requestAutoFill(new String[]{View.AUTOFILL_HINT_USERNAME});
     }
 
     public synchronized void requestAutoFillPassword() {
-        requestAutoFill(
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? new String[]{View.AUTOFILL_HINT_PASSWORD} :
-            null);
+        requestAutoFill(new String[]{View.AUTOFILL_HINT_PASSWORD});
     }
 
     public synchronized void requestAutoFill(String[] autoFillHints) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         if (autoFillHints == null || autoFillHints.length < 1) return;
 
         try {
@@ -1427,7 +1417,6 @@ public final class TerminalView extends View {
     }
 
     public synchronized void cancelRequestAutoFill() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         if (mAutoFillType == AUTOFILL_TYPE_NONE) return;
 
         try {
