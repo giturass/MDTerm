@@ -73,7 +73,7 @@
         <item>隐藏键盘或退出应用</item><item>发送 Escape</item>
     </string-array>
     <string-array name="mdterm_prop_volume_entries">
-        <item>终端组合键（Ctrl / Fn）</item><item>调整设备音量</item>
+        <item>终端组合键（Ctrl / Fn）</item><item>调整设备音量</item><item>上下移动光标（音量＋ / －）</item>
     </string-array>
     <string-array name="mdterm_prop_keyboard_toggle_entries">
         <item>显示或隐藏键盘</item><item>启用或禁用键盘</item>

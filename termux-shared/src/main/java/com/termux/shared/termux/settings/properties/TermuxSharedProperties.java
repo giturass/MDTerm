@@ -688,6 +688,11 @@ public abstract class TermuxSharedProperties {
         return (boolean) TermuxPropertyConstants.IVALUE_VOLUME_KEY_BEHAVIOUR_VOLUME.equals(getInternalPropertyValue(TermuxPropertyConstants.KEY_VOLUME_KEYS_BEHAVIOUR, true));
     }
 
+    public boolean shouldUseVolumeKeysForCursor() {
+        return TermuxPropertyConstants.IVALUE_VOLUME_KEY_BEHAVIOUR_ARROWS.equals(
+            getInternalPropertyValue(TermuxPropertyConstants.KEY_VOLUME_KEYS_BEHAVIOUR, true));
+    }
+
 
 
 

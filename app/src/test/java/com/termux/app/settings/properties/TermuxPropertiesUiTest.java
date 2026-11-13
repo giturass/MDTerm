@@ -183,6 +183,27 @@ public class TermuxPropertiesUiTest {
     }
 
     @Test
+    public void volumeArrowsCanBeSelectedAndSurviveActivityRecreation() throws Exception {
+        try (Screen screen = new Screen(ORIGINAL)) {
+            screen.open("input");
+            ListPreference volume = screen.fragment.findPreference("volume-keys");
+            assertArrayEquals(new CharSequence[]{"virtual", "volume", "arrows"}, volume.getEntryValues());
+            assertEquals("virtual", volume.getValue());
+            int arrows = volume.findIndexOfValue("arrows");
+            assertTrue(volume.getEntries()[arrows].toString().contains("上下移动光标"));
+            choose(screen.fragment, volume, arrows);
+            assertEquals("arrows", new TermuxPropertiesFile(screen.primary).read().getProperty("volume-keys"));
+            assertEquals("keep me", new TermuxPropertiesFile(screen.primary).read().getProperty("custom-option"));
+
+            screen.activity.recreate();
+            screen.bindTemporarySettings();
+            assertEquals("input", screen.fragment.getPreferenceScreen().getKey());
+            volume = screen.fragment.findPreference("volume-keys");
+            assertEquals("arrows", volume.getValue());
+        }
+    }
+
+    @Test
     public void invalidNumberStaysInTheDialogWithoutSavingAndCanBeCorrected() throws Exception {
         try (Screen screen = new Screen(ORIGINAL)) {
             screen.open("property_sessions");

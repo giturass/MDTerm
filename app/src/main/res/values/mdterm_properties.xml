@@ -73,7 +73,7 @@
         <item>Hide keyboard or leave app</item><item>Send Escape</item>
     </string-array>
     <string-array name="mdterm_prop_volume_entries">
-        <item>Terminal modifiers (Ctrl / Fn)</item><item>Adjust device volume</item>
+        <item>Terminal modifiers (Ctrl / Fn)</item><item>Adjust device volume</item><item>Move cursor up/down (Volume + / −)</item>
     </string-array>
     <string-array name="mdterm_prop_keyboard_toggle_entries">
         <item>Show or hide keyboard</item><item>Enable or disable keyboard</item>

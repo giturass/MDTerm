@@ -83,7 +83,7 @@ public final class TermuxPropertiesPreferences {
         list(input, "back-key", R.string.mdterm_prop_back_key, 0,
             R.array.mdterm_prop_back_entries, "back", "escape");
         list(input, "volume-keys", R.string.mdterm_prop_volume_keys, 0,
-            R.array.mdterm_prop_volume_entries, "virtual", "volume");
+            R.array.mdterm_prop_volume_entries, "virtual", "volume", "arrows");
         toggle(input, "hide-soft-keyboard-on-startup", R.string.mdterm_prop_hide_keyboard,
             R.string.mdterm_prop_hide_keyboard_summary);
 

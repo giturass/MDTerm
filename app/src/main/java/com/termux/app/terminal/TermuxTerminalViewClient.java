@@ -260,7 +260,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     @SuppressLint("RtlHardcoded")
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent e, TerminalSession currentSession) {
-        if (handleVirtualKeys(keyCode, e, true)) return true;
+        if (handleVolumeKeys(keyCode, e, true)) return true;
 
         if (keyCode == KeyEvent.KEYCODE_ENTER && !currentSession.isRunning()) {
             mTermuxTerminalSessionActivityClient.removeFinishedSession(currentSession);
@@ -318,17 +318,28 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             return true;
         }
 
-        return handleVirtualKeys(keyCode, e, false);
+        return handleVolumeKeys(keyCode, e, false);
     }
 
-    /** Handle dedicated volume buttons as virtual keys if applicable. */
-    private boolean handleVirtualKeys(int keyCode, KeyEvent event, boolean down) {
+    /** Handle dedicated volume buttons as modifiers or cursor arrows if applicable. */
+    private boolean handleVolumeKeys(int keyCode, KeyEvent event, boolean down) {
+        if (keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && keyCode != KeyEvent.KEYCODE_VOLUME_UP)
+            return false;
+
         InputDevice inputDevice = event.getDevice();
         if (mActivity.getProperties().areVirtualVolumeKeysDisabled()) {
             return false;
         } else if (inputDevice != null && inputDevice.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
             // Do not steal dedicated buttons from a full external keyboard.
             return false;
+        } else if (mActivity.getProperties().shouldUseVolumeKeysForCursor()) {
+            if (down) {
+                mActivity.getTerminalView().setTopRow(0);
+                mActivity.getTerminalView().handleKeyCode(keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                    ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN, 0);
+            }
+            // Repeated key-down events move again; releasing the button only consumes the event.
+            return true;
         } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             mVirtualControlKeyDown = down;
             return true;
@@ -518,6 +529,8 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
 
     public void onReloadProperties() {
+        // A settings screen may consume the release when changing the volume-button mode.
+        mVirtualControlKeyDown = mVirtualFnKeyDown = false;
         setSessionShortcuts();
     }
 
